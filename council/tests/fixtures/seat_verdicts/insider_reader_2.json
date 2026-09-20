@@ -1,0 +1,23 @@
+{
+  "vote": "BULLISH",
+  "probability": 0.561,
+  "comparison_class": {
+    "definition": "Instances of a single C-suite open-market purchase alongside routine, scheduled insider sales",
+    "n_observations": 27,
+    "base_rate": 0.54,
+    "why_this_class": "closest analogue distinguishing a genuine discretionary buy from concurrent noise-level sales"
+  },
+  "decomposition": [],
+  "memory_applied": [],
+  "entry": null,
+  "exit": null,
+  "invalidation": null,
+  "expected_move_pct": 2.0,
+  "thesis": "The CTO's open-market purchase is a genuine discretionary buy, not a scheduled disposal, and open-market purchases are the strongest single-transaction signal in this seat's grammar. The concurrent CFO and director sales are correctly discounted: one is a routine Rule 10b5-1 sale carrying near-zero information, and the other is a single director sale, both weaker categories. Net read leans mildly bullish on the strength of the one real signal present.",
+  "key_evidence": [
+    {"claim": "CTO open-market buy, officer-level", "source": "insider_derived", "as_of": "2026-08-28"}
+  ],
+  "what_would_change_my_mind": "If the CTO's purchase were itself revealed to be plan-driven rather than discretionary, this read would drop to NO_READ.",
+  "data_quality": "GOOD",
+  "abstain_reason": null
+}

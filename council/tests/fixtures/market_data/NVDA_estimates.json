@@ -1,0 +1,28 @@
+{
+  "consensus_eps_next_q": 1.28,
+  "consensus_revenue_next_q": 48900000000.0,
+  "eps_revision_pct_30d": 3.4,
+  "price_target_mean": 185.0,
+  "price_target_high": 220.0,
+  "price_target_low": 140.0,
+  "price_target_dispersion": 18.6,
+  "guidance_vs_consensus": "prior-quarter guidance came in above the then-consensus revenue estimate by roughly 4%",
+  "historical_surprises": [
+    {
+      "fiscal_period": "Q1 FY2027",
+      "surprise_pct": 6.1
+    },
+    {
+      "fiscal_period": "Q4 FY2026",
+      "surprise_pct": 4.4
+    },
+    {
+      "fiscal_period": "Q3 FY2026",
+      "surprise_pct": 7.8
+    },
+    {
+      "fiscal_period": "Q2 FY2026",
+      "surprise_pct": 2.1
+    }
+  ]
+}

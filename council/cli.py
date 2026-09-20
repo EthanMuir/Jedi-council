@@ -17,7 +17,10 @@ def _print_result(result: DeliberationResult) -> None:
     for sr in result.seat_results:
         v = sr.verdict
         print(f"\n--- {sr.title} ({sr.seat_id}) ---")
-        print(f"  vote: {v.vote}   probability: {v.probability}   data_quality: {v.data_quality}")
+        print(
+            f"  vote: {v.vote}   probability: {v.probability}   data_quality: {v.data_quality}"
+            f"   dispersion: {sr.dispersion} (n={sr.sample_count} samples)"
+        )
         if v.vote == "NO_READ":
             print(f"  abstain_reason: {v.abstain_reason}")
         else:

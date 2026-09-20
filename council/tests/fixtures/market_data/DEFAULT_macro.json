@@ -1,0 +1,10 @@
+{
+  "fed_funds_rate": 3.375,
+  "treasury_10y": 3.92,
+  "treasury_2y": 3.55,
+  "curve_10y_minus_2y": 0.37,
+  "cpi_yoy": 2.6,
+  "unemployment_rate": 4.1,
+  "dollar_index": 101.8,
+  "wti_crude": 68.4
+}

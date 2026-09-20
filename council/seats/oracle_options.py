@@ -52,6 +52,7 @@ class OracleOptionsSeat:
         ctx: SeatContext,
         llm_client: LLMClient,
         round_n: int = 0,
+        sample_index: int = 0,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict:
         chain = ctx["option_chain"]
@@ -95,4 +96,5 @@ class OracleOptionsSeat:
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             fixture_name="oracle_options",
+            sample_index=sample_index,
         )

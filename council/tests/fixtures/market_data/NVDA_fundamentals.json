@@ -1,0 +1,16 @@
+{
+  "fiscal_period": "Q2 FY2027",
+  "revenue": 46700000000.0,
+  "revenue_growth_yoy": 0.56,
+  "gross_margin": 0.735,
+  "operating_margin": 0.62,
+  "net_margin": 0.55,
+  "total_debt": 10400000000.0,
+  "cash_and_equivalents": 34800000000.0,
+  "free_cash_flow": 18200000000.0,
+  "pe_ratio": 42.3,
+  "ev_to_ebitda": 31.1,
+  "price_to_sales": 21.4,
+  "sector_median_pe": 28.6,
+  "sector_median_ev_ebitda": 19.8
+}

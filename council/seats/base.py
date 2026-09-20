@@ -165,5 +165,6 @@ class Seat(Protocol):
         ctx: SeatContext,
         llm_client: Any,
         round_n: int = 0,
+        sample_index: int = 0,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict: ...

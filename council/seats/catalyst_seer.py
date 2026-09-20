@@ -53,6 +53,7 @@ class CatalystSeerSeat:
         ctx: SeatContext,
         llm_client: LLMClient,
         round_n: int = 0,
+        sample_index: int = 0,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict:
         news = ctx["news"]
@@ -91,4 +92,5 @@ class CatalystSeerSeat:
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             fixture_name="catalyst_seer",
+            sample_index=sample_index,
         )

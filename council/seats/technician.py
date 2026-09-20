@@ -53,6 +53,7 @@ class TechnicianSeat:
         ctx: SeatContext,
         llm_client: LLMClient,
         round_n: int = 0,
+        sample_index: int = 0,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict:
         series = ctx["ohlcv"]
@@ -94,6 +95,7 @@ class TechnicianSeat:
             system_prompt=_SYSTEM_PROMPT,
             user_prompt=user_prompt,
             fixture_name="technician",
+            sample_index=sample_index,
         )
 
         if verdict.vote == "NO_READ":

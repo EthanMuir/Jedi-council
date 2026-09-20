@@ -1,0 +1,12 @@
+{
+  "quarter_end": "2026-05-24",
+  "filed_at": "2026-08-31T00:00:00",
+  "total_institutional_shares": 4900000000,
+  "pct_of_float_held": 0.67,
+  "qoq_share_change_pct": 1.8,
+  "top_holders_net_buyers": 312,
+  "top_holders_net_sellers": 201,
+  "etf_inclusion_notes": "core holding across major semiconductor and large-cap growth ETFs, weight increased at last rebalance",
+  "short_interest_shares": 185000000,
+  "days_to_cover": 1.4
+}

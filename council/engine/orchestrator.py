@@ -18,16 +18,41 @@ from council.crypt.ledger import write_blind_prediction, write_seat_vote
 from council.data.cache import DiskCache
 from council.data.providers.alpha_vantage import AlphaVantageProvider
 from council.data.providers.fixtures import FixtureProvider
+from council.data.providers.fmp import FMPProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
 from council.data.service import DataService
 from council.engine.horizons import is_competent, resolve_at_for
 from council.engine.llm_client import LLMClient
+from council.engine.sampling import aggregate_samples
 from council.seats.base import SeatVerdict
 from council.seats.catalyst_seer import CatalystSeerSeat
+from council.seats.cross_market import CrossMarketSeat
+from council.seats.estimate_scribe import EstimateScribeSeat
+from council.seats.flow_cartographer import FlowCartographerSeat
+from council.seats.fundamentalist import FundamentalistSeat
+from council.seats.insider_reader import InsiderReaderSeat
+from council.seats.macro_sage import MacroSageSeat
 from council.seats.oracle_options import OracleOptionsSeat
+from council.seats.senate_watcher import SenateWatcherSeat
+from council.seats.structure_archivist import StructureArchivistSeat
 from council.seats.technician import TechnicianSeat
+from council.seats.transcript_linguist import TranscriptLinguistSeat
 
-TIER_I_SEATS = [TechnicianSeat(), CatalystSeerSeat(), OracleOptionsSeat()]
+# Full Tier I roster (spec section 3), in roster order.
+TIER_I_SEATS = [
+    TechnicianSeat(),
+    FundamentalistSeat(),
+    CatalystSeerSeat(),
+    InsiderReaderSeat(),
+    SenateWatcherSeat(),
+    FlowCartographerSeat(),
+    OracleOptionsSeat(),
+    MacroSageSeat(),
+    CrossMarketSeat(),
+    EstimateScribeSeat(),
+    TranscriptLinguistSeat(),
+    StructureArchivistSeat(),
+]
 
 
 @dataclass
@@ -35,6 +60,8 @@ class SeatResult:
     seat_id: str
     title: str
     verdict: SeatVerdict
+    dispersion: float
+    sample_count: int
 
 
 @dataclass
@@ -60,6 +87,8 @@ def build_data_service(settings: Settings) -> DataService:
     else:
         if settings.alpha_vantage_api_key:
             providers.append(AlphaVantageProvider(settings.alpha_vantage_api_key))
+        if settings.fmp_api_key:
+            providers.append(FMPProvider(settings.fmp_api_key))
         providers.append(YFinanceProvider())  # backstop, per spec: "unreliable, use as fallback only"
     return DataService(providers=providers, cache=cache)
 
@@ -99,16 +128,24 @@ async def run_blind_round(
         raise ValueError(f"no Tier I seat is competent at horizon '{horizon}'")
 
     semaphore = asyncio.Semaphore(settings.max_concurrent_llm_calls)
+    n_samples = settings.n_samples_per_seat
 
-    async def run_seat(seat):
+    async def deliberate_one(seat, ctx, sample_index):
+        async with semaphore:
+            return await seat.deliberate(ctx, llm_client, sample_index=sample_index)
+
+    async def run_seat(seat) -> tuple:
         async with semaphore:
             ctx = await seat.gather(data_service, ticker, as_of, horizon)
-            verdict = await seat.deliberate(ctx, llm_client)
-            return seat, ctx, verdict
+        samples = await asyncio.gather(
+            *(deliberate_one(seat, ctx, i) for i in range(n_samples))
+        )
+        sampled = aggregate_samples(seat.id, list(samples))
+        return seat, ctx, sampled
 
-    results = await asyncio.gather(*(run_seat(seat) for seat in eligible_seats))
+    results: list[tuple] = await asyncio.gather(*(run_seat(seat) for seat in eligible_seats))
 
-    verdicts_by_id = {seat.id: verdict for seat, _ctx, verdict in results}
+    verdicts_by_id = {seat.id: sampled.representative for seat, _ctx, sampled in results}
     blind_vote, blind_probability, blind_consensus_pct = aggregate_blind_round(verdicts_by_id)
 
     price_series = await data_service.get_ohlcv(ticker, as_of=as_of, lookback_days=5)
@@ -143,13 +180,13 @@ async def run_blind_round(
             blind_consensus_pct=blind_consensus_pct,
             created_at=as_of,
         )
-        for seat, _ctx, verdict in results:
+        for seat, _ctx, sampled in results:
             write_seat_vote(
                 conn,
                 prediction_id=prediction_id,
                 seat_id=seat.id,
-                verdict=verdict,
-                dispersion=None,  # N-sampling dispersion arrives Phase 2
+                verdict=sampled.representative,
+                dispersion=sampled.dispersion,
                 weight_applied=1.0,  # Calibration Officer weighting arrives Phase 3/4
                 model_id="fixture" if settings.resolved_no_llm else settings.seat_model,
                 provider="none" if settings.resolved_no_llm else "anthropic",
@@ -158,7 +195,8 @@ async def run_blind_round(
         conn.close()
 
     seat_results = [
-        SeatResult(seat.id, seat.title, verdict) for seat, _ctx, verdict in results
+        SeatResult(seat.id, seat.title, sampled.representative, sampled.dispersion, len(sampled.samples))
+        for seat, _ctx, sampled in results
     ]
     return DeliberationResult(
         prediction_id=prediction_id,

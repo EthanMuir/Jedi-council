@@ -1,0 +1,19 @@
+{
+  "vote": "NO_READ",
+  "probability": 0.5,
+  "comparison_class": null,
+  "decomposition": [],
+  "memory_applied": [],
+  "entry": null,
+  "exit": null,
+  "invalidation": null,
+  "expected_move_pct": 0.0,
+  "thesis": "Both disclosed trades are stale by the time they are visible: one filed with a roughly 30-day disclosure lag on a trade made about two months ago, the other similarly lagged. One buy and one sell from members without a clearly relevant committee assignment beyond general financial oversight. The pending legislation is still in committee with no scheduled vote. None of this rises above noise for a directional call.",
+  "key_evidence": [
+    {"claim": "House member buy, ~30d disclosure lag, trade itself ~55d old", "source": "congress_derived", "as_of": "2026-08-24"},
+    {"claim": "Export-control amendment still in committee, no floor vote scheduled", "source": "congress_derived", "as_of": "2026-08-09"}
+  ],
+  "what_would_change_my_mind": "A committee vote being scheduled on the export-control amendment, or a cluster of same-direction trades from members on a directly relevant committee.",
+  "data_quality": "PARTIAL",
+  "abstain_reason": "stale_disclosure_no_edge"
+}

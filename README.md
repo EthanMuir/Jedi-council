@@ -7,12 +7,16 @@ spec). The single governing constraint: every Council Member seat is
 isolated by *data*, enforced in code (`DataIsolationError`), not by prompt.
 Five LLM personas reading the same feed are one source wearing five robes.
 
-## Status: Phase 0 + Phase 1 complete
+## Status: Phase 0 + Phase 1 + Phase 2 complete
 
 - **DataService** (`council/data/`) -- normalised schemas, SQLite disk
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
-  any record dated after `as_of`, and provider fallback (Alpha Vantage,
-  yfinance backstop, or a recorded-fixture provider for offline use).
+  any record dated after `as_of`, and provider fallback (Alpha Vantage, FMP,
+  yfinance backstop, or a recorded-fixture provider for offline use). Covers
+  OHLCV, news/sentiment, options, fundamentals, insider transactions,
+  congressional disclosures, 13F/institutional holdings, macro data,
+  cross-market instruments, analyst estimates, earnings transcripts, and SEC
+  filings.
 - **The Crypt** (`council/crypt/`) -- append-only, hash-chained SQLite
   ledger. `predictions` and `seat_votes` reject UPDATE/DELETE by trigger.
   `write_blind_prediction` refuses to write a prediction whose `resolve_at`
@@ -20,17 +24,35 @@ Five LLM personas reading the same feed are one source wearing five robes.
 - **SeatVerdict v2** (`council/seats/base.py`) -- the Addendum A1 schema:
   three-decimal probabilities, a mandatory `comparison_class` for any
   directional vote, and code-level data isolation via `SeatContext`.
-- **Three Tier I seats**: Technician (OHLCV only, ticker anonymised to
-  "Instrument A", direction decided by a deterministic family-vote engine
-  in `technical_indicators.py`), Catalyst Seer (news/sentiment only), Oracle
-  of Options (option chain only).
-- **Blind-round orchestrator + CLI** -- runs the three seats in parallel,
-  isolated, no peer visibility, and writes the result to the Crypt.
+- **All 12 Tier I seats**: Technician (OHLCV only, ticker anonymised,
+  mechanical family-vote direction), Fundamentalist, Catalyst Seer, Insider
+  Reader, Senate Watcher, Flow Cartographer, Oracle of Options, Macro Sage,
+  Cross-Market Navigator (never sees the ticker's own price series), Estimate
+  Scribe, Transcript Linguist, Structure Archivist -- each isolated to
+  exactly one data domain, gated by the spec's hardcoded horizon-competence
+  matrix (`council/engine/horizons.py`).
+- **N-sampling + dispersion** (`council/engine/sampling.py`) -- every seat is
+  sampled N times (`Settings.n_samples_per_seat`, default 3). Majority vote across samples
+  becomes the seat's consensus; disagreement fraction becomes `dispersion`
+  and automatically discounts the reported confidence toward 0.5. A tie with
+  no majority resolves to `NO_READ`.
+- **Blind-round orchestrator + CLI** -- runs all competent seats in parallel,
+  isolated, no peer visibility, each sampled 3x, and writes the result to
+  the Crypt (including per-seat dispersion).
 
-Not yet built (by design -- stopping here per the spec's phase order): the
-other 9 Tier I seats, Tiers II-IV (debate, Prosecutor, Base-Rate Keeper,
-Grand Master), N-sampling/dispersion, calibration weighting, resolution
-sweep, and the UI.
+Not yet built (by design -- stopping here per the spec's phase order):
+Tiers II-IV (debate, Prosecutor, Base-Rate Keeper, Cost Auditor, Risk Warden,
+Grand Master), calibration weighting, the resolution sweep, and the UI.
+
+Known Phase 2 scope cuts (see inline comments): Fundamentals/AnalystEstimates
+/Macro snapshots don't yet enforce a filing-lag point-in-time guard the way
+the dated feeds (insider transactions, congress trades, transcripts, SEC
+filings, 13F) do -- deferred to Phase 4, when the Crypt actually backtests
+against historical `as_of` dates. FMP provider endpoints are unverified
+against a live key (none configured). Cross-Market Navigator's sector/peer/
+index/overseas proxies all resolve to the same `DEFAULT_ohlcv.json` fixture
+in offline mode, so their values are currently identical -- a fixture-mode
+artifact, not a code issue.
 
 ## Setup
 

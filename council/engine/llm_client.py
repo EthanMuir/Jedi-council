@@ -66,8 +66,16 @@ class LLMClient:
     def _prompt_hash(self, system_prompt: str, user_prompt: str) -> str:
         return hashlib.sha256((system_prompt + "\x00" + user_prompt).encode()).hexdigest()[:16]
 
-    async def _fixture_verdict(self, seat_id: str, fixture_name: str) -> SeatVerdict:
-        path = _FIXTURE_DIR / f"{fixture_name}.json"
+    async def _fixture_verdict(
+        self, seat_id: str, fixture_name: str, sample_index: int = 0
+    ) -> SeatVerdict:
+        """Sample N looks for `{fixture_name}_{N}.json` (1-indexed, for
+        seats with hand-authored per-sample variants -- see
+        insider_reader_1/2/3.json) and falls back to the single base
+        fixture, which every sample then shares (dispersion 0, a legitimate
+        degenerate case for a deterministic recorded fixture)."""
+        variant_path = _FIXTURE_DIR / f"{fixture_name}_{sample_index + 1}.json"
+        path = variant_path if variant_path.exists() else _FIXTURE_DIR / f"{fixture_name}.json"
         with open(path) as f:
             data = json.load(f)
         verdict = SeatVerdict(**data)
@@ -95,10 +103,11 @@ class LLMClient:
         system_prompt: str,
         user_prompt: str,
         fixture_name: str | None = None,
+        sample_index: int = 0,
         max_retries: int = 2,
     ) -> SeatVerdict:
         if self.settings.resolved_no_llm:
-            return await self._fixture_verdict(seat_id, fixture_name or seat_id)
+            return await self._fixture_verdict(seat_id, fixture_name or seat_id, sample_index)
 
         schema = SeatVerdict.model_json_schema()
         prompt_hash = self._prompt_hash(system_prompt, user_prompt)
@@ -110,6 +119,8 @@ class LLMClient:
                 resp = await self._client.messages.create(
                     model=model,
                     max_tokens=1500,
+                    temperature=0.3,  # Addendum A3: fixed across providers so dispersion
+                    # measures model behaviour, not sampling config drift
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_prompt}],
                     tools=[

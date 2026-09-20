@@ -1,0 +1,28 @@
+[
+  {
+    "filed_at": "2026-09-12T16:30:00",
+    "form_type": "8-K",
+    "headline": "8-K: investor day materials furnished",
+    "summary": "Furnished presentation materials from the data center roadmap investor day; no new financial guidance included.",
+    "url": "https://example.com/8k-investor-day",
+    "flags": []
+  },
+  {
+    "filed_at": "2026-08-09T16:30:00",
+    "form_type": "8-K",
+    "headline": "8-K: expanded share repurchase authorization",
+    "summary": "Board authorized an incremental buyback program; timing and pace of repurchases at management's discretion.",
+    "url": "https://example.com/8k-buyback",
+    "flags": [
+      "BUYBACK_AUTHORIZATION"
+    ]
+  },
+  {
+    "filed_at": "2026-06-15T16:30:00",
+    "form_type": "10-Q",
+    "headline": "10-Q: quarterly report",
+    "summary": "Routine quarterly filing; no covenant or litigation flags noted beyond ordinary-course disclosures.",
+    "url": "https://example.com/10q",
+    "flags": []
+  }
+]
