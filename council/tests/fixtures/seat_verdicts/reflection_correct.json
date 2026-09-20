@@ -1,0 +1,11 @@
+{
+  "lesson_id": "placeholder",
+  "seat_id": "placeholder",
+  "ticker": "placeholder",
+  "horizon": "placeholder",
+  "was_correct": true,
+  "probability_stated": 0.6,
+  "error_type": "CORRECT",
+  "lesson": "When trend and volume families both confirmed and RSI was not overbought, the move continued well past the stated exit -- next time, trail the target rather than treating it as a hard cap in this specific configuration.",
+  "generalises_beyond_this_ticker": true
+}

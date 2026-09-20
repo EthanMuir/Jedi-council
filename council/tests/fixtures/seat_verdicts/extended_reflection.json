@@ -1,0 +1,8 @@
+{
+  "seat_id": "placeholder",
+  "n_resolutions_reviewed": 30,
+  "systematic_bias_summary": "Directional calls were roughly balanced across the reviewed window, but confidence on bullish calls ran consistently above the realised hit rate specifically at the shortest horizon, while medium- and long-horizon calibration tracked closely. No consistent ticker- or sector-level miss pattern emerged.",
+  "direction_bias": "NONE_DETECTED",
+  "confidence_bias": "OVERCONFIDENT",
+  "horizons_to_abstain_more": ["1d"]
+}

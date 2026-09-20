@@ -82,6 +82,19 @@ class MemoryLesson(BaseModel):
     from_date: str
 
 
+def format_memory_context(memories: list["MemoryLesson"] | None) -> str:
+    """Shared across every seat's prompt so live LLM calls actually see
+    retrieved memory, not just have it bolted onto the output afterward."""
+    if not memories:
+        return ""
+    lines = "\n".join(f"- [{m.from_date}] {m.lesson}" for m in memories)
+    return (
+        "\n\nRelevant lessons from your own history on this ticker (weigh these, "
+        "don't ignore them, but don't let a past miss override what today's data "
+        f"actually shows):\n{lines}\n"
+    )
+
+
 class EvidenceItem(BaseModel):
     claim: str
     source: str
@@ -166,5 +179,6 @@ class Seat(Protocol):
         llm_client: Any,
         round_n: int = 0,
         sample_index: int = 0,
+        memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict: ...

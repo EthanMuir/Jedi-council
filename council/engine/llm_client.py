@@ -23,7 +23,8 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 
 from council.config import Settings
-from council.seats.base import SeatVerdict
+from council.engine.routing import resolve_route
+from council.seats.base import SeatVerdict, format_memory_context
 
 _FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "seat_verdicts"
 
@@ -125,6 +126,20 @@ class LLMClient:
                 seat_id, fixture_name or seat_id, response_model, sample_index
             )
 
+        route = resolve_route(seat_id, self.settings, default_model=model)
+        if route.provider != "anthropic":
+            # Routing infrastructure (Addendum A3) exists and correctly
+            # resolved a heterogeneous provider -- but live calling for
+            # anything other than Anthropic isn't wired up yet. This should
+            # be unreachable until an OPENAI_API_KEY / GOOGLE_API_KEY is
+            # actually configured, at which point it's the next thing to build.
+            raise NotImplementedError(
+                f"seat '{seat_id}' routed to provider '{route.provider}' "
+                f"(model '{route.model}'), but live calling for non-Anthropic "
+                "providers is not implemented yet -- only routing resolution is."
+            )
+        model = route.model
+
         schema = response_model.model_json_schema()
         prompt_hash = self._prompt_hash(system_prompt, user_prompt)
         last_error: Exception | None = None
@@ -202,8 +217,11 @@ class LLMClient:
         user_prompt: str,
         fixture_name: str | None = None,
         sample_index: int = 0,
+        memories: list | None = None,
         max_retries: int = 2,
     ) -> SeatVerdict:
+        if memories:
+            user_prompt = user_prompt + format_memory_context(memories)
         try:
             return await self.get_structured(
                 seat_id=seat_id,

@@ -23,6 +23,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from council.calibration.officer import compute_weights
 from council.config import Settings
 from council.crypt.db import connect, get_open_tickers
 from council.crypt.ledger import write_prediction, write_seat_vote
@@ -32,13 +33,15 @@ from council.data.providers.fixtures import FixtureProvider
 from council.data.providers.fmp import FMPProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
 from council.data.service import DataService
-from council.engine.aggregation import DATA_QUALITY_MULTIPLIER, weighted_vote
+from council.engine.aggregation import DATA_QUALITY_MULTIPLIER, extremize, weighted_vote
 from council.engine.base_rate import RealityAnchor, check_plausibility, compute_reality_anchor
 from council.engine.cost_auditor import CostAuditResult, audit
 from council.engine.horizons import competence, is_competent, resolve_at_for
 from council.engine.llm_client import LLMClient
 from council.engine.risk_warden import RiskSizing, size_position
+from council.engine.routing import resolve_route
 from council.engine.sampling import aggregate_samples
+from council.memory.store import MemoryStore, to_seat_memory_lesson
 from council.engine.schemas import (
     DebateArgument,
     GrandMasterVerdict,
@@ -58,7 +61,12 @@ from council.seats.grand_master import GrandMasterSeat
 from council.seats.insider_reader import InsiderReaderSeat
 from council.seats.macro_sage import MacroSageSeat
 from council.seats.oracle_options import OracleOptionsSeat
-from council.seats.prosecutor import ProsecutorSeat, detect_correlated_evidence
+from council.seats.prosecutor import (
+    INCOHERENCE_WEIGHT_DISCOUNT,
+    ProsecutorSeat,
+    detect_correlated_evidence,
+    detect_incoherent_decompositions,
+)
 from council.seats.senate_watcher import SenateWatcherSeat
 from council.seats.structure_archivist import StructureArchivistSeat
 from council.seats.technician import TechnicianSeat
@@ -108,6 +116,9 @@ class DeliberationResult:
     prosecutor_verdicts: list[ProsecutorVerdict]
     correlated_evidence: list[str]
     weighted_vote_result: tuple[str, float, float]
+    p_raw: float
+    p_extremized: float
+    incoherent_decompositions: dict
     gates_passed: bool
     gate_failure_reasons: list[str]
     cost_audit: CostAuditResult
@@ -156,22 +167,35 @@ async def run_deliberation(
     data_service = build_data_service(settings)
     llm_client = LLMClient(settings)
     semaphore = asyncio.Semaphore(settings.max_concurrent_llm_calls)
+    conn = connect(settings.council_db_path)
 
     # ---- Phase A: blind round -------------------------------------------
     eligible_seats = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
     if not eligible_seats:
         raise ValueError(f"no Tier I seat is competent at horizon '{horizon}'")
 
+    calibration_weights = compute_weights(conn, [s.id for s in eligible_seats], settings, horizon)
+    memory = MemoryStore(conn, cap_per_seat=settings.memory_cap_per_seat)
+
     n_samples = settings.n_samples_per_seat
 
-    async def deliberate_one(seat, ctx, sample_index):
+    async def deliberate_one(seat, ctx, sample_index, memory_lessons):
         async with semaphore:
-            return await seat.deliberate(ctx, llm_client, sample_index=sample_index)
+            verdict = await seat.deliberate(
+                ctx, llm_client, sample_index=sample_index, memories=memory_lessons
+            )
+            if memory_lessons and verdict.vote != "NO_READ":
+                verdict = verdict.model_copy(update={"memory_applied": memory_lessons})
+            return verdict
 
     async def run_seat(seat) -> tuple:
         async with semaphore:
             ctx = await seat.gather(data_service, ticker, as_of, horizon)
-        samples = await asyncio.gather(*(deliberate_one(seat, ctx, i) for i in range(n_samples)))
+        retrieved = memory.retrieve(seat_id=seat.id, ticker=ticker, as_of=as_of, limit=5)
+        memory_lessons = [to_seat_memory_lesson(e) for e in retrieved]
+        samples = await asyncio.gather(
+            *(deliberate_one(seat, ctx, i, memory_lessons) for i in range(n_samples))
+        )
         sampled = aggregate_samples(seat.id, list(samples))
         return seat, ctx, sampled
 
@@ -210,6 +234,7 @@ async def run_deliberation(
         for seat, _ctx, sampled in results
     ]
     correlated_evidence = detect_correlated_evidence(tier1_summaries)
+    incoherent_decompositions = detect_incoherent_decompositions(verdicts_by_id)
 
     bull, bear, prosecutor = BullAdvocateSeat(), BearAdvocateSeat(), ProsecutorSeat()
     debate_transcript: list[DebateArgument] = []
@@ -236,6 +261,7 @@ async def run_deliberation(
                 debate_transcript,
                 plausibility_flags,
                 correlated_evidence,
+                incoherent_decompositions,
                 blind_vote,
                 round_n,
                 llm_client,
@@ -250,12 +276,22 @@ async def run_deliberation(
         if v.vote == "NO_READ":
             continue
         plausibility_multiplier = 0.5 if plausibility_flags.get(sid) == "IMPLAUSIBLE" else 1.0
+        coherence_multiplier = (
+            1 - INCOHERENCE_WEIGHT_DISCOUNT if sid in incoherent_decompositions else 1.0
+        )
         phase_d_weights[sid] = (
             competence(sid, horizon)
             * DATA_QUALITY_MULTIPLIER.get(v.data_quality, 0.5)
             * plausibility_multiplier
+            * coherence_multiplier
+            * calibration_weights.get(sid, 1.0)
         )
     weighted_vote_result = weighted_vote(verdicts_by_id, phase_d_weights)
+    wv_vote, wv_confidence, _wv_consensus = weighted_vote_result
+    p_raw = (
+        wv_confidence if wv_vote == "BULLISH" else 1 - wv_confidence if wv_vote == "BEARISH" else 0.5
+    )
+    p_extremized = extremize(p_raw, settings.extremize_alpha)
 
     # ---- Phase E: audit gates -----------------------------------------------
     directional_count = sum(1 for v in verdicts_by_id.values() if v.vote != "NO_READ")
@@ -293,7 +329,6 @@ async def run_deliberation(
     gates_passed = min_seats_gate and base_rate_gate and cost_gate and prosecutor_gate
 
     # ---- Risk Warden (sizing only, never sees the vote) ---------------------
-    conn = connect(settings.council_db_path)
     open_tickers = get_open_tickers(conn)
     risk_sizing = size_position(
         atr_implied_range_pct=reality_anchor.atr_implied_range_pct,
@@ -377,9 +412,12 @@ async def run_deliberation(
             correlated_evidence_warning=gm_verdict.correlated_evidence_warning,
             prosecutor_verdict=json.dumps([pv.model_dump() for pv in prosecutor_verdicts]),
             cost_audit_passed=cost_audit_result.passed,
+            p_raw=p_raw,
+            p_extremized=p_extremized,
             created_at=as_of,
         )
         for seat, _ctx, sampled in results:
+            route = resolve_route(seat.id, settings, default_model=settings.seat_model)
             write_seat_vote(
                 conn,
                 prediction_id=prediction_id,
@@ -387,8 +425,8 @@ async def run_deliberation(
                 verdict=sampled.representative,
                 dispersion=sampled.dispersion,
                 weight_applied=phase_d_weights.get(seat.id, 0.0),
-                model_id="fixture" if settings.resolved_no_llm else settings.seat_model,
-                provider="none" if settings.resolved_no_llm else "anthropic",
+                model_id="fixture" if settings.resolved_no_llm else route.model,
+                provider="none" if settings.resolved_no_llm else route.provider,
             )
     finally:
         conn.close()
@@ -415,6 +453,9 @@ async def run_deliberation(
         prosecutor_verdicts=prosecutor_verdicts,
         correlated_evidence=correlated_evidence,
         weighted_vote_result=weighted_vote_result,
+        p_raw=p_raw,
+        p_extremized=p_extremized,
+        incoherent_decompositions=incoherent_decompositions,
         gates_passed=gates_passed,
         gate_failure_reasons=gate_failure_reasons,
         cost_audit=cost_audit_result,

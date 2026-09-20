@@ -17,6 +17,7 @@ import uuid
 from datetime import datetime
 
 from council.crypt.db import compute_row_hash, get_last_hash
+from council.crypt.resolution import ResolutionOutcome
 from council.seats.base import SeatVerdict
 
 
@@ -51,6 +52,8 @@ def write_prediction(
     correlated_evidence_warning: str | None = None,
     prosecutor_verdict: str | None = None,
     cost_audit_passed: bool | None = None,
+    p_raw: float | None = None,
+    p_extremized: float | None = None,
     created_at: datetime | None = None,
 ) -> str:
     created_at = created_at or datetime.utcnow()
@@ -88,6 +91,8 @@ def write_prediction(
         "correlated_evidence_warning": correlated_evidence_warning,
         "prosecutor_verdict": prosecutor_verdict,
         "cost_audit_passed": int(cost_audit_passed) if cost_audit_passed is not None else None,
+        "p_raw": p_raw,
+        "p_extremized": p_extremized,
         "discussion_enabled": 0,
     }
     row_hash = compute_row_hash(fields, prev_hash)
@@ -139,3 +144,45 @@ def write_seat_vote(
         ),
     )
     conn.commit()
+
+
+def write_resolution(
+    conn: sqlite3.Connection,
+    *,
+    prediction_id: str,
+    resolved_at: datetime,
+    outcome: ResolutionOutcome,
+    notes: str | None = None,
+) -> None:
+    """One row per prediction_id -- the resolutions table's PRIMARY KEY
+    already makes a second write for the same prediction fail loudly."""
+    conn.execute(
+        """
+        INSERT INTO resolutions (
+            prediction_id, resolved_at, price_at_resolve, high, low,
+            direction_correct, entry_hit, exit_hit, invalidation_hit,
+            mfe_pct, mae_pct, realised_move_pct, brier, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            prediction_id,
+            resolved_at.isoformat(),
+            outcome.price_at_resolve,
+            outcome.high,
+            outcome.low,
+            _bool_to_int(outcome.direction_correct),
+            _bool_to_int(outcome.entry_hit),
+            _bool_to_int(outcome.exit_hit),
+            _bool_to_int(outcome.invalidation_hit),
+            outcome.mfe_pct,
+            outcome.mae_pct,
+            outcome.realised_move_pct,
+            outcome.brier,
+            notes,
+        ),
+    )
+    conn.commit()
+
+
+def _bool_to_int(value: bool | None) -> int | None:
+    return None if value is None else int(value)

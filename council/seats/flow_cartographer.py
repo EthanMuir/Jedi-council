@@ -8,7 +8,7 @@ from typing import Any
 from council.data.service import DataService
 from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
 from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
@@ -50,6 +50,7 @@ class FlowCartographerSeat:
         llm_client: LLMClient,
         round_n: int = 0,
         sample_index: int = 0,
+        memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict:
         s = ctx["institutional"]
@@ -87,4 +88,5 @@ class FlowCartographerSeat:
             user_prompt=user_prompt,
             fixture_name=self.id,
             sample_index=sample_index,
+            memories=memories,
         )

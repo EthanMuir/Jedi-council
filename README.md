@@ -7,7 +7,7 @@ spec). The single governing constraint: every Council Member seat is
 isolated by *data*, enforced in code (`DataIsolationError`), not by prompt.
 Five LLM personas reading the same feed are one source wearing five robes.
 
-## Status: Phase 0 + Phase 1 + Phase 2 + Phase 3 complete
+## Status: Phase 0 + Phase 1 + Phase 2 + Phase 3 + Phase 4 complete
 
 - **DataService** (`council/data/`) -- normalised schemas, SQLite disk
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
@@ -57,8 +57,8 @@ Five LLM personas reading the same feed are one source wearing five robes.
   force `NO_CONVICTION`.
 - **Phase D -- weighted vote** (`council/engine/aggregation.py`) -- each
   directional seat weighted by horizon-competence x data-quality x
-  plausibility (Calibration Officer weighting arrives Phase 4; every seat
-  is 1.0 until then).
+  plausibility x decomposition-coherence x the Calibration Officer's
+  weight (1.0 until a seat has 20+ resolutions).
 - **Phase E -- audit gates** -- Cost Auditor (`council/engine/cost_auditor.py`,
   pure computation: spread/break-even/edge, using a configurable assumed
   spread since there's no live bid/ask feed for the underlying yet),
@@ -76,28 +76,86 @@ Five LLM personas reading the same feed are one source wearing five robes.
   concentration check against other open Crypt positions. Its function
   signature takes no vote, probability, or direction parameter at all
   (Addendum A9's wall enforced at the type level, not by convention).
+- **Decomposition coherence check** (`council/seats/prosecutor.py`) --
+  Addendum A7. Verifies a seat's `decomposition` sub-probabilities actually
+  combine (AND/OR/CONDITIONAL arithmetic) to within 0.15 of its headline
+  `probability`; flags `INCOHERENT_CONFIDENCE` and discounts that seat's
+  Phase D weight by 30% for the deliberation.
+- **Multi-provider routing** (`council/engine/routing.py`,
+  `config/models.yaml`) -- Addendum A3 infrastructure. Every seat has a
+  declared provider/model and a fallback; routing resolves to the intended
+  provider only if that provider's key is configured, else falls back to
+  Anthropic automatically. Since no OpenAI/Google keys exist yet, every
+  seat resolves to its Anthropic fallback in practice -- one `.env` change
+  away from real heterogeneity, no code changes needed. Live calling for
+  non-Anthropic providers deliberately raises `NotImplementedError` rather
+  than silently mis-calling the wrong API.
+- **The resolution sweep** (`council/crypt/resolution.py`,
+  `council/engine/resolution_sweep.py`, `python -m council resolve`) --
+  bar-by-bar sequencing: a stop broken before the target is a loss even if
+  price later reaches the target (spec: "be precise here, most systems get
+  this wrong"). Computes direction_correct, entry/exit/invalidation hits in
+  the order they actually occurred, MFE/MAE, and per-prediction Brier.
+  Never modifies a prediction row -- resolutions are new, immutable rows.
+- **The Calibration Officer** (`council/calibration/officer.py`) --
+  per-seat hit rate, Brier score, log loss, and a calibration curve,
+  derived independently of the council's own vote (a seat's own
+  correctness is scored against its own vote, not `council_vote`). Every
+  seat starts at weight 1.0; weight only moves after 20+ resolutions.
+  Addendum A4 Stage 1 percentile selection: once 8+ seats qualify, the
+  worst 30% by Brier get excluded (weight 0) for that deliberation --  a
+  seat below the resolution floor is never excluded, regardless of cohort
+  size.
+- **Extremizing** (`council/engine/aggregation.py::extremize`) -- Addendum
+  A4 Stage 3, log-odds extremizing. `Settings.extremize_alpha` defaults to
+  1.0 (off, a no-op). Both `p_raw` and `p_extremized` are stored on every
+  prediction regardless, so the Crypt can score which is better once
+  there's enough resolved history to ask that question honestly.
+- **Layered memory + decay** (`council/memory/`) -- shallow (5-day
+  half-life: Technician, Catalyst Seer, Oracle of Options, Cross-Market),
+  intermediate (45-day), and deep (400-day) layers matched to each seat's
+  data type. Retrieval score = relevance x recency_weight x importance,
+  capped at 200 events/seat with lowest-score eviction. The point-in-time
+  guard covers memory too: `retrieve()` only returns events whose `as_of`
+  is *strictly* earlier than the prediction being made -- a memory event
+  from the future is exactly the kind of lookahead the rest of this system
+  works to prevent.
+- **The reflection loop** (`council/memory/reflection.py`) -- immediate
+  reflection runs on every resolution: each participating seat is given
+  only its own verdict and the realised outcome (nothing about what other
+  seats said) and writes one concrete, actionable lesson with a hard
+  vagueness filter ("I should be more careful" is rejected outright).
+  Extended (monthly, per-seat bias summary) reflection is implemented and
+  tested but never alters a stored verdict -- it can only be written to
+  memory. Memory is genuinely wired into deliberation, not just plumbing
+  that exists on paper: `python -m council deliberate` retrieves relevant
+  memories before calling each seat, and a live end-to-end test proves a
+  lesson from one resolved prediction gets applied on the next
+  deliberation of the same ticker.
 
 Not yet built (by design -- stopping here per the spec's phase order): the
-Calibration Officer and its weight vector, the resolution sweep and
-scoring, and the UI (all Phase 4+).
+UI (Phase 5), the discussion mechanism (Phase 7, deliberately gated behind
+an A/B that doesn't exist yet), and actually calling a non-Anthropic
+provider (the routing decision exists; the API call doesn't).
 
 Known scope cuts (see inline comments): Fundamentals/AnalystEstimates/Macro
-snapshots don't yet enforce a filing-lag point-in-time guard the way the
-dated feeds (insider transactions, congress trades, transcripts, SEC
-filings, 13F) do -- deferred to Phase 4, when the Crypt actually backtests
-against historical `as_of` dates. FMP provider endpoints are unverified
-against a live key (none configured). Cross-Market Navigator's sector/peer/
-index/overseas proxies all resolve to the same `DEFAULT_ohlcv.json` fixture
-in offline mode, so their values are currently identical -- a fixture-mode
-artifact, not a code issue. Cost Auditor's spread is an assumed constant
-(`Settings.assumed_spread_bps`), not a live quote. Risk Warden's
-"correlation against other open positions" is currently a same-ticker
-concentration check only, not a real cross-asset correlation matrix. Debate
-and Prosecutor fixtures are static text (not horizon- or ticker-aware), so
-at short horizons the Reality Anchor will often flag their fixed
-expected-move numbers IMPLAUSIBLE and fail the base-rate gate -- a real,
-correct audit-gate response to a fixture-mode limitation, not a bug (try
-`--horizon 1d` vs `--horizon 1w` to see both paths).
+snapshots still don't enforce a filing-lag point-in-time guard the way the
+dated feeds do -- a real gap, deferred again; it matters most for
+historical backtesting, which this system doesn't do yet either. FMP
+provider endpoints are unverified against a live key (none configured).
+Cross-Market Navigator's sector/peer/index/overseas proxies all resolve to
+the same `DEFAULT_ohlcv.json` fixture offline, so their values are
+currently identical -- a fixture-mode artifact, not a code issue. Cost
+Auditor's spread is an assumed constant, not a live quote. Risk Warden's
+"correlation against other open positions" is a same-ticker concentration
+check only, not a real cross-asset correlation matrix. Debate/Prosecutor/
+reflection fixtures are static text (not horizon- or ticker-aware), so at
+short horizons the Reality Anchor will often flag their fixed expected-move
+numbers IMPLAUSIBLE and fail the base-rate gate -- a real, correct
+audit-gate response to a fixture-mode limitation, not a bug (try
+`--horizon 1d` vs `--horizon 1w` to see both paths). Memory relevance is a
+same-ticker-or-not heuristic, not semantic/embedding-based -- a documented
+simplification, not an oversight.
 
 ## Setup
 
@@ -111,12 +169,25 @@ With no `ANTHROPIC_API_KEY` / `ALPHA_VANTAGE_API_KEY` set, the system
 automatically runs in fixture mode: seat verdicts come from
 `council/tests/fixtures/seat_verdicts/`, market data from
 `council/tests/fixtures/market_data/` (NVDA only, for now). Set the keys in
-`.env` to go live -- no code changes needed.
+`.env` to go live -- no code changes needed. Adding `OPENAI_API_KEY` /
+`GOOGLE_API_KEY` similarly activates the seats routed to those providers in
+`config/models.yaml`, with no code changes either.
 
 ## Run it
 
 ```bash
+# Deliberate -- writes one row to the Crypt (blind + synthesized together)
 .venv/bin/python -m council deliberate NVDA --horizon 1w
+
+# Backdate it, so the resolution sweep has something to resolve without
+# waiting real time to pass -- also demonstrates the point-in-time guards
+# correctly narrowing what each seat can see at an earlier as_of
+.venv/bin/python -m council deliberate NVDA --horizon 1w --as-of 2026-08-01T16:00:00
+
+# Sweep every unresolved prediction whose resolve_at has passed: writes
+# resolutions, runs immediate reflection into memory, prints a per-seat
+# calibration snapshot
+.venv/bin/python -m council resolve
 ```
 
 ## Test

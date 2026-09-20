@@ -120,6 +120,8 @@ def test_hash_chain_detects_tampering(conn):
         "correlated_evidence_warning": row["correlated_evidence_warning"],
         "prosecutor_verdict": row["prosecutor_verdict"],
         "cost_audit_passed": row["cost_audit_passed"],
+        "p_raw": row["p_raw"],
+        "p_extremized": row["p_extremized"],
         "discussion_enabled": row["discussion_enabled"],
     }
     recomputed = compute_row_hash(fields, row["prev_hash"])

@@ -7,16 +7,29 @@ Phase D (spec section 4):
 
 Dispersion is already baked into each seat's stored `probability` (Phase 2's
 sampling discount), so it is not applied a second time here -- see
-council/engine/sampling.py. seat_weight is the Calibration Officer's output,
-which doesn't exist until Phase 4 (needs 20+ resolved predictions); it
-defaults to 1.0 for every seat until then. NO_READ contributes to neither
-numerator nor denominator.
+council/engine/sampling.py. seat_weight is the Calibration Officer's output
+(council/calibration/officer.py); it stays 1.0 per seat until that seat has
+20+ resolved predictions. NO_READ contributes to neither numerator nor
+denominator.
 """
 from __future__ import annotations
 
 from council.seats.base import SeatVerdict
 
 DATA_QUALITY_MULTIPLIER = {"GOOD": 1.0, "PARTIAL": 0.7, "POOR": 0.4}
+
+
+def extremize(p: float, alpha: float = 1.0) -> float:
+    """Addendum A4 Stage 3: log-odds extremizing. alpha=1.0 is a no-op.
+    Legitimate only under information diversity across the aggregated
+    forecasters -- which data-isolated seats are, by construction. Do not
+    enable (alpha>1.0) without 50+ resolutions showing it actually helps on
+    this system's own data; see Settings.extremize_alpha."""
+    if p <= 0.0 or p >= 1.0 or alpha == 1.0:
+        return p
+    odds = p / (1 - p)
+    extremized = (odds**alpha) / (1 + odds**alpha)
+    return round(extremized, 3)
 
 
 def weighted_vote(

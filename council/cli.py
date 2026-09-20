@@ -1,11 +1,14 @@
-"""python -m council deliberate NVDA --horizon 1w"""
+"""python -m council deliberate NVDA --horizon 1w
+python -m council resolve"""
 from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime
 
 from council.config import get_settings
-from council.engine.orchestrator import DeliberationResult, run_deliberation
+from council.engine.orchestrator import TIER_I_SEATS, DeliberationResult, run_deliberation
+from council.engine.resolution_sweep import sweep_unresolved
 
 
 def _print_result(result: DeliberationResult) -> None:
@@ -30,6 +33,8 @@ def _print_result(result: DeliberationResult) -> None:
                 f"   expected_move: {v.expected_move_pct}%"
             )
         print(f"    thesis: {v.thesis}")
+        if v.memory_applied:
+            print(f"    memory_applied: {[m.lesson for m in v.memory_applied]}")
     print(
         f"\n  BLIND VOTE: {result.blind_vote}   probability={result.blind_probability}"
         f"   consensus={result.blind_consensus_pct}%"
@@ -62,10 +67,15 @@ def _print_result(result: DeliberationResult) -> None:
         if pv.veto_reason:
             print(f"    veto_reason: {pv.veto_reason}")
     print(f"\n  Correlated evidence: {result.correlated_evidence or 'none'}")
+    if result.incoherent_decompositions:
+        print("  INCOHERENT_CONFIDENCE (decomposition doesn't support headline number):")
+        for sid, r in result.incoherent_decompositions.items():
+            print(f"    - {sid}: stated {r.stated_probability}, implied {r.implied_probability}")
 
     print("\n--- PHASE D/E: WEIGHTED VOTE + AUDIT GATES ---")
     wv_vote, wv_conf, wv_consensus = result.weighted_vote_result
     print(f"  Weighted vote: {wv_vote}   confidence={wv_conf}   consensus={wv_consensus}%")
+    print(f"  p_raw={result.p_raw}   p_extremized={result.p_extremized}")
     print(f"  Cost Auditor: edge={result.cost_audit.edge_pct}%   passed={result.cost_audit.passed}")
     print(f"  Gates passed: {result.gates_passed}")
     if result.gate_failure_reasons:
@@ -95,6 +105,40 @@ def _print_result(result: DeliberationResult) -> None:
     print(f"\nLLM calls: {len(result.call_log)}   total estimated cost: ${total_cost:.4f}\n")
 
 
+def _print_sweep_results(settings, swept) -> None:
+    print(f"\n=== THE CRYPT -- resolution sweep ===")
+    if not swept:
+        print("  Nothing to resolve -- no unresolved prediction has a passed resolve_at.\n")
+        return
+    for s in swept:
+        mark = "amber (correct)" if s.direction_correct else (
+            "grey (n/a)" if s.direction_correct is None else "crimson (wrong)"
+        )
+        print(
+            f"  [{s.ticker} {s.horizon}] {s.council_vote} -> realised {s.realised_move_pct:+.2f}%"
+            f"   {mark}   lessons_written={s.lessons_written}"
+        )
+
+    print("\n--- CALIBRATION SNAPSHOT (per seat, all horizons) ---")
+    from council.calibration.officer import compute_seat_calibration
+    from council.crypt.db import connect
+
+    conn = connect(settings.council_db_path)
+    for seat in TIER_I_SEATS:
+        calib = compute_seat_calibration(conn, seat.id)
+        if calib.n_resolutions == 0:
+            continue
+        gate = "OK" if calib.n_resolutions >= settings.calibration_min_resolutions else (
+            f"{calib.n_resolutions}/{settings.calibration_min_resolutions} until weight can move"
+        )
+        print(
+            f"  [{seat.id}] n={calib.n_resolutions}   hit_rate={calib.hit_rate}"
+            f"   brier={calib.brier_score}   log_loss={calib.log_loss}   ({gate})"
+        )
+    conn.close()
+    print()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="council")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -102,14 +146,26 @@ def main(argv: list[str] | None = None) -> None:
     deliberate = sub.add_parser("deliberate", help="Run a full council deliberation for a ticker")
     deliberate.add_argument("ticker")
     deliberate.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], required=True)
+    deliberate.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO datetime to backdate the deliberation to (e.g. 2026-08-01T16:00:00), "
+        "for demoing the deliberate -> resolve lifecycle without waiting real time to pass.",
+    )
+
+    sub.add_parser("resolve", help="Sweep unresolved predictions whose resolve_at has passed")
 
     args = parser.parse_args(argv)
     settings = get_settings()
     settings.ensure_dirs()
 
     if args.command == "deliberate":
-        result = asyncio.run(run_deliberation(args.ticker.upper(), args.horizon, settings))
+        as_of = datetime.fromisoformat(args.as_of) if args.as_of else None
+        result = asyncio.run(run_deliberation(args.ticker.upper(), args.horizon, settings, as_of=as_of))
         _print_result(result)
+    elif args.command == "resolve":
+        swept = asyncio.run(sweep_unresolved(settings))
+        _print_sweep_results(settings, swept)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+{
+  "lesson_id": "placeholder",
+  "seat_id": "placeholder",
+  "ticker": "placeholder",
+  "horizon": "placeholder",
+  "was_correct": false,
+  "probability_stated": 0.6,
+  "error_type": "MAGNITUDE",
+  "lesson": "When the comparison class base rate sat near 0.55, the realised move undershot the stated target by a wide margin despite the correct direction -- treat sub-0.6 base rates as a signal to size the target closer to the ATR-implied range, not the optimistic case.",
+  "generalises_beyond_this_ticker": true
+}

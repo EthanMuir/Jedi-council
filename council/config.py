@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     alpha_vantage_api_key: str = ""
     fmp_api_key: str = ""
+    openai_api_key: str = ""
+    google_api_key: str = ""
 
     no_llm: bool | None = None
     use_data_fixtures: bool | None = None
@@ -33,6 +35,13 @@ class Settings(BaseSettings):
     assumed_spread_bps: float = 5.0  # no live bid/ask feed yet -- see Cost Auditor
     risk_budget_pct: float = 1.0
     kelly_cap: float = 0.25  # quarter-Kelly default
+
+    # Phase 4: Calibration Officer, extremizing, memory
+    calibration_min_resolutions: int = 20
+    calibration_min_cohort_for_exclusion: int = 8
+    calibration_exclude_worst_pct: float = 0.30
+    extremize_alpha: float = 1.0  # 1.0 = off; do not enable until 50+ resolutions show it helps
+    memory_cap_per_seat: int = 200
 
     @property
     def resolved_no_llm(self) -> bool:

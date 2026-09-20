@@ -34,6 +34,18 @@ def compute_row_hash(fields: dict, prev_hash: str) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def get_sweepable_predictions(conn: sqlite3.Connection, as_of: str) -> list[sqlite3.Row]:
+    """Predictions whose resolve_at has passed `as_of` and have no
+    resolution row yet -- exactly what the resolution sweep should touch."""
+    return conn.execute(
+        "SELECT p.* FROM predictions p "
+        "LEFT JOIN resolutions r ON r.prediction_id = p.id "
+        "WHERE r.prediction_id IS NULL AND p.resolve_at <= ? "
+        "ORDER BY p.resolve_at ASC",
+        (as_of,),
+    ).fetchall()
+
+
 def get_open_tickers(conn: sqlite3.Connection) -> list[str]:
     """Tickers with a prediction row that has no matching resolution yet --
     used by the Risk Warden's concentration check. Since the resolution

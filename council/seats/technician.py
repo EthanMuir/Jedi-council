@@ -9,7 +9,7 @@ from typing import Any
 from council.data.service import DataService
 from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
 from council.seats.debiasing import DEBIASING_PREAMBLE
 from council.seats.technical_indicators import analyse
 
@@ -54,6 +54,7 @@ class TechnicianSeat:
         llm_client: LLMClient,
         round_n: int = 0,
         sample_index: int = 0,
+        memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
     ) -> SeatVerdict:
         series = ctx["ohlcv"]
@@ -96,6 +97,7 @@ class TechnicianSeat:
             user_prompt=user_prompt,
             fixture_name="technician",
             sample_index=sample_index,
+            memories=memories,
         )
 
         if verdict.vote == "NO_READ":

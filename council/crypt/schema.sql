@@ -44,6 +44,12 @@ CREATE TABLE IF NOT EXISTS predictions (
     flip_count                   INTEGER,
     protected_dissenters         TEXT,
 
+    -- Addendum A4 Stage 3: both stored on every prediction regardless of
+    -- whether extremizing is enabled, so the Crypt can score which is
+    -- better on this system's own data before turning it on for real.
+    p_raw                        REAL,
+    p_extremized                 REAL,
+
     prev_hash                    TEXT NOT NULL,
     row_hash                     TEXT NOT NULL UNIQUE
 );
