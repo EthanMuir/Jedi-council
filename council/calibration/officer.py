@@ -145,3 +145,20 @@ def compute_weights(
         weights[sid] = round(max(0.25, min(2.0, raw)), 3)
 
     return weights
+
+
+RANKS = ("YOUNGLING", "PADAWAN", "KNIGHT", "MASTER", "GRAND_MASTER")
+
+
+def rank_for_seat(calib: SeatCalibration, min_resolutions: int) -> str:
+    """Gated on a resolved track record -- a lucky streak can't mint a
+    Master, per spec section 3's Archives description."""
+    if calib.n_resolutions < min_resolutions or calib.hit_rate is None:
+        return "YOUNGLING"
+    if calib.hit_rate >= 0.65:
+        return "GRAND_MASTER"
+    if calib.hit_rate >= 0.58:
+        return "MASTER"
+    if calib.hit_rate >= 0.52:
+        return "KNIGHT"
+    return "PADAWAN"

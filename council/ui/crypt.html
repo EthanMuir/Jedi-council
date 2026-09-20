@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The High Council -- The Crypt</title>
+<link rel="stylesheet" href="/css/theme.css" />
+<link rel="stylesheet" href="/css/crypt.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1 style="text-align:center; margin-bottom: 24px;">The Crypt</h1>
+
+  <div class="panel" style="margin-bottom: 20px; text-align:center;">
+    <p class="dim">Every prediction ever made, hash-chained and immutable. Pull the lever to sweep
+    every unresolved prediction whose resolution window has passed.</p>
+    <button class="btn btn-lever" id="update-crypt-btn">&#9889; Update The Crypt &#9889;</button>
+    <div id="sweep-status" class="mono dim" style="margin-top: 10px; min-height: 18px;"></div>
+  </div>
+
+  <div class="panel" style="margin-bottom: 20px;">
+    <h2>Scoreboard</h2>
+    <div id="scoreboard" class="mono dim">Loading...</div>
+  </div>
+
+  <div class="panel" style="margin-bottom: 20px;">
+    <div class="row" style="align-items:flex-end; gap: 20px;">
+      <div>
+        <h3>Filter by ticker</h3>
+        <input type="text" id="filter-ticker" placeholder="e.g. NVDA" />
+      </div>
+      <div>
+        <h3>Filter by horizon</h3>
+        <div class="toggle-row" id="filter-horizon">
+          <button class="toggle-option active" data-horizon="">All</button>
+          <button class="toggle-option" data-horizon="1d">1D</button>
+          <button class="toggle-option" data-horizon="1w">1W</button>
+          <button class="toggle-option" data-horizon="1m">1M</button>
+          <button class="toggle-option" data-horizon="1y">1Y</button>
+        </div>
+      </div>
+      <div>
+        <button class="btn" id="refresh-btn">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="holocron-grid" id="holocron-grid"></div>
+</div>
+
+<div class="holo-modal-backdrop" id="holo-backdrop">
+  <div class="panel holo-modal" id="holo-modal"></div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/crypt.js"></script>
+</body>
+</html>

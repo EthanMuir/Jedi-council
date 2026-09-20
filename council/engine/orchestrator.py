@@ -22,6 +22,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Awaitable, Callable
 
 from council.calibration.officer import compute_weights
 from council.config import Settings
@@ -162,7 +163,20 @@ async def run_deliberation(
     horizon: str,
     settings: Settings,
     as_of: datetime | None = None,
+    progress: Callable[[str, dict], Awaitable[None]] | None = None,
+    context: str | None = None,
 ) -> DeliberationResult:
+    """`progress`, when given, is awaited as `progress(event, payload)` at
+    each phase transition and seat completion -- purely additive, no
+    caller that omits it (the CLI, every existing test) observes any
+    behaviour change. This is what lets the UI show the deliberation as a
+    spectacle instead of a spinner: seats illuminate as they actually
+    finish, not all at once when the whole pipeline returns."""
+
+    async def emit(event: str, payload: dict) -> None:
+        if progress:
+            await progress(event, payload)
+
     as_of = as_of or datetime.utcnow()
     data_service = build_data_service(settings)
     llm_client = LLMClient(settings)
@@ -197,6 +211,18 @@ async def run_deliberation(
             *(deliberate_one(seat, ctx, i, memory_lessons) for i in range(n_samples))
         )
         sampled = aggregate_samples(seat.id, list(samples))
+        await emit(
+            "seat_result",
+            {
+                "seat_id": seat.id,
+                "title": seat.title,
+                "vote": sampled.representative.vote,
+                "probability": sampled.representative.probability,
+                "dispersion": sampled.dispersion,
+                "data_quality": sampled.representative.data_quality,
+                "thesis": sampled.representative.thesis,
+            },
+        )
         return seat, ctx, sampled
 
     results: list[tuple] = await asyncio.gather(*(run_seat(seat) for seat in eligible_seats))
@@ -207,6 +233,10 @@ async def run_deliberation(
     dispersion_by_id = {seat.id: sampled.dispersion for seat, _ctx, sampled in results}
     title_by_id = {seat.id: seat.title for seat, _ctx, _sampled in results}
     blind_vote, blind_probability, blind_consensus_pct = weighted_vote(verdicts_by_id)
+    await emit(
+        "phase_a_complete",
+        {"blind_vote": blind_vote, "blind_probability": blind_probability, "blind_consensus_pct": blind_consensus_pct},
+    )
 
     price_series = await data_service.get_ohlcv(ticker, as_of=as_of, lookback_days=5)
     if not price_series.bars:
@@ -227,6 +257,15 @@ async def run_deliberation(
         for sid, v in verdicts_by_id.items()
         if v.vote != "NO_READ"
     }
+    await emit(
+        "phase_b_reality_anchor",
+        {
+            "max_plausible_move_pct": reality_anchor.max_plausible_move_pct,
+            "hit_rate_up": reality_anchor.hit_rate_up,
+            "options_implied_move_pct": reality_anchor.options_implied_move_pct,
+            "plausibility_flags": plausibility_flags,
+        },
+    )
 
     # ---- Phase C: Debate ---------------------------------------------------
     tier1_summaries = [
@@ -270,6 +309,17 @@ async def run_deliberation(
         if pv:
             prosecutor_verdicts.append(pv)
 
+        await emit(
+            "debate_round",
+            {
+                "round_n": round_n,
+                "bull_argument": bull_arg.argument if bull_arg else None,
+                "bear_argument": bear_arg.argument if bear_arg else None,
+                "prosecutor_veto": pv.veto if pv else False,
+                "prosecutor_findings": [f.description for f in pv.findings] if pv else [],
+            },
+        )
+
     # ---- Phase D: weighted vote ---------------------------------------------
     phase_d_weights = {}
     for sid, v in verdicts_by_id.items():
@@ -292,6 +342,10 @@ async def run_deliberation(
         wv_confidence if wv_vote == "BULLISH" else 1 - wv_confidence if wv_vote == "BEARISH" else 0.5
     )
     p_extremized = extremize(p_raw, settings.extremize_alpha)
+    await emit(
+        "phase_d_weighted_vote",
+        {"vote": wv_vote, "confidence": wv_confidence, "p_raw": p_raw, "p_extremized": p_extremized},
+    )
 
     # ---- Phase E: audit gates -----------------------------------------------
     directional_count = sum(1 for v in verdicts_by_id.values() if v.vote != "NO_READ")
@@ -327,6 +381,7 @@ async def run_deliberation(
     if not prosecutor_gate:
         gate_failure_reasons.append("Prosecutor veto")
     gates_passed = min_seats_gate and base_rate_gate and cost_gate and prosecutor_gate
+    await emit("phase_e_gates", {"gates_passed": gates_passed, "reasons": gate_failure_reasons})
 
     # ---- Risk Warden (sizing only, never sees the vote) ---------------------
     open_tickers = get_open_tickers(conn)
@@ -337,6 +392,13 @@ async def run_deliberation(
         kelly_cap=settings.kelly_cap,
         ticker=ticker,
         other_open_tickers=open_tickers,
+    )
+    await emit(
+        "risk_warden",
+        {
+            "position_size_pct_of_book": risk_sizing.position_size_pct_of_book,
+            "concentration_warning": risk_sizing.concentration_warning,
+        },
     )
 
     # ---- Phase F: synthesis ---------------------------------------------------
@@ -351,6 +413,7 @@ async def run_deliberation(
             correlated_evidence=correlated_evidence,
             llm_client=llm_client,
             model=settings.synthesis_model,
+            user_context=context,
         )
         if gm_verdict is None:
             gm_verdict = _synthetic_grand_master_verdict(
@@ -364,6 +427,16 @@ async def run_deliberation(
             "Audit gates failed: " + "; ".join(gate_failure_reasons),
             correlated_evidence,
         )
+    await emit(
+        "phase_f_synthesis",
+        {
+            "vote": gm_verdict.vote,
+            "confidence": gm_verdict.confidence,
+            "dissent_summary": gm_verdict.dissent_summary,
+            "correlated_evidence_warning": gm_verdict.correlated_evidence_warning,
+            "reasoning": gm_verdict.reasoning,
+        },
+    )
 
     # ---- Phase G: Crypt write (exactly once) -----------------------------
     snapshot_fields = {
@@ -435,6 +508,8 @@ async def run_deliberation(
         SeatResult(seat.id, seat.title, sampled.representative, sampled.dispersion, len(sampled.samples))
         for seat, _ctx, sampled in results
     ]
+
+    await emit("phase_g_crypt_write", {"prediction_id": prediction_id})
 
     return DeliberationResult(
         prediction_id=prediction_id,

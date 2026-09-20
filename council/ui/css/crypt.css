@@ -1,0 +1,63 @@
+.holocron-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.holocron-card {
+  background: var(--slate);
+  border: 2px solid #2a3348;
+  box-shadow: inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo), 3px 3px 0 rgba(0, 0, 0, 0.35);
+  padding: 12px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.holocron-card:hover {
+  transform: translateY(-3px);
+}
+
+.holocron-card.outcome-correct {
+  border-color: var(--amber);
+  box-shadow: 0 0 14px rgba(232, 176, 79, 0.4), inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo);
+}
+
+.holocron-card.outcome-wrong {
+  border-color: var(--crimson);
+  box-shadow: 0 0 14px rgba(214, 69, 63, 0.4), inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo);
+}
+
+.holocron-card.outcome-unresolved {
+  opacity: 0.65;
+}
+
+.holocron-card .ticker-line {
+  font-family: var(--font-header);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.holocron-card .meta-line {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.scoreboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scoreboard-table td, .scoreboard-table th {
+  padding: 6px 12px;
+  text-align: right;
+  border-bottom: 1px solid #2a3348;
+}
+
+.scoreboard-table th:first-child, .scoreboard-table td:first-child {
+  text-align: left;
+}
+
+.scoreboard-table th {
+  color: var(--cyan);
+  font-weight: normal;
+}

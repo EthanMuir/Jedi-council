@@ -60,12 +60,20 @@ class GrandMasterSeat:
         correlated_evidence: list[str],
         llm_client: LLMClient,
         model: str,
+        user_context: str | None = None,
     ) -> GrandMasterVerdict | None:
         vote, confidence, consensus_pct = weighted_vote_result
         vetoed = any(pv.veto for pv in prosecutor_verdicts)
 
         user_prompt = (
-            f"Weighted council vote (Phase D, pre-synthesis): {vote} "
+            (
+                f"The user asked specifically: \"{user_context}\" -- address it directly in "
+                "your reasoning, but your vote/confidence must still be grounded in the "
+                "evidence below, not just the question's framing.\n\n"
+                if user_context
+                else ""
+            )
+            + f"Weighted council vote (Phase D, pre-synthesis): {vote} "
             f"(confidence={confidence}, consensus={consensus_pct}%)\n"
             f"Dissent map: {summarize_dissent(tier1_summaries)}\n\n"
             f"Tier I verdicts:\n{format_tier1_summaries(tier1_summaries)}\n\n"

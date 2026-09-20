@@ -1,0 +1,52 @@
+.archives-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.archives-table th, .archives-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid #2a3348;
+}
+
+.archives-table th {
+  color: var(--cyan);
+  font-family: var(--font-header);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.rank-badge {
+  font-family: var(--font-header);
+  font-size: 8px;
+  padding: 5px 8px;
+  display: inline-block;
+  border: 1px solid;
+}
+
+.rank-YOUNGLING { color: var(--bone-dim); border-color: var(--grey); }
+.rank-PADAWAN { color: var(--cyan); border-color: var(--cyan-dim); }
+.rank-KNIGHT { color: #9fe6ce; border-color: #4a9b7f; }
+.rank-MASTER { color: var(--amber); border-color: var(--amber-dim); }
+.rank-GRAND_MASTER { color: #fff3d6; border-color: var(--amber); box-shadow: 0 0 10px rgba(232, 176, 79, 0.5); }
+
+.calib-bar {
+  display: flex;
+  gap: 1px;
+  height: 14px;
+  width: 140px;
+}
+
+.calib-bar .bin {
+  flex: 1;
+  background: var(--slate-light);
+  position: relative;
+}
+
+.calib-bar .bin .fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--cyan-dim);
+}

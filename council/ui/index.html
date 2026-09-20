@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The High Council -- The Chamber</title>
+<link rel="stylesheet" href="/css/theme.css" />
+<link rel="stylesheet" href="/css/chamber.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1 style="text-align:center; margin-bottom: 24px;">The High Council Chamber</h1>
+
+  <div class="panel" style="margin-bottom: 20px;">
+    <div class="row" style="align-items:flex-end; justify-content: center; gap: 24px;">
+      <div>
+        <h3>Ticker</h3>
+        <input type="text" id="ticker-input" value="NVDA" maxlength="8" />
+      </div>
+      <div>
+        <h3>Horizon</h3>
+        <div class="toggle-row" id="horizon-toggle">
+          <button class="toggle-option" data-horizon="1d">Next Day</button>
+          <button class="toggle-option active" data-horizon="1w">Next Week</button>
+          <button class="toggle-option" data-horizon="1m">Next Month</button>
+          <button class="toggle-option" data-horizon="1y">Next Year</button>
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-lever" id="convene-btn">Convene the Council</button>
+      </div>
+    </div>
+    <div id="status-line" class="dim mono" style="text-align:center; margin-top: 12px; min-height: 18px;"></div>
+  </div>
+
+  <div class="chamber-ring-wrap panel">
+    <div class="chamber-ring" id="chamber-ring">
+      <div class="holocron" id="holocron">
+        <div class="holocron-face f1"></div>
+        <div class="holocron-face f2"></div>
+        <div class="holocron-face f3"></div>
+        <div class="holocron-label" id="holocron-label">AWAITING<br/>DELIBERATION</div>
+      </div>
+      <!-- seat chairs injected by chamber.js -->
+    </div>
+  </div>
+
+  <div class="row" style="margin-top: 20px; align-items: stretch;">
+    <div class="panel" style="flex: 1; min-width: 320px;">
+      <h2>Reality Anchor</h2>
+      <div id="reality-anchor" class="mono dim">No deliberation yet.</div>
+    </div>
+    <div class="panel" style="flex: 1; min-width: 320px;">
+      <h2>Dissent Map</h2>
+      <div id="dissent-map" class="mono dim">No deliberation yet.</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top: 20px;" id="debate-panel">
+    <h2>The Adversarial Chamber</h2>
+    <div id="debate-transcript" class="mono dim">No debate yet.</div>
+  </div>
+
+  <div class="row" style="margin-top: 20px; align-items: stretch;">
+    <div class="panel" style="flex: 1; min-width: 280px;">
+      <h2>Cost Auditor / Risk Warden</h2>
+      <div id="audit-panel" class="mono dim">--</div>
+    </div>
+    <div class="panel" style="flex: 2; min-width: 320px;" id="verdict-panel">
+      <h2>Grand Master Synthesis</h2>
+      <div id="grand-master-verdict" class="mono dim">The council has not yet convened.</div>
+    </div>
+  </div>
+</div>
+
+<div class="holo-modal-backdrop" id="holo-backdrop">
+  <div class="panel holo-modal" id="holo-modal"></div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/chamber.js"></script>
+</body>
+</html>
