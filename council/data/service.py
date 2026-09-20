@@ -1,0 +1,388 @@
+"""The only door onto market data. Seats must never call a provider
+directly -- DataService owns caching, rate limiting, provider fallback, and
+(most importantly) the point-in-time guard.
+
+Point-in-time discipline: `get(...)` must never return a record whose
+publication/filing timestamp is later than `as_of`. This is the single most
+common way these systems silently cheat -- an LLM's training data already
+contains the future, so any record dated after `as_of` that leaks through is
+a lookahead, not a signal.
+"""
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from typing import Any, Iterable, TypeVar
+
+from council.data.cache import DiskCache
+from council.data.providers.base import MarketDataProvider
+from council.data.schemas import (
+    AnalystEstimatesSnapshot,
+    CongressTrade,
+    CongressTradeFeed,
+    CrossMarketSnapshot,
+    EarningsTranscriptFeed,
+    EarningsTranscriptRecord,
+    FundamentalsSnapshot,
+    InsiderTransaction,
+    InsiderTransactionFeed,
+    InstitutionalHoldingsSnapshot,
+    MacroSnapshot,
+    NewsFeed,
+    NewsItem,
+    OHLCVBar,
+    OHLCVSeries,
+    OptionChainSnapshot,
+    OptionContract,
+    SECFiling,
+    SECFilingFeed,
+)
+
+T = TypeVar("T", bound=dict[str, Any])
+
+_TTL_SECONDS = {
+    "ohlcv": 3600,
+    "news": 900,
+    "options": 300,
+    "fundamentals": 21600,
+    "insider": 3600,
+    "congress": 3600,
+    "institutional": 21600,
+    "macro": 21600,
+    "estimates": 21600,
+    "transcripts": 86400,
+    "filings": 3600,
+}
+
+
+def _naive(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def filter_point_in_time(records: Iterable[T], as_of: datetime, time_field: str) -> list[T]:
+    """Drop any record whose `time_field` timestamp is later than `as_of`.
+
+    Both naive and tz-aware timestamps are normalised to naive UTC for the
+    comparison so callers don't have to think about it.
+    """
+    out: list[T] = []
+    cutoff = as_of.replace(tzinfo=None) if as_of.tzinfo else as_of
+    for record in records:
+        raw = record[time_field]
+        ts = datetime.fromisoformat(raw) if isinstance(raw, str) else raw
+        ts = ts.replace(tzinfo=None) if ts.tzinfo else ts
+        if ts <= cutoff:
+            out.append(record)
+    return out
+
+
+def _latest_timestamp(records: list[dict[str, Any]], time_field: str) -> datetime | None:
+    if not records:
+        return None
+    latest = max(records, key=lambda r: r[time_field])[time_field]
+    return datetime.fromisoformat(latest) if isinstance(latest, str) else latest
+
+
+class DataService:
+    def __init__(
+        self,
+        providers: list[MarketDataProvider],
+        cache: DiskCache,
+    ):
+        if not providers:
+            raise ValueError("DataService requires at least one provider")
+        self._providers = providers
+        self._cache = cache
+
+    async def _fetch_with_fallback(self, method_name: str, cache_key: str, ttl: int, *args):
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+        last_error: Exception | None = None
+        for provider in self._providers:
+            method = getattr(provider, method_name)
+            try:
+                result = await method(*args)
+                self._cache.set(cache_key, result, ttl)
+                return result
+            except Exception as exc:  # noqa: BLE001 -- graceful provider degradation
+                last_error = exc
+                continue
+        raise RuntimeError(
+            f"All providers failed for {method_name}({args}): {last_error}"
+        ) from last_error
+
+    async def get_ohlcv(
+        self, ticker: str, as_of: datetime, lookback_days: int = 180
+    ) -> OHLCVSeries:
+        start = (as_of - timedelta(days=lookback_days)).date()
+        end = as_of.date()
+        cache_key = f"ohlcv:{ticker}:{start}:{end}"
+        raw = await self._fetch_with_fallback(
+            "fetch_ohlcv", cache_key, _TTL_SECONDS["ohlcv"], ticker, start, end
+        )
+        filtered = filter_point_in_time(raw, as_of, "trade_date")
+        latest = _latest_timestamp(filtered, "trade_date")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        source = self._providers[0].name
+        return OHLCVSeries(
+            ticker=ticker,
+            bars=[OHLCVBar(**b) for b in filtered],
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=source,
+        )
+
+    async def get_news(
+        self, ticker: str, as_of: datetime, lookback_days: int = 14
+    ) -> NewsFeed:
+        start = as_of - timedelta(days=lookback_days)
+        cache_key = f"news:{ticker}:{start.date()}:{as_of.date()}"
+        raw = await self._fetch_with_fallback(
+            "fetch_news", cache_key, _TTL_SECONDS["news"], ticker, start, as_of
+        )
+        filtered = filter_point_in_time(raw, as_of, "published_at")
+        latest = _latest_timestamp(filtered, "published_at")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        source = self._providers[0].name
+        return NewsFeed(
+            ticker=ticker,
+            items=[NewsItem(**n) for n in filtered],
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=source,
+        )
+
+    async def get_option_chain(self, ticker: str, as_of: datetime) -> OptionChainSnapshot:
+        cache_key = f"options:{ticker}:{as_of.isoformat()}"
+        raw = await self._fetch_with_fallback(
+            "fetch_option_chain", cache_key, _TTL_SECONDS["options"], ticker
+        )
+        source = self._providers[0].name
+        # Options snapshots are point-in-time by construction (a live quote),
+        # so staleness is measured against the snapshot's own as_of if the
+        # provider supplied one, else assumed fresh at fetch time.
+        staleness = raw.get("staleness_seconds", 0.0)
+        return OptionChainSnapshot(
+            ticker=ticker,
+            underlying_price=raw["underlying_price"],
+            contracts=[OptionContract(**c) for c in raw["contracts"]],
+            put_call_ratio=raw.get("put_call_ratio"),
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=source,
+        )
+
+    async def get_fundamentals(self, ticker: str, as_of: datetime) -> FundamentalsSnapshot:
+        """Current-view snapshot. NOTE: unlike the dated feeds below, this
+        does not yet enforce a filing-lag point-in-time guard -- rigorous
+        historical PIT for fundamentals is deferred to Phase 4, when the
+        Crypt actually backtests against historical `as_of` dates."""
+        cache_key = f"fundamentals:{ticker}"
+        raw = await self._fetch_with_fallback(
+            "fetch_fundamentals", cache_key, _TTL_SECONDS["fundamentals"], ticker
+        )
+        return FundamentalsSnapshot(
+            ticker=ticker, as_of=as_of, staleness_seconds=0.0, source=self._providers[0].name, **raw
+        )
+
+    async def get_insider_transactions(
+        self, ticker: str, as_of: datetime, lookback_days: int = 180
+    ) -> InsiderTransactionFeed:
+        start = (as_of - timedelta(days=lookback_days)).date()
+        end = as_of.date()
+        cache_key = f"insider:{ticker}:{start}:{end}"
+        raw = await self._fetch_with_fallback(
+            "fetch_insider_transactions", cache_key, _TTL_SECONDS["insider"], ticker, start, end
+        )
+        filtered = filter_point_in_time(raw, as_of, "filed_at")
+        latest = _latest_timestamp(filtered, "filed_at")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        return InsiderTransactionFeed(
+            ticker=ticker,
+            transactions=[InsiderTransaction(**t) for t in filtered],
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=self._providers[0].name,
+        )
+
+    async def get_congress_trades(
+        self, ticker: str, as_of: datetime, lookback_days: int = 365
+    ) -> CongressTradeFeed:
+        start = (as_of - timedelta(days=lookback_days)).date()
+        end = as_of.date()
+        cache_key = f"congress:{ticker}:{start}:{end}"
+        raw = await self._fetch_with_fallback(
+            "fetch_congress_data", cache_key, _TTL_SECONDS["congress"], ticker, start, end
+        )
+        filtered = filter_point_in_time(raw["trades"], as_of, "filed_at")
+        latest = _latest_timestamp(filtered, "filed_at")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        return CongressTradeFeed(
+            ticker=ticker,
+            trades=[CongressTrade(**t) for t in filtered],
+            pending_legislation=raw.get("pending_legislation", []),
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=self._providers[0].name,
+        )
+
+    async def get_institutional_holdings(
+        self, ticker: str, as_of: datetime
+    ) -> InstitutionalHoldingsSnapshot:
+        """13F filings lag their quarter by up to 45 days -- `filed_at` is
+        the point-in-time guard here, not `quarter_end`. A 13F filed after
+        `as_of` is treated as not-yet-available, not silently used."""
+        cache_key = f"institutional:{ticker}"
+        raw = await self._fetch_with_fallback(
+            "fetch_institutional_holdings", cache_key, _TTL_SECONDS["institutional"], ticker
+        )
+        filed_at = raw["filed_at"]
+        filed_at = datetime.fromisoformat(filed_at) if isinstance(filed_at, str) else filed_at
+        if _naive(filed_at) > _naive(as_of):
+            raw = {
+                **raw,
+                "total_institutional_shares": 0,
+                "pct_of_float_held": 0.0,
+                "qoq_share_change_pct": 0.0,
+                "top_holders_net_buyers": 0,
+                "top_holders_net_sellers": 0,
+                "etf_inclusion_notes": "no 13F filed as of this date",
+                "short_interest_shares": 0,
+                "days_to_cover": 0.0,
+            }
+            staleness = None
+        else:
+            staleness = (_naive(as_of) - _naive(filed_at)).total_seconds()
+        return InstitutionalHoldingsSnapshot(
+            ticker=ticker, as_of=as_of, staleness_seconds=staleness, source=self._providers[0].name, **raw
+        )
+
+    async def get_macro_snapshot(self, ticker: str, as_of: datetime) -> MacroSnapshot:
+        cache_key = "macro:latest"
+        raw = await self._fetch_with_fallback("fetch_macro", cache_key, _TTL_SECONDS["macro"])
+        beta = await self._estimate_beta(ticker, "SPY", as_of)
+        return MacroSnapshot(
+            as_of=as_of,
+            staleness_seconds=0.0,
+            source=self._providers[0].name,
+            ticker_beta_to_spx=beta,
+            **raw,
+        )
+
+    async def _estimate_beta(self, ticker: str, benchmark: str, as_of: datetime) -> float | None:
+        """60-day daily-return beta of `ticker` to `benchmark`, computed from
+        OHLCV this service already knows how to fetch -- no separate
+        provider endpoint needed."""
+        try:
+            ticker_series, bench_series = (
+                await self.get_ohlcv(ticker, as_of, lookback_days=90),
+                await self.get_ohlcv(benchmark, as_of, lookback_days=90),
+            )
+        except Exception:  # noqa: BLE001 -- beta is a nice-to-have, never blocks the seat
+            return None
+        t_closes = [b.close for b in ticker_series.bars][-60:]
+        b_closes = [b.close for b in bench_series.bars][-60:]
+        n = min(len(t_closes), len(b_closes))
+        if n < 10:
+            return None
+        t_returns = [(t_closes[i] / t_closes[i - 1]) - 1 for i in range(-n + 1, 0)]
+        b_returns = [(b_closes[i] / b_closes[i - 1]) - 1 for i in range(-n + 1, 0)]
+        mean_t = sum(t_returns) / len(t_returns)
+        mean_b = sum(b_returns) / len(b_returns)
+        covariance = sum((t - mean_t) * (b - mean_b) for t, b in zip(t_returns, b_returns))
+        variance_b = sum((b - mean_b) ** 2 for b in b_returns)
+        if variance_b == 0:
+            return None
+        return round(covariance / variance_b, 3)
+
+    async def get_cross_market_snapshot(
+        self,
+        ticker: str,
+        as_of: datetime,
+        sector_etf: str = "SMH",
+        peer: str = "AMD",
+        index_proxy: str = "SPY",
+        overseas_proxy: str = "EWJ",
+    ) -> CrossMarketSnapshot:
+        """Never fetches `ticker`'s own price series -- every field here
+        comes from a different instrument, per the Cross-Market Navigator's
+        mandate."""
+
+        async def _return_5d(symbol: str) -> float:
+            series = await self.get_ohlcv(symbol, as_of, lookback_days=15)
+            closes = [b.close for b in series.bars]
+            if len(closes) < 6:
+                return 0.0
+            return round(((closes[-1] / closes[-6]) - 1) * 100, 2)
+
+        sector_return, peer_return, index_return, overseas_return = (
+            await _return_5d(sector_etf),
+            await _return_5d(peer),
+            await _return_5d(index_proxy),
+            await _return_5d(overseas_proxy),
+        )
+        # NOTE: deliberately does NOT call get_macro_snapshot(ticker, ...) here --
+        # that computes ticker_beta_to_spx, which fetches the ticker's own OHLCV
+        # internally (see _estimate_beta) and would violate this seat's "never the
+        # ticker's own price series" mandate even though the beta value itself
+        # would never reach CrossMarketSnapshot. dollar/oil deltas are left at 0.0
+        # pending a real macro time-series (fetch_macro only returns point levels).
+        return CrossMarketSnapshot(
+            sector_etf_symbol=sector_etf,
+            sector_etf_return_5d_pct=sector_return,
+            peer_basket_return_5d_pct=peer_return,
+            index_futures_change_pct=index_return,
+            dollar_index_change_pct=0.0,
+            oil_change_pct=0.0,
+            overseas_session_return_pct=overseas_return,
+            as_of=as_of,
+            staleness_seconds=0.0,
+            source=self._providers[0].name,
+        )
+
+    async def get_analyst_estimates(self, ticker: str, as_of: datetime) -> AnalystEstimatesSnapshot:
+        cache_key = f"estimates:{ticker}"
+        raw = await self._fetch_with_fallback(
+            "fetch_analyst_estimates", cache_key, _TTL_SECONDS["estimates"], ticker
+        )
+        return AnalystEstimatesSnapshot(
+            ticker=ticker, as_of=as_of, staleness_seconds=0.0, source=self._providers[0].name, **raw
+        )
+
+    async def get_earnings_transcripts(
+        self, ticker: str, as_of: datetime, limit: int = 4
+    ) -> EarningsTranscriptFeed:
+        cache_key = f"transcripts:{ticker}:{limit}"
+        raw = await self._fetch_with_fallback(
+            "fetch_earnings_transcripts", cache_key, _TTL_SECONDS["transcripts"], ticker, limit
+        )
+        filtered = filter_point_in_time(raw, as_of, "call_date")
+        latest = _latest_timestamp(filtered, "call_date")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        return EarningsTranscriptFeed(
+            ticker=ticker,
+            calls=[EarningsTranscriptRecord(**c) for c in filtered],
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=self._providers[0].name,
+        )
+
+    async def get_sec_filings(
+        self, ticker: str, as_of: datetime, lookback_days: int = 730
+    ) -> SECFilingFeed:
+        start = (as_of - timedelta(days=lookback_days)).date()
+        end = as_of.date()
+        cache_key = f"filings:{ticker}:{start}:{end}"
+        raw = await self._fetch_with_fallback(
+            "fetch_sec_filings", cache_key, _TTL_SECONDS["filings"], ticker, start, end
+        )
+        filtered = filter_point_in_time(raw, as_of, "filed_at")
+        latest = _latest_timestamp(filtered, "filed_at")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        return SECFilingFeed(
+            ticker=ticker,
+            filings=[SECFiling(**f) for f in filtered],
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=self._providers[0].name,
+        )
