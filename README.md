@@ -195,3 +195,46 @@ automatically runs in fixture mode: seat verdicts come from
 ```bash
 .venv/bin/python -m pytest council/tests/ -q
 ```
+
+## Run the web UI
+
+```bash
+.venv/bin/python -m uvicorn council.api.main:app --reload --port 8000
+```
+
+Open `http://localhost:8000` -- The Chamber, The Crypt, The Archives, The
+Oracle, and The Guide are all served from `council/ui/`. `--reload` is a dev
+convenience (restarts on file changes); drop it for anything long-running.
+
+## Host it locally, always-on
+
+Running it means it's only up while that command's terminal is open. To keep
+it running in the background and reachable from other devices on your home
+network:
+
+1. **Bind to every interface, not just localhost.** `scripts/run-server.bat`
+   (Windows) does this already -- `--host 0.0.0.0` instead of the default
+   `127.0.0.1`. Find this machine's LAN IP with `ipconfig` (look for
+   `IPv4 Address` under your active adapter); other devices on the same
+   network reach it at `http://<that-IP>:8000`.
+2. **Allow the port through Windows Firewall** the first time you run it --
+   Windows will prompt automatically; allow it for Private networks.
+3. **Auto-start at login, with no console window**, via Task Scheduler:
+   - Task Scheduler -> Create Task -> Trigger: *At log on*.
+   - Action: *Start a program* -> point it at
+     `scripts\run-server-hidden.vbs` (uses `wscript.exe` to launch the
+     `.bat` with a hidden window, so it starts silently).
+   - Under Settings, consider "Restart if the task fails" for resilience
+     across crashes.
+4. **Schedule `council resolve` too**, on its own daily trigger (Action:
+   *Start a program*, Program: `.venv\Scripts\python.exe`, Arguments:
+   `-m council resolve`, Start in: the repo root) -- otherwise nothing
+   scores past predictions and the Archives/calibration data never
+   accumulates.
+
+**Security note:** there is no authentication on any of this -- anyone who
+can reach the port can run deliberations (spending your configured API
+keys) and read every prediction in the Crypt. That's an acceptable risk on
+your own home network, where only devices you control can reach it. Do
+**not** port-forward this out to the public internet without adding real
+auth first; that's a separate piece of work this repo doesn't have yet.
