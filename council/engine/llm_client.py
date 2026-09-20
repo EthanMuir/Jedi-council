@@ -13,6 +13,7 @@ debate argument as it does for an analyst's vote.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import time
@@ -20,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+import anthropic
 from pydantic import BaseModel, ValidationError
 
 from council.config import Settings
@@ -27,6 +29,22 @@ from council.engine.routing import resolve_route
 from council.seats.base import SeatVerdict, format_memory_context
 
 _FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "seat_verdicts"
+
+# Connection/timeout/rate-limit/5xx -- transient, worth retrying with backoff.
+# Everything else under APIStatusError (auth, bad request, permission, not
+# found, conflict, unprocessable) is a client-side problem retrying won't fix.
+_RETRYABLE_ANTHROPIC_ERRORS = (
+    anthropic.APIConnectionError,
+    anthropic.APITimeoutError,
+    anthropic.RateLimitError,
+    anthropic.InternalServerError,
+)
+_BACKOFF_BASE_SECONDS = 1.0
+_BACKOFF_CAP_SECONDS = 8.0
+
+
+def _backoff_seconds(attempt: int) -> float:
+    return min(_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)), _BACKOFF_CAP_SECONDS)
 
 # Rough $ per million tokens. Approximate on purpose -- good enough for the
 # Cost Auditor's relative comparisons, not an invoice.
@@ -57,6 +75,16 @@ class SchemaRetryExhausted(Exception):
     """Raised by get_structured when every retry fails schema validation.
     Callers choose their own fallback -- Tier I abstains (NO_READ), a
     debate round skips, the Prosecutor stays silent, Grand Master aborts."""
+
+
+class LLMCallFailed(Exception):
+    """Raised by get_structured when the network/API call itself fails --
+    either a transient error (connection, timeout, rate limit, 5xx) that
+    exhausted its backoff retries, or a non-retryable error (auth, bad
+    request, ...) that failed immediately. Distinct from
+    SchemaRetryExhausted, which means the API responded fine but the
+    structured payload never validated. Callers degrade the same way for
+    both -- see SchemaRetryExhausted's own docstring."""
 
 
 class LLMClient:
@@ -184,6 +212,49 @@ class LLMClient:
                     )
                 )
                 return result
+            except _RETRYABLE_ANTHROPIC_ERRORS as exc:
+                last_error = exc
+                latency_ms = (time.monotonic() - start) * 1000
+                self.call_log.append(
+                    LLMCallRecord(
+                        seat_id=seat_id,
+                        model=model,
+                        provider="anthropic",
+                        prompt_hash=prompt_hash,
+                        input_tokens=0,
+                        output_tokens=0,
+                        latency_ms=latency_ms,
+                        cost_usd=0.0,
+                        attempt=attempt,
+                        success=False,
+                        error=str(exc),
+                    )
+                )
+                if attempt <= max_retries:
+                    await asyncio.sleep(_backoff_seconds(attempt))
+                continue
+            except anthropic.APIStatusError as exc:
+                # Auth, bad request, permission, not found, conflict,
+                # unprocessable -- a client-side problem no retry fixes.
+                latency_ms = (time.monotonic() - start) * 1000
+                self.call_log.append(
+                    LLMCallRecord(
+                        seat_id=seat_id,
+                        model=model,
+                        provider="anthropic",
+                        prompt_hash=prompt_hash,
+                        input_tokens=0,
+                        output_tokens=0,
+                        latency_ms=latency_ms,
+                        cost_usd=0.0,
+                        attempt=attempt,
+                        success=False,
+                        error=str(exc),
+                    )
+                )
+                raise LLMCallFailed(
+                    f"{seat_id}: non-retryable API error ({exc.__class__.__name__}): {exc}"
+                ) from exc
             except (ValidationError, StopIteration, KeyError, TypeError) as exc:
                 last_error = exc
                 latency_ms = (time.monotonic() - start) * 1000
@@ -204,6 +275,10 @@ class LLMClient:
                 )
                 continue
 
+        if isinstance(last_error, _RETRYABLE_ANTHROPIC_ERRORS):
+            raise LLMCallFailed(
+                f"{seat_id}: still failing after {max_retries} retries: {last_error}"
+            ) from last_error
         raise SchemaRetryExhausted(
             f"{seat_id}: schema validation failed after {max_retries} retries: {last_error}"
         )
@@ -242,4 +317,14 @@ class LLMClient:
                 what_would_change_my_mind="N/A",
                 data_quality="POOR",
                 abstain_reason="schema_failure",
+            )
+        except LLMCallFailed as exc:
+            return SeatVerdict(
+                vote="NO_READ",
+                probability=0.5,
+                expected_move_pct=0.0,
+                thesis=f"LLM call failed: {exc}"[:500],
+                what_would_change_my_mind="N/A",
+                data_quality="POOR",
+                abstain_reason="llm_call_failed",
             )

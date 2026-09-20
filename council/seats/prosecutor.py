@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from council.engine.llm_client import LLMClient, SchemaRetryExhausted
+from council.engine.llm_client import LLMCallFailed, LLMClient, SchemaRetryExhausted
 from council.engine.schemas import (
     DebateArgument,
     ProsecutorVerdict,
@@ -168,5 +168,5 @@ class ProsecutorSeat:
                 response_model=ProsecutorVerdict,
                 fixture_name=f"prosecutor_round{round_n}",
             )
-        except SchemaRetryExhausted:
+        except (SchemaRetryExhausted, LLMCallFailed):
             return None

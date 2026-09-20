@@ -41,7 +41,7 @@ from council.engine.horizons import competence, is_competent, resolve_at_for
 from council.engine.llm_client import LLMClient
 from council.engine.risk_warden import RiskSizing, size_position
 from council.engine.routing import resolve_route
-from council.engine.sampling import aggregate_samples
+from council.engine.sampling import SampledSeatVerdict, aggregate_samples
 from council.memory.store import MemoryStore, to_seat_memory_lesson
 from council.engine.schemas import (
     DebateArgument,
@@ -52,7 +52,7 @@ from council.engine.schemas import (
     summarize_tier1,
 )
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
-from council.seats.base import SeatVerdict
+from council.seats.base import SeatContext, SeatVerdict
 from council.seats.catalyst_seer import CatalystSeerSeat
 from council.seats.cross_market import CrossMarketSeat
 from council.seats.estimate_scribe import EstimateScribeSeat
@@ -203,14 +203,36 @@ async def run_deliberation(
             return verdict
 
     async def run_seat(seat) -> tuple:
-        async with semaphore:
-            ctx = await seat.gather(data_service, ticker, as_of, horizon)
-        retrieved = memory.retrieve(seat_id=seat.id, ticker=ticker, as_of=as_of, limit=5)
-        memory_lessons = [to_seat_memory_lesson(e) for e in retrieved]
-        samples = await asyncio.gather(
-            *(deliberate_one(seat, ctx, i, memory_lessons) for i in range(n_samples))
-        )
-        sampled = aggregate_samples(seat.id, list(samples))
+        try:
+            async with semaphore:
+                ctx = await seat.gather(data_service, ticker, as_of, horizon)
+            retrieved = memory.retrieve(seat_id=seat.id, ticker=ticker, as_of=as_of, limit=5)
+            memory_lessons = [to_seat_memory_lesson(e) for e in retrieved]
+            samples = await asyncio.gather(
+                *(deliberate_one(seat, ctx, i, memory_lessons) for i in range(n_samples))
+            )
+            sampled = aggregate_samples(seat.id, list(samples))
+        except Exception as exc:  # noqa: BLE001 -- one seat's data/LLM failure
+            # must never take down the other eleven. Abstention is already a
+            # valid answer for "no signal"; it's the right answer here too,
+            # for "infrastructure failed before a signal could be formed".
+            ctx = SeatContext(seat.id, frozenset(), {}, ticker=ticker, as_of=as_of, horizon=horizon)
+            failed_verdict = SeatVerdict(
+                vote="NO_READ",
+                probability=0.5,
+                expected_move_pct=0.0,
+                thesis=f"Seat failed before producing a verdict: {exc}"[:500],
+                what_would_change_my_mind="N/A",
+                data_quality="POOR",
+                abstain_reason="seat_infrastructure_failure",
+            )
+            sampled = SampledSeatVerdict(
+                seat_id=seat.id,
+                samples=[failed_verdict],
+                consensus_vote="NO_READ",
+                dispersion=0.0,
+                representative=failed_verdict,
+            )
         await emit(
             "seat_result",
             {
@@ -460,6 +482,10 @@ async def run_deliberation(
         }
     )
 
+    total_cost_usd = round(sum(c.cost_usd for c in llm_client.call_log), 6)
+    total_input_tokens = sum(c.input_tokens for c in llm_client.call_log)
+    total_output_tokens = sum(c.output_tokens for c in llm_client.call_log)
+
     try:
         prediction_id = write_prediction(
             conn,
@@ -487,6 +513,9 @@ async def run_deliberation(
             cost_audit_passed=cost_audit_result.passed,
             p_raw=p_raw,
             p_extremized=p_extremized,
+            total_cost_usd=total_cost_usd,
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
             created_at=as_of,
         )
         for seat, _ctx, sampled in results:

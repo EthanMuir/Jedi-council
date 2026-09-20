@@ -122,6 +122,9 @@ def test_hash_chain_detects_tampering(conn):
         "cost_audit_passed": row["cost_audit_passed"],
         "p_raw": row["p_raw"],
         "p_extremized": row["p_extremized"],
+        "total_cost_usd": row["total_cost_usd"],
+        "total_input_tokens": row["total_input_tokens"],
+        "total_output_tokens": row["total_output_tokens"],
         "discussion_enabled": row["discussion_enabled"],
     }
     recomputed = compute_row_hash(fields, row["prev_hash"])

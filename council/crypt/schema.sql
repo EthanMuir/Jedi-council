@@ -50,6 +50,11 @@ CREATE TABLE IF NOT EXISTS predictions (
     p_raw                        REAL,
     p_extremized                 REAL,
 
+    -- Phase 6: cost tracking, summed from LLMClient.call_log at write time.
+    total_cost_usd                REAL,
+    total_input_tokens            INTEGER,
+    total_output_tokens           INTEGER,
+
     prev_hash                    TEXT NOT NULL,
     row_hash                     TEXT NOT NULL UNIQUE
 );

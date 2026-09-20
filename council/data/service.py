@@ -10,6 +10,7 @@ a lookahead, not a signal.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timedelta
 from typing import Any, Iterable, TypeVar
 
@@ -82,6 +83,15 @@ def _latest_timestamp(records: list[dict[str, Any]], time_field: str) -> datetim
     return datetime.fromisoformat(latest) if isinstance(latest, str) else latest
 
 
+_PROVIDER_MAX_RETRIES = 2
+_PROVIDER_BACKOFF_BASE_SECONDS = 0.5
+_PROVIDER_BACKOFF_CAP_SECONDS = 4.0
+
+
+def _provider_backoff_seconds(attempt: int) -> float:
+    return min(_PROVIDER_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)), _PROVIDER_BACKOFF_CAP_SECONDS)
+
+
 class DataService:
     def __init__(
         self,
@@ -100,13 +110,19 @@ class DataService:
         last_error: Exception | None = None
         for provider in self._providers:
             method = getattr(provider, method_name)
-            try:
-                result = await method(*args)
-                self._cache.set(cache_key, result, ttl)
-                return result
-            except Exception as exc:  # noqa: BLE001 -- graceful provider degradation
-                last_error = exc
-                continue
+            # A couple of quick retries on the current provider before
+            # falling through to the next one -- most failures at this layer
+            # are a single transient blip (a dropped connection, a momentary
+            # 5xx), not the provider being genuinely down.
+            for attempt in range(1, _PROVIDER_MAX_RETRIES + 2):
+                try:
+                    result = await method(*args)
+                    self._cache.set(cache_key, result, ttl)
+                    return result
+                except Exception as exc:  # noqa: BLE001 -- graceful provider degradation
+                    last_error = exc
+                    if attempt <= _PROVIDER_MAX_RETRIES:
+                        await asyncio.sleep(_provider_backoff_seconds(attempt))
         raise RuntimeError(
             f"All providers failed for {method_name}({args}): {last_error}"
         ) from last_error

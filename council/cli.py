@@ -7,6 +7,9 @@ import asyncio
 from datetime import datetime
 
 from council.config import get_settings
+from council.crypt.db import connect
+from council.crypt.export import fetch_predictions_for_export, write_csv, write_json
+from council.engine.cost_estimate import CostEstimate, estimate_deliberation_cost
 from council.engine.orchestrator import TIER_I_SEATS, DeliberationResult, run_deliberation
 from council.engine.resolution_sweep import sweep_unresolved
 
@@ -105,6 +108,19 @@ def _print_result(result: DeliberationResult) -> None:
     print(f"\nLLM calls: {len(result.call_log)}   total estimated cost: ${total_cost:.4f}\n")
 
 
+def _print_cost_estimate(estimate: CostEstimate) -> None:
+    print(f"\n=== DRY RUN -- estimated cost for {estimate.ticker} @ {estimate.horizon} ===")
+    print("(no network calls made -- rough per-call token constants, not measured usage)\n")
+    for li in estimate.line_items:
+        print(
+            f"  {li.label:<32} model={li.model:<18} calls={li.call_count:<3}"
+            f" ~tokens_in={li.est_input_tokens:<6} ~tokens_out={li.est_output_tokens:<6}"
+            f" ~${li.est_cost_usd:.4f}"
+        )
+    print(f"\n  total calls: {estimate.total_calls}")
+    print(f"  total estimated cost: ${estimate.total_cost_usd:.4f}\n")
+
+
 def _print_sweep_results(settings, swept) -> None:
     print(f"\n=== THE CRYPT -- resolution sweep ===")
     if not swept:
@@ -152,20 +168,49 @@ def main(argv: list[str] | None = None) -> None:
         help="ISO datetime to backdate the deliberation to (e.g. 2026-08-01T16:00:00), "
         "for demoing the deliberate -> resolve lifecycle without waiting real time to pass.",
     )
+    deliberate.add_argument(
+        "--dry-run-cost",
+        action="store_true",
+        help="Print an estimated $ cost for this deliberation and exit -- no network calls, "
+        "no Crypt write, just call-count x rough token constants x model pricing.",
+    )
 
     sub.add_parser("resolve", help="Sweep unresolved predictions whose resolve_at has passed")
+
+    export = sub.add_parser("export", help="Export predictions + resolutions from the Crypt")
+    export.add_argument("--format", choices=["csv", "json"], required=True)
+    export.add_argument("--out", required=True, help="Output file path")
+    export.add_argument("--ticker", default=None)
+    export.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], default=None)
 
     args = parser.parse_args(argv)
     settings = get_settings()
     settings.ensure_dirs()
 
     if args.command == "deliberate":
+        if args.dry_run_cost:
+            estimate = estimate_deliberation_cost(args.ticker.upper(), args.horizon, settings)
+            _print_cost_estimate(estimate)
+            return
         as_of = datetime.fromisoformat(args.as_of) if args.as_of else None
         result = asyncio.run(run_deliberation(args.ticker.upper(), args.horizon, settings, as_of=as_of))
         _print_result(result)
     elif args.command == "resolve":
         swept = asyncio.run(sweep_unresolved(settings))
         _print_sweep_results(settings, swept)
+    elif args.command == "export":
+        conn = connect(settings.council_db_path)
+        try:
+            rows = fetch_predictions_for_export(
+                conn, ticker=args.ticker.upper() if args.ticker else None, horizon=args.horizon
+            )
+        finally:
+            conn.close()
+        if args.format == "csv":
+            write_csv(rows, args.out)
+        else:
+            write_json(rows, args.out)
+        print(f"Exported {len(rows)} prediction(s) to {args.out}")
 
 
 if __name__ == "__main__":

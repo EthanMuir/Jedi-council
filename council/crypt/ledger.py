@@ -54,6 +54,9 @@ def write_prediction(
     cost_audit_passed: bool | None = None,
     p_raw: float | None = None,
     p_extremized: float | None = None,
+    total_cost_usd: float | None = None,
+    total_input_tokens: int | None = None,
+    total_output_tokens: int | None = None,
     created_at: datetime | None = None,
 ) -> str:
     created_at = created_at or datetime.utcnow()
@@ -93,6 +96,9 @@ def write_prediction(
         "cost_audit_passed": int(cost_audit_passed) if cost_audit_passed is not None else None,
         "p_raw": p_raw,
         "p_extremized": p_extremized,
+        "total_cost_usd": total_cost_usd,
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
         "discussion_enabled": 0,
     }
     row_hash = compute_row_hash(fields, prev_hash)

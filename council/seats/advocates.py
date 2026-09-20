@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from council.engine.llm_client import LLMClient, SchemaRetryExhausted
+from council.engine.llm_client import LLMCallFailed, LLMClient, SchemaRetryExhausted
 from council.engine.schemas import DebateArgument, Tier1Summary, format_tier1_summaries
 
 _BASE_PROMPT = """
@@ -55,7 +55,7 @@ class _AdvocateSeat:
                 response_model=DebateArgument,
                 fixture_name=f"{self.id}_round{round_n}",
             )
-        except SchemaRetryExhausted:
+        except (SchemaRetryExhausted, LLMCallFailed):
             return None
 
 

@@ -1,0 +1,89 @@
+"""Phase 6: DataService retries a flaky provider with backoff before
+falling through to the next one -- most failures at this layer are a
+single transient blip, not the provider being genuinely down."""
+from __future__ import annotations
+
+import pytest
+
+import council.data.service as data_service_module
+from council.data.cache import DiskCache
+from council.data.service import DataService
+
+
+class _FlakyProvider:
+    name = "flaky"
+
+    def __init__(self, fail_times: int, result: str = "ok"):
+        self._fail_times = fail_times
+        self._result = result
+        self.calls = 0
+
+    async def fetch_thing(self, *args):
+        self.calls += 1
+        if self.calls <= self._fail_times:
+            raise ConnectionError("transient blip")
+        return self._result
+
+
+class _AlwaysFailsProvider:
+    name = "always_fails"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def fetch_thing(self, *args):
+        self.calls += 1
+        raise ConnectionError("provider is genuinely down")
+
+
+class _BackstopProvider:
+    name = "backstop"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def fetch_thing(self, *args):
+        self.calls += 1
+        return "backstop result"
+
+
+def _fast_backoff(monkeypatch):
+    monkeypatch.setattr(data_service_module, "_PROVIDER_BACKOFF_BASE_SECONDS", 0.001)
+    monkeypatch.setattr(data_service_module, "_PROVIDER_BACKOFF_CAP_SECONDS", 0.001)
+
+
+@pytest.mark.asyncio
+async def test_flaky_provider_recovers_within_retry_budget(tmp_path, monkeypatch):
+    _fast_backoff(monkeypatch)
+    provider = _FlakyProvider(fail_times=2)
+    service = DataService(providers=[provider], cache=DiskCache(str(tmp_path / "cache.db")))
+
+    result = await service._fetch_with_fallback("fetch_thing", "test:key:1", 60)
+
+    assert result == "ok"
+    assert provider.calls == 3
+
+
+@pytest.mark.asyncio
+async def test_provider_exhausting_retries_falls_through_to_next_provider(tmp_path, monkeypatch):
+    _fast_backoff(monkeypatch)
+    dead = _AlwaysFailsProvider()
+    backstop = _BackstopProvider()
+    service = DataService(providers=[dead, backstop], cache=DiskCache(str(tmp_path / "cache.db")))
+
+    result = await service._fetch_with_fallback("fetch_thing", "test:key:2", 60)
+
+    assert result == "backstop result"
+    # initial attempt + 2 retries against the dead provider before falling through
+    assert dead.calls == 3
+    assert backstop.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_all_providers_exhausted_raises_runtime_error(tmp_path, monkeypatch):
+    _fast_backoff(monkeypatch)
+    service = DataService(
+        providers=[_AlwaysFailsProvider()], cache=DiskCache(str(tmp_path / "cache.db"))
+    )
+    with pytest.raises(RuntimeError):
+        await service._fetch_with_fallback("fetch_thing", "test:key:3", 60)

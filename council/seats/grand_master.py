@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from council.engine.base_rate import RealityAnchor
 from council.engine.cost_auditor import CostAuditResult
-from council.engine.llm_client import LLMClient, SchemaRetryExhausted
+from council.engine.llm_client import LLMCallFailed, LLMClient, SchemaRetryExhausted
 from council.engine.schemas import (
     DebateArgument,
     GrandMasterVerdict,
@@ -97,5 +97,5 @@ class GrandMasterSeat:
                 response_model=GrandMasterVerdict,
                 fixture_name="grand_master",
             )
-        except SchemaRetryExhausted:
+        except (SchemaRetryExhausted, LLMCallFailed):
             return None

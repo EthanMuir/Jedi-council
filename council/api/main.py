@@ -94,6 +94,7 @@ async def list_predictions(ticker: str | None = None, horizon: str | None = None
         query = (
             "SELECT p.id, p.created_at, p.ticker, p.horizon, p.resolve_at, p.council_vote, "
             "p.council_confidence, p.blind_vote, p.entry, p.exit, p.invalidation, "
+            "p.total_cost_usd, p.total_input_tokens, p.total_output_tokens, "
             "r.direction_correct, r.realised_move_pct, r.resolved_at "
             "FROM predictions p LEFT JOIN resolutions r ON r.prediction_id = p.id WHERE 1=1"
         )
