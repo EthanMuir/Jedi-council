@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The High Council -- The Guide</title>
+<link rel="stylesheet" href="/css/theme.css" />
+<link rel="stylesheet" href="/css/guide.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1 style="text-align:center; margin-bottom: 8px;">The Guide</h1>
+  <p class="dim" style="text-align:center; max-width: 720px; margin: 0 auto 24px;">
+    How the Council actually works: what the colors mean, how to use each
+    screen, and what every Council Member does and is allowed to see.
+  </p>
+
+  <!-- ================= COLOR LEGEND ================= -->
+  <div class="panel" style="margin-bottom: 20px;">
+    <h2>Reading a Verdict</h2>
+    <div class="legend-row">
+      <div class="legend-item">
+        <div class="legend-swatch sw-bullish"></div>
+        <div><b class="green">BULLISH</b><div class="dim" style="font-size:12px;">expects the price to rise</div></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch sw-bearish"></div>
+        <div><b class="crimson">BEARISH</b><div class="dim" style="font-size:12px;">expects the price to fall</div></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch sw-noread"></div>
+        <div><b class="yellow">NO_READ / NO_CONVICTION</b><div class="dim" style="font-size:12px;">abstained -- data didn't support a call, or an audit gate blocked one</div></div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:14px; margin-bottom:0; font-size:13px;">
+      This mapping is the same everywhere -- seat chairs in the Chamber ring, the
+      center holocron, the dissent map, the holo-panel, and every seat's vote in
+      the Crypt. A seat abstaining is a deliberate, valid answer in this system --
+      it is not a failure state, it means the seat's own data genuinely didn't
+      support a directional call for this ticker and horizon.
+    </p>
+  </div>
+
+  <!-- ================= HOW EACH SCREEN WORKS ================= -->
+  <h2 style="margin-top: 32px;">The Screens</h2>
+
+  <div class="panel screen-panel" style="margin-bottom: 16px;">
+    <h3 class="cyan">The Chamber</h3>
+    <ol class="step-list mono">
+      <li>Type a ticker (fixture data only covers <b>NVDA</b> until a real market-data provider key is configured in <code>.env</code> -- everything else will run the full pipeline but fail at the data-fetch step).</li>
+      <li>Pick a horizon: Next Day / Next Week / Next Month / Next Year. Not every seat is competent at every horizon -- see the competence table below -- so fewer seats light up at 1d than at 1y.</li>
+      <li>Click <b>Convene the Council</b>. Seats light up live as each finishes its isolated read (Phase A, the blind round). Click any seat chair to open its full reasoning in the holo-panel.</li>
+      <li>Once all Tier I seats report: the Reality Anchor appears (Phase B), then the Bull/Bear debate with the Prosecutor's rulings (Phase C), then the audit gates and Risk Warden's position size, and finally the Grand Master's synthesis fills the center holocron (Phase F). The whole run is written to the Crypt automatically (Phase G).</li>
+    </ol>
+  </div>
+
+  <div class="panel screen-panel" style="margin-bottom: 16px;">
+    <h3 class="cyan">The Crypt</h3>
+    <ol class="step-list mono">
+      <li>Every deliberation ever run lives here, permanently -- the ledger is append-only and hash-chained, so nothing can be edited or quietly deleted after the fact.</li>
+      <li>Filter by ticker and/or horizon, then click <b>Update the Crypt</b> to sweep any prediction whose resolution window has passed and score it against what actually happened.</li>
+      <li>Click a card to see every seat's individual vote alongside the Grand Master's final verdict for that prediction.</li>
+      <li>The scoreboard compares the Council's blind vote, final (weighted) vote, and extremized vote against two baselines: buy-and-hold and always-bullish.</li>
+    </ol>
+  </div>
+
+  <div class="panel screen-panel" style="margin-bottom: 16px;">
+    <h3 class="cyan">The Archives</h3>
+    <ol class="step-list mono">
+      <li>Once real resolutions accumulate in the Crypt, this shows each seat's actual track record: hit rate, Brier score, log loss, and a calibration curve (predicted probability vs. how often that was actually right).</li>
+      <li>Rank (Youngling &rarr; Grand Master) requires at least 20 resolved predictions before it can move at all -- a lucky streak cannot mint a Grand Master, and a seat's Crypt-derived weight in future votes only starts shifting once it clears that same floor.</li>
+    </ol>
+  </div>
+
+  <div class="panel screen-panel" style="margin-bottom: 16px;">
+    <h3 class="cyan">The Oracle</h3>
+    <ol class="step-list mono">
+      <li>Runs the exact same pipeline as the Chamber, plus a free-form question field.</li>
+      <li>A ticker is still required -- every Tier I seat's data domain (OHLCV, filings, options, ...) is fetched per-ticker, so there's no ticker-free market data to isolate seats around.</li>
+      <li>Your question is handed to the Grand Master as explicit framing for the final synthesis only -- it does not change what any Tier I seat itself is allowed to see or how it votes.</li>
+    </ol>
+  </div>
+
+  <!-- ================= HORIZON COMPETENCE ================= -->
+  <div class="panel" style="margin-bottom: 8px;">
+    <h2>Which Seats Vote at Which Horizon</h2>
+    <p class="dim" style="font-size:13px;">
+      A hardcoded competence weight per seat per horizon (0.0-1.0). A seat at
+      0.0 is not called at all -- no tokens spent on an opinion that horizon's
+      own spec says the seat has no business having. Higher weight also means
+      more influence in the final weighted vote, before calibration and
+      data-quality adjustments are applied on top.
+    </p>
+    <table class="guide-table mono" style="margin-top: 12px;">
+      <thead>
+        <tr><th>Seat</th><th>1D</th><th>1W</th><th>1M</th><th>1Y</th></tr>
+      </thead>
+      <tbody id="competence-tbody">
+        <!-- filled by guide.js from the same matrix the backend uses -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= TIER I: THE TWELVE SEATS ================= -->
+  <h2 class="tier-label">Tier I -- The Twelve Seats</h2>
+  <p class="dim" style="font-size:13px; margin-top:-6px; margin-bottom:16px;">
+    Every seat below deliberates in total isolation -- it is constructed with
+    only the data fields listed, enforced in code (not by prompting), and is
+    sampled independently three times to measure its own run-to-run
+    consistency before its votes are combined with anyone else's.
+  </p>
+  <div class="seat-grid">
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of the Charts</div>
+      <div class="seat-card-id mono">technician</div>
+      <div class="seat-card-field"><b>Sees:</b> price/volume (OHLCV) only. The ticker itself is anonymised to "Instrument A" so the model can't pattern-match the real name from training data.</div>
+      <div class="seat-card-field"><b>Does:</b> direction is decided by a deterministic family-vote engine (trend, breakout, oscillator, volume), never by the LLM -- its job is only to narrate the setup and place entry/exit/invalidation from ATR and structure.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of the Ledgers</div>
+      <div class="seat-card-id mono">fundamentalist</div>
+      <div class="seat-card-field"><b>Sees:</b> financial statements, margins, growth, and valuation multiples vs. sector. No price action at all.</div>
+      <div class="seat-card-field"><b>Does:</b> a fundamentals read. Weak at short horizons by design -- abstains entirely at 1d.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Watcher of Omens</div>
+      <div class="seat-card-id mono">catalyst_seer</div>
+      <div class="seat-card-field"><b>Sees:</b> the news/sentiment feed only.</div>
+      <div class="seat-card-field"><b>Does:</b> classifies each catalyst SCHEDULED vs SURPRISE and must justify why a headline isn't already priced in.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Student of the Inner Circle</div>
+      <div class="seat-card-id mono">insider_reader</div>
+      <div class="seat-card-field"><b>Sees:</b> Form 4 insider transactions only.</div>
+      <div class="seat-card-field"><b>Does:</b> weighs cluster buys over single buys, C-suite over directors, open-market purchases far over option exercises; treats routine 10b5-1 sales as near-zero signal.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Reader of the Republic</div>
+      <div class="seat-card-id mono">senate_watcher</div>
+      <div class="seat-card-field"><b>Sees:</b> congressional disclosure filings and pending legislation/regulation relevant to the ticker.</div>
+      <div class="seat-card-field"><b>Does:</b> must explicitly account for disclosure lag -- filings appear well after the underlying trade happened.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Reader of Great Tides</div>
+      <div class="seat-card-id mono">flow_cartographer</div>
+      <div class="seat-card-field"><b>Sees:</b> 13F institutional holdings, ETF inclusion, short interest, days-to-cover.</div>
+      <div class="seat-card-field"><b>Does:</b> must note the quarterly lag on 13F data and discount its own confidence accordingly.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Reader of Probabilities</div>
+      <div class="seat-card-id mono">oracle_options</div>
+      <div class="seat-card-field"><b>Sees:</b> the option chain / IV surface / put-call ratio only.</div>
+      <div class="seat-card-field"><b>Does:</b> its most valuable output is the implied expected move, not direction -- every other seat's price target gets checked against this seat's distribution downstream.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of the Outer Rim</div>
+      <div class="seat-card-id mono">macro_sage</div>
+      <div class="seat-card-field"><b>Sees:</b> yields, curve shape, Fed path proxies, CPI, employment, the dollar, oil, and the ticker's historical beta to the market -- never the ticker's own price series.</div>
+      <div class="seat-card-field"><b>Does:</b> a macro backdrop read. Strong at 1m/1y, usually abstains at 1d.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Reader of Distant Stars</div>
+      <div class="seat-card-id mono">cross_market</div>
+      <div class="seat-card-field"><b>Sees:</b> the sector ETF, a peer basket, an index-futures proxy, and an overseas-session proxy -- never the ticker's own price series.</div>
+      <div class="seat-card-field"><b>Does:</b> looks for confirmation (or contradiction) from a genuinely different market, on the theory that same-asset data is already priced in.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of Expectations</div>
+      <div class="seat-card-id mono">estimate_scribe</div>
+      <div class="seat-card-field"><b>Sees:</b> analyst estimates, revision history, price-target dispersion, guidance vs. consensus, historical surprise pattern.</div>
+      <div class="seat-card-field"><b>Does:</b> weighs revision momentum and analyst dispersion more heavily than the raw estimate level.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Listener to the Council of Officers</div>
+      <div class="seat-card-id mono">transcript_linguist</div>
+      <div class="seat-card-field"><b>Sees:</b> earnings call transcripts (prepared remarks and Q&amp;A) only.</div>
+      <div class="seat-card-field"><b>Does:</b> looks for hedging-language shifts, guidance verb changes, analyst tone, and avoided topics -- always compares the last four calls, never one in isolation.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of Charters</div>
+      <div class="seat-card-id mono">structure_archivist</div>
+      <div class="seat-card-field"><b>Sees:</b> SEC filings (8-K, S-1, S-3, 13D/G), buybacks, dilution, debt maturities, covenants, ESG/litigation flags.</div>
+      <div class="seat-card-field"><b>Does:</b> low frequency, high impact -- abstains often, and that's correct behaviour for this seat, not a failure.</div>
+    </div>
+  </div>
+
+  <!-- ================= TIER II ================= -->
+  <h2 class="tier-label">Tier II -- The Adversarial Chamber</h2>
+  <div class="seat-grid">
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Bull Advocate &amp; Bear Advocate</div>
+      <div class="seat-card-id mono">bull_advocate / bear_advocate</div>
+      <div class="seat-card-field"><b>Sees:</b> all twelve Tier I verdicts (vote, probability, thesis, data quality) -- never the raw underlying data.</div>
+      <div class="seat-card-field"><b>Does:</b> each builds the strongest possible case for its assigned side regardless of personal read. The assignment is fixed, not chosen -- they are advocates, not analysts.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">The Devil's Advocate</div>
+      <div class="seat-card-id mono">prosecutor</div>
+      <div class="seat-card-field"><b>Sees:</b> everything -- every Tier I verdict, the debate so far, and which direction the council is currently converging on.</div>
+      <div class="seat-card-field"><b>Does:</b> attacks the converging direction, whichever it is. Hunts for evidence cited by multiple seats (counted once, not once per seat), price targets outside the plausible range, and theses that don't actually depend on the data shown. Has veto power -- can force the final verdict to NO_CONVICTION.</div>
+    </div>
+  </div>
+
+  <!-- ================= TIER III ================= -->
+  <h2 class="tier-label">Tier III -- Quality Control</h2>
+  <p class="dim" style="font-size:13px; margin-top:-6px; margin-bottom:16px;">
+    None of these four are an LLM call -- pure computation, deterministic, no token cost.
+  </p>
+  <div class="seat-grid">
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of What Usually Happens</div>
+      <div class="seat-card-id mono">base_rate_keeper</div>
+      <div class="seat-card-field"><b>Computes:</b> the ticker's unconditional historical return distribution -- hit rate of "up," realised volatility, ATR-implied range, max plausible move.</div>
+      <div class="seat-card-field"><b>Used for:</b> the Reality Anchor -- every seat's price target is checked against it, and targets far outside it are flagged IMPLAUSIBLE.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of the Toll</div>
+      <div class="seat-card-id mono">cost_auditor</div>
+      <div class="seat-card-field"><b>Computes:</b> spread as a percentage of expected move, round-trip cost, break-even move.</div>
+      <div class="seat-card-field"><b>Does:</b> if the edge is smaller than the cost of trading it, the verdict is downgraded to NO_CONVICTION regardless of how enthusiastic the rest of the council is.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of the Shields</div>
+      <div class="seat-card-id mono">risk_warden</div>
+      <div class="seat-card-field"><b>Computes:</b> ATR/IV-based position size for a fixed risk budget, with a fractional-Kelly cap and a concentration check against other open Crypt positions.</div>
+      <div class="seat-card-field"><b>Does:</b> sizing only, never direction -- its own function signature takes no vote or probability as input, so it is structurally incapable of sizing based on conviction.</div>
+    </div>
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Keeper of the Crypt's Memory</div>
+      <div class="seat-card-id mono">calibration_officer</div>
+      <div class="seat-card-field"><b>Computes:</b> from the resolved Crypt, per-seat hit rate, Brier score, log loss, and a calibration curve (what The Archives page displays).</div>
+      <div class="seat-card-field"><b>Does:</b> outputs a weight vector for the next deliberation's vote -- every seat starts at 1.0, and weight can only move once a seat has at least 20 resolved predictions, so a lucky streak can't buy influence early.</div>
+    </div>
+  </div>
+
+  <!-- ================= TIER IV ================= -->
+  <h2 class="tier-label">Tier IV -- Synthesis</h2>
+  <div class="seat-grid">
+    <div class="panel-inset seat-card">
+      <div class="seat-card-title">Master of the Order</div>
+      <div class="seat-card-id mono">grand_master</div>
+      <div class="seat-card-field"><b>Sees:</b> everything -- every Tier I verdict, the full Bull/Bear debate, every Prosecutor ruling, the Reality Anchor, and the Cost Auditor's result.</div>
+      <div class="seat-card-field"><b>Does:</b> writes the final call. Must report the <i>structure</i> of disagreement, not just a consensus number -- unanimity among seats that all leaned on the same correlated evidence is treated as a warning sign, not a green light. Cannot override a Prosecutor veto.</div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/guide.js"></script>
+</body>
+</html>

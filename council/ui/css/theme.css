@@ -18,6 +18,10 @@
   --amber-dim: #7a5d2c;
   --crimson: #d6453f;
   --crimson-dim: #6e2724;
+  --green: #5fd66f;
+  --green-dim: #2f6e39;
+  --yellow: #e8d84f;
+  --yellow-dim: #746e2c;
   --bone: #e8e4d8;
   --bone-dim: #8b8779;
   --grey: #4a5164;
@@ -97,6 +101,8 @@ h3 { font-size: 11px; color: var(--amber); }
 .cyan { color: var(--cyan); }
 .amber { color: var(--amber); }
 .crimson { color: var(--crimson); }
+.green { color: var(--green); }
+.yellow { color: var(--yellow); }
 
 /* ---- chunky bevelled panel ------------------------------------------------ */
 .panel {
@@ -204,15 +210,19 @@ input[type="text"]:focus {
   border-color: var(--cyan-dim);
 }
 
-/* ---- status colors ---------------------------------------------------- */
-.status-bullish { color: var(--amber); }
+/* ---- status colors ----------------------------------------------------
+   BULLISH = green, BEARISH = red, NO_READ / NO_CONVICTION = yellow. This
+   is the one color mapping every screen must agree on -- a seat's vote
+   should read the same way whether you're looking at the Chamber ring,
+   the holo-panel, the dissent map, or the Crypt's seat-vote list. */
+.status-bullish { color: var(--green); }
 .status-bearish { color: var(--crimson); }
-.status-noread { color: var(--grey); }
+.status-noread { color: var(--yellow); }
 .status-pending { color: var(--cyan); }
 
-.glow-bullish { box-shadow: 0 0 18px rgba(232, 176, 79, 0.55); border-color: var(--amber) !important; }
+.glow-bullish { box-shadow: 0 0 18px rgba(95, 214, 111, 0.55); border-color: var(--green) !important; }
 .glow-bearish { box-shadow: 0 0 18px rgba(214, 69, 63, 0.55); border-color: var(--crimson) !important; }
-.glow-noread { opacity: 0.55; }
+.glow-noread { box-shadow: 0 0 14px rgba(232, 216, 79, 0.45); border-color: var(--yellow) !important; opacity: 0.75; }
 .glow-pending { box-shadow: 0 0 14px rgba(79, 214, 232, 0.5); border-color: var(--cyan) !important; }
 
 @keyframes holo-shimmer {

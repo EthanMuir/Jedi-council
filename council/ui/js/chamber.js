@@ -104,7 +104,7 @@ function appendDebateRound(payload) {
   div.style.marginBottom = '10px';
   div.innerHTML = `
     <h3>Round ${payload.round_n}</h3>
-    ${payload.bull_argument ? `<div style="margin-bottom:6px;"><span class="amber">BULL:</span> ${payload.bull_argument}</div>` : ''}
+    ${payload.bull_argument ? `<div style="margin-bottom:6px;"><span class="green">BULL:</span> ${payload.bull_argument}</div>` : ''}
     ${payload.bear_argument ? `<div style="margin-bottom:6px;"><span class="crimson">BEAR:</span> ${payload.bear_argument}</div>` : ''}
     <div class="dim">PROSECUTOR: veto=${payload.prosecutor_veto} ${payload.prosecutor_findings.map(f => `<div>&#8226; ${f}</div>`).join('')}</div>
   `;

@@ -61,8 +61,8 @@
 }
 
 .seat-chair.state-bullish {
-  border-color: var(--amber);
-  box-shadow: 0 0 16px rgba(232, 176, 79, 0.5), inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo);
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(95, 214, 111, 0.5), inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo);
 }
 
 .seat-chair.state-bearish {
@@ -71,7 +71,9 @@
 }
 
 .seat-chair.state-noread {
-  opacity: 0.5;
+  border-color: var(--yellow);
+  box-shadow: 0 0 16px rgba(232, 216, 79, 0.4), inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo);
+  opacity: 0.75;
 }
 
 .seat-chair.state-idle {
@@ -130,9 +132,9 @@
   pointer-events: none;
 }
 
-.holocron.verdict-bullish .holocron-face { border-color: var(--amber); }
+.holocron.verdict-bullish .holocron-face { border-color: var(--green); }
 .holocron.verdict-bearish .holocron-face { border-color: var(--crimson); }
-.holocron.verdict-noconviction .holocron-face { border-color: var(--grey); }
+.holocron.verdict-noconviction .holocron-face { border-color: var(--yellow); }
 
 @media (prefers-reduced-motion: reduce) {
   .holocron-face { animation: none; transform: rotateY(30deg) rotateX(8deg); }

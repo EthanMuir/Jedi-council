@@ -6,6 +6,7 @@ const NAV_LINKS = [
   { href: '/crypt.html', label: 'The Crypt' },
   { href: '/archives.html', label: 'The Archives' },
   { href: '/oracle.html', label: 'The Oracle' },
+  { href: '/guide.html', label: 'The Guide' },
 ];
 
 function renderNav(activeHref) {
