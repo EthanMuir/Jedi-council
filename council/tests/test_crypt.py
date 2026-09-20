@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from council.crypt.db import GENESIS_HASH, compute_row_hash, connect, get_last_hash
-from council.crypt.ledger import ResolutionWindowError, write_blind_prediction
+from council.crypt.ledger import ResolutionWindowError, write_prediction
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def conn(tmp_path):
 
 def _write_sample(conn, ticker="NVDA", days_out=7, created_at=None):
     created_at = created_at or datetime(2026, 9, 18, 12, 0, 0)
-    return write_blind_prediction(
+    return write_prediction(
         conn,
         ticker=ticker,
         horizon="1w",
@@ -107,6 +107,19 @@ def test_hash_chain_detects_tampering(conn):
         "blind_vote": row["blind_vote"],
         "blind_probability": row["blind_probability"],
         "blind_consensus_pct": row["blind_consensus_pct"],
+        "council_vote": row["council_vote"],
+        "council_confidence": row["council_confidence"],
+        "consensus_pct": row["consensus_pct"],
+        "entry": row["entry"],
+        "exit": row["exit"],
+        "invalidation": row["invalidation"],
+        "stop": row["stop"],
+        "expected_move_pct": row["expected_move_pct"],
+        "base_rate_move_pct": row["base_rate_move_pct"],
+        "dissent_summary": row["dissent_summary"],
+        "correlated_evidence_warning": row["correlated_evidence_warning"],
+        "prosecutor_verdict": row["prosecutor_verdict"],
+        "cost_audit_passed": row["cost_audit_passed"],
         "discussion_enabled": row["discussion_enabled"],
     }
     recomputed = compute_row_hash(fields, row["prev_hash"])
@@ -119,7 +132,7 @@ def test_hash_chain_detects_tampering(conn):
 def test_resolution_window_guard_rejects_past_resolve_at(conn):
     created_at = datetime(2026, 9, 18, 12, 0, 0)
     with pytest.raises(ResolutionWindowError):
-        write_blind_prediction(
+        write_prediction(
             conn,
             ticker="NVDA",
             horizon="1w",
@@ -137,7 +150,7 @@ def test_resolution_window_guard_rejects_past_resolve_at(conn):
 def test_resolution_window_guard_rejects_resolve_at_equal_to_created_at(conn):
     created_at = datetime(2026, 9, 18, 12, 0, 0)
     with pytest.raises(ResolutionWindowError):
-        write_blind_prediction(
+        write_prediction(
             conn,
             ticker="NVDA",
             horizon="1d",

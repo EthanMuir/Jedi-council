@@ -1,8 +1,17 @@
 """Append-only writers for the Crypt. No function here ever issues an UPDATE
 or DELETE -- the schema's triggers would reject it anyway, but the intent is
-enforced here too so a bug fails loudly in Python, not just in SQLite."""
+enforced here too so a bug fails loudly in Python, not just in SQLite.
+
+`write_prediction` writes exactly once, after the FULL pipeline (Phases
+A-F) has run entirely in memory -- it is impossible to write the blind
+columns now and the council/synthesis columns later, because the
+immutability trigger blocks any UPDATE. Addendum A8's "written and
+hash-chained before any discussion runs" requirement is satisfied by
+computation order (Phase A completes before Phase C's debate begins), not
+by a second database write."""
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from datetime import datetime
@@ -17,7 +26,7 @@ class ResolutionWindowError(Exception):
     unknowable, per the spec's forward-only evaluation guard."""
 
 
-def write_blind_prediction(
+def write_prediction(
     conn: sqlite3.Connection,
     *,
     ticker: str,
@@ -29,12 +38,21 @@ def write_blind_prediction(
     blind_vote: str,
     blind_probability: float,
     blind_consensus_pct: float,
+    council_vote: str | None = None,
+    council_confidence: float | None = None,
+    consensus_pct: float | None = None,
+    entry: float | None = None,
+    exit: float | None = None,
+    invalidation: float | None = None,
+    stop: float | None = None,
+    expected_move_pct: float | None = None,
+    base_rate_move_pct: float | None = None,
+    dissent_summary: str | None = None,
+    correlated_evidence_warning: str | None = None,
+    prosecutor_verdict: str | None = None,
+    cost_audit_passed: bool | None = None,
     created_at: datetime | None = None,
 ) -> str:
-    """Writes the Phase A (blind round) result only. `council_vote` and the
-    other Tier IV synthesis fields stay NULL until the Grand Master exists
-    (Phase 3) -- this function must never be used to fake a synthesised
-    verdict."""
     created_at = created_at or datetime.utcnow()
     if resolve_at <= created_at:
         raise ResolutionWindowError(
@@ -42,8 +60,6 @@ def write_blind_prediction(
             f"created_at ({created_at.isoformat()}); a prediction may never "
             "be written after its own resolution window has opened."
         )
-
-    import json
 
     prediction_id = str(uuid.uuid4())
     prev_hash = get_last_hash(conn)
@@ -59,35 +75,28 @@ def write_blind_prediction(
         "blind_vote": blind_vote,
         "blind_probability": blind_probability,
         "blind_consensus_pct": blind_consensus_pct,
+        "council_vote": council_vote,
+        "council_confidence": council_confidence,
+        "consensus_pct": consensus_pct,
+        "entry": entry,
+        "exit": exit,
+        "invalidation": invalidation,
+        "stop": stop,
+        "expected_move_pct": expected_move_pct,
+        "base_rate_move_pct": base_rate_move_pct,
+        "dissent_summary": dissent_summary,
+        "correlated_evidence_warning": correlated_evidence_warning,
+        "prosecutor_verdict": prosecutor_verdict,
+        "cost_audit_passed": int(cost_audit_passed) if cost_audit_passed is not None else None,
         "discussion_enabled": 0,
     }
     row_hash = compute_row_hash(fields, prev_hash)
 
+    columns = [k for k in fields] + ["prev_hash", "row_hash"]
+    placeholders = ", ".join("?" for _ in columns)
     conn.execute(
-        """
-        INSERT INTO predictions (
-            id, created_at, ticker, horizon, resolve_at,
-            price_at_prediction, data_snapshot_hash, model_versions_json,
-            blind_vote, blind_probability, blind_consensus_pct,
-            discussion_enabled, prev_hash, row_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            fields["id"],
-            fields["created_at"],
-            fields["ticker"],
-            fields["horizon"],
-            fields["resolve_at"],
-            fields["price_at_prediction"],
-            fields["data_snapshot_hash"],
-            fields["model_versions_json"],
-            fields["blind_vote"],
-            fields["blind_probability"],
-            fields["blind_consensus_pct"],
-            fields["discussion_enabled"],
-            prev_hash,
-            row_hash,
-        ),
+        f"INSERT INTO predictions ({', '.join(columns)}) VALUES ({placeholders})",
+        [*fields.values(), prev_hash, row_hash],
     )
     conn.commit()
     return prediction_id

@@ -32,3 +32,15 @@ def compute_row_hash(fields: dict, prev_hash: str) -> str:
     canonical = json.dumps(fields, sort_keys=True, default=str)
     payload = f"{prev_hash}:{canonical}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def get_open_tickers(conn: sqlite3.Connection) -> list[str]:
+    """Tickers with a prediction row that has no matching resolution yet --
+    used by the Risk Warden's concentration check. Since the resolution
+    sweep is Phase 4, every prediction is currently "open"."""
+    rows = conn.execute(
+        "SELECT p.ticker FROM predictions p "
+        "LEFT JOIN resolutions r ON r.prediction_id = p.id "
+        "WHERE r.prediction_id IS NULL"
+    ).fetchall()
+    return [row["ticker"] for row in rows]

@@ -1,17 +1,26 @@
 """Structured-output wrapper around the Anthropic SDK. Every call -- live or
 fixture -- is logged (model, prompt hash, tokens, latency, cost) per
 engineering rule #2. In --no-llm / fixture mode, no network call is made at
-all; a recorded SeatVerdict is loaded and validated through the same schema
-a live call would have to pass."""
+all; a recorded object is loaded and validated through the same schema a
+live call would have to pass.
+
+`get_structured` is the generic primitive (any Pydantic response model);
+`get_verdict` is a thin SeatVerdict-specific wrapper that preserves the
+NO_READ-on-schema-failure fallback Tier I seats rely on. Tier II-IV
+(debate, Prosecutor, Grand Master) call `get_structured` directly and pick
+their own fallback, since "abstain" doesn't mean the same thing for a
+debate argument as it does for an analyst's vote.
+"""
 from __future__ import annotations
 
 import hashlib
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeVar
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from council.config import Settings
 from council.seats.base import SeatVerdict
@@ -24,6 +33,8 @@ _PRICING_PER_MTOK = {
     "claude-sonnet-5": {"input": 3.0, "output": 15.0},
     "claude-opus-5": {"input": 15.0, "output": 75.0},
 }
+
+T = TypeVar("T", bound=BaseModel)
 
 
 @dataclass
@@ -42,7 +53,9 @@ class LLMCallRecord:
 
 
 class SchemaRetryExhausted(Exception):
-    pass
+    """Raised by get_structured when every retry fails schema validation.
+    Callers choose their own fallback -- Tier I abstains (NO_READ), a
+    debate round skips, the Prosecutor stays silent, Grand Master aborts."""
 
 
 class LLMClient:
@@ -66,9 +79,9 @@ class LLMClient:
     def _prompt_hash(self, system_prompt: str, user_prompt: str) -> str:
         return hashlib.sha256((system_prompt + "\x00" + user_prompt).encode()).hexdigest()[:16]
 
-    async def _fixture_verdict(
-        self, seat_id: str, fixture_name: str, sample_index: int = 0
-    ) -> SeatVerdict:
+    async def _fixture_structured(
+        self, seat_id: str, fixture_name: str, response_model: type[T], sample_index: int = 0
+    ) -> T:
         """Sample N looks for `{fixture_name}_{N}.json` (1-indexed, for
         seats with hand-authored per-sample variants -- see
         insider_reader_1/2/3.json) and falls back to the single base
@@ -78,7 +91,7 @@ class LLMClient:
         path = variant_path if variant_path.exists() else _FIXTURE_DIR / f"{fixture_name}.json"
         with open(path) as f:
             data = json.load(f)
-        verdict = SeatVerdict(**data)
+        result = response_model(**data)
         self.call_log.append(
             LLMCallRecord(
                 seat_id=seat_id,
@@ -93,25 +106,29 @@ class LLMClient:
                 success=True,
             )
         )
-        return verdict
+        return result
 
-    async def get_verdict(
+    async def get_structured(
         self,
         *,
         seat_id: str,
         model: str,
         system_prompt: str,
         user_prompt: str,
+        response_model: type[T],
         fixture_name: str | None = None,
         sample_index: int = 0,
         max_retries: int = 2,
-    ) -> SeatVerdict:
+    ) -> T:
         if self.settings.resolved_no_llm:
-            return await self._fixture_verdict(seat_id, fixture_name or seat_id, sample_index)
+            return await self._fixture_structured(
+                seat_id, fixture_name or seat_id, response_model, sample_index
+            )
 
-        schema = SeatVerdict.model_json_schema()
+        schema = response_model.model_json_schema()
         prompt_hash = self._prompt_hash(system_prompt, user_prompt)
         last_error: Exception | None = None
+        tool_name = f"submit_{response_model.__name__.lower()}"
 
         for attempt in range(1, max_retries + 2):  # initial attempt + max_retries
             start = time.monotonic()
@@ -125,16 +142,16 @@ class LLMClient:
                     messages=[{"role": "user", "content": user_prompt}],
                     tools=[
                         {
-                            "name": "submit_verdict",
-                            "description": "Submit your structured seat verdict.",
+                            "name": tool_name,
+                            "description": f"Submit your structured {response_model.__name__}.",
                             "input_schema": schema,
                         }
                     ],
-                    tool_choice={"type": "tool", "name": "submit_verdict"},
+                    tool_choice={"type": "tool", "name": tool_name},
                 )
                 latency_ms = (time.monotonic() - start) * 1000
                 tool_use = next(b for b in resp.content if b.type == "tool_use")
-                verdict = SeatVerdict(**tool_use.input)
+                result = response_model(**tool_use.input)
                 self.call_log.append(
                     LLMCallRecord(
                         seat_id=seat_id,
@@ -151,7 +168,7 @@ class LLMClient:
                         success=True,
                     )
                 )
-                return verdict
+                return result
             except (ValidationError, StopIteration, KeyError, TypeError) as exc:
                 last_error = exc
                 latency_ms = (time.monotonic() - start) * 1000
@@ -172,12 +189,39 @@ class LLMClient:
                 )
                 continue
 
-        return SeatVerdict(
-            vote="NO_READ",
-            probability=0.5,
-            expected_move_pct=0.0,
-            thesis=f"Schema validation failed after {max_retries} retries: {last_error}"[:500],
-            what_would_change_my_mind="N/A",
-            data_quality="POOR",
-            abstain_reason="schema_failure",
+        raise SchemaRetryExhausted(
+            f"{seat_id}: schema validation failed after {max_retries} retries: {last_error}"
         )
+
+    async def get_verdict(
+        self,
+        *,
+        seat_id: str,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+        fixture_name: str | None = None,
+        sample_index: int = 0,
+        max_retries: int = 2,
+    ) -> SeatVerdict:
+        try:
+            return await self.get_structured(
+                seat_id=seat_id,
+                model=model,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_model=SeatVerdict,
+                fixture_name=fixture_name,
+                sample_index=sample_index,
+                max_retries=max_retries,
+            )
+        except SchemaRetryExhausted as exc:
+            return SeatVerdict(
+                vote="NO_READ",
+                probability=0.5,
+                expected_move_pct=0.0,
+                thesis=f"Schema validation failed after {max_retries} retries: {exc}"[:500],
+                what_would_change_my_mind="N/A",
+                data_quality="POOR",
+                abstain_reason="schema_failure",
+            )

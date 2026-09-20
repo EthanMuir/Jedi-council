@@ -1,0 +1,7 @@
+{
+  "side": "BULL",
+  "round_n": 2,
+  "argument": "The Bear is right that individual hedges exist, but hedged is not the same as wrong -- a seat stating its own confidence honestly is the system working as designed, not a weakness to exploit. The staleness point cuts both ways: a several-day-old catalyst that has NOT been reversed by newer information is itself informative. And 'weak directional lean' from oracle_options was never the bull case -- its expected-move output, which the Bear does not dispute, is what the whole council's targets get checked against, and nothing here is flagged implausible relative to it. Three independently-sourced, non-hedged reads (estimate_scribe's revision momentum, fundamentalist's growth-justified premium, technician's mechanically-computed trend) still stand.",
+  "cites_seats": ["estimate_scribe", "fundamentalist", "technician", "oracle_options"],
+  "rebuts": "Bear's round 1 argument that hedged theses and stale catalysts undercut the bullish case."
+}

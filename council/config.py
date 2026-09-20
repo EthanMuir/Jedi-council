@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     n_samples_per_seat: int = 3
     max_concurrent_llm_calls: int = 8
 
+    # Phase 3: Tiers II-IV
+    debate_rounds: int = 2
+    min_participating_seats: int = 6
+    assumed_spread_bps: float = 5.0  # no live bid/ask feed yet -- see Cost Auditor
+    risk_budget_pct: float = 1.0
+    kelly_cap: float = 0.25  # quarter-Kelly default
+
     @property
     def resolved_no_llm(self) -> bool:
         """Fixture mode is forced whenever no Anthropic key is configured,

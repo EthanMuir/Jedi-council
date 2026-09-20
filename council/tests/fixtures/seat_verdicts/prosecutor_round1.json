@@ -1,0 +1,12 @@
+{
+  "round_n": 1,
+  "target_direction": "BULLISH",
+  "findings": [
+    {
+      "category": "OTHER",
+      "description": "No correlated evidence detected across directional Tier I seats -- each cites a distinct source, so the apparent agreement is not an artifact of everyone reading the same headline."
+    }
+  ],
+  "veto": false,
+  "veto_reason": null
+}

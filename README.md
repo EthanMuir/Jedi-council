@@ -7,7 +7,7 @@ spec). The single governing constraint: every Council Member seat is
 isolated by *data*, enforced in code (`DataIsolationError`), not by prompt.
 Five LLM personas reading the same feed are one source wearing five robes.
 
-## Status: Phase 0 + Phase 1 + Phase 2 complete
+## Status: Phase 0 + Phase 1 + Phase 2 + Phase 3 complete
 
 - **DataService** (`council/data/`) -- normalised schemas, SQLite disk
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
@@ -36,23 +36,68 @@ Five LLM personas reading the same feed are one source wearing five robes.
   becomes the seat's consensus; disagreement fraction becomes `dispersion`
   and automatically discounts the reported confidence toward 0.5. A tie with
   no majority resolves to `NO_READ`.
-- **Blind-round orchestrator + CLI** -- runs all competent seats in parallel,
-  isolated, no peer visibility, each sampled 3x, and writes the result to
-  the Crypt (including per-seat dispersion).
+- **Full pipeline orchestrator + CLI** (`council/engine/orchestrator.py`) --
+  runs Phases A-G entirely in memory and writes the Crypt exactly once, at
+  the end (Phase G) -- the immutability trigger makes a later UPDATE
+  impossible, so `blind_*` and the Tier IV synthesis columns are populated
+  together in one row, not two writes.
+- **Phase B -- Reality Anchor** (`council/engine/base_rate.py`) -- the
+  Base-Rate Keeper (pure computation, no LLM): hit-rate-up, realised vol,
+  ATR-implied range, and a 95th-percentile max-plausible-move ceiling from
+  the ticker's own rolling-return history, combined with Oracle of Options'
+  implied move. Every directional Tier I target is checked against it and
+  flagged PLAUSIBLE/IMPLAUSIBLE (flagged, never deleted).
+- **Phase C -- Debate** (`council/seats/advocates.py`,
+  `council/seats/prosecutor.py`) -- Bull and Bear Advocate see only Tier I
+  *summaries* (never raw data), argue their fixed side over N rounds
+  (default 2), and rebut the opposing side from round 2 on. The Prosecutor
+  sees everything, including a deterministically pre-computed
+  correlated-evidence check (`detect_correlated_evidence` -- two seats
+  citing the same source, not just the LLM's own read), and can veto to
+  force `NO_CONVICTION`.
+- **Phase D -- weighted vote** (`council/engine/aggregation.py`) -- each
+  directional seat weighted by horizon-competence x data-quality x
+  plausibility (Calibration Officer weighting arrives Phase 4; every seat
+  is 1.0 until then).
+- **Phase E -- audit gates** -- Cost Auditor (`council/engine/cost_auditor.py`,
+  pure computation: spread/break-even/edge, using a configurable assumed
+  spread since there's no live bid/ask feed for the underlying yet),
+  Prosecutor veto, base-rate plausibility (gate fails if a majority of
+  directional targets are IMPLAUSIBLE), and a minimum-participating-seats
+  floor. Any gate failing short-circuits Phase F entirely -- Grand Master
+  is never called, a synthetic `NO_CONVICTION` verdict is written instead,
+  and the reasons are recorded.
+- **Phase F -- Grand Master synthesis** (`council/seats/grand_master.py`) --
+  final verdict using the stronger model. Hard rule enforced by the schema:
+  `dissent_summary` is a required, non-empty field, and it must report the
+  *structure* of disagreement, not just a consensus number.
+- **Risk Warden** (`council/engine/risk_warden.py`) -- ATR/IV-based
+  position sizing with a fractional-Kelly cap and a same-ticker
+  concentration check against other open Crypt positions. Its function
+  signature takes no vote, probability, or direction parameter at all
+  (Addendum A9's wall enforced at the type level, not by convention).
 
-Not yet built (by design -- stopping here per the spec's phase order):
-Tiers II-IV (debate, Prosecutor, Base-Rate Keeper, Cost Auditor, Risk Warden,
-Grand Master), calibration weighting, the resolution sweep, and the UI.
+Not yet built (by design -- stopping here per the spec's phase order): the
+Calibration Officer and its weight vector, the resolution sweep and
+scoring, and the UI (all Phase 4+).
 
-Known Phase 2 scope cuts (see inline comments): Fundamentals/AnalystEstimates
-/Macro snapshots don't yet enforce a filing-lag point-in-time guard the way
-the dated feeds (insider transactions, congress trades, transcripts, SEC
+Known scope cuts (see inline comments): Fundamentals/AnalystEstimates/Macro
+snapshots don't yet enforce a filing-lag point-in-time guard the way the
+dated feeds (insider transactions, congress trades, transcripts, SEC
 filings, 13F) do -- deferred to Phase 4, when the Crypt actually backtests
 against historical `as_of` dates. FMP provider endpoints are unverified
 against a live key (none configured). Cross-Market Navigator's sector/peer/
 index/overseas proxies all resolve to the same `DEFAULT_ohlcv.json` fixture
 in offline mode, so their values are currently identical -- a fixture-mode
-artifact, not a code issue.
+artifact, not a code issue. Cost Auditor's spread is an assumed constant
+(`Settings.assumed_spread_bps`), not a live quote. Risk Warden's
+"correlation against other open positions" is currently a same-ticker
+concentration check only, not a real cross-asset correlation matrix. Debate
+and Prosecutor fixtures are static text (not horizon- or ticker-aware), so
+at short horizons the Reality Anchor will often flag their fixed
+expected-move numbers IMPLAUSIBLE and fail the base-rate gate -- a real,
+correct audit-gate response to a fixture-mode limitation, not a bug (try
+`--horizon 1d` vs `--horizon 1w` to see both paths).
 
 ## Setup
 

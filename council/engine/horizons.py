@@ -19,6 +19,11 @@ def resolve_at_for(horizon: str, as_of: datetime) -> datetime:
     return as_of + HORIZON_TIMEDELTA[horizon]
 
 
+# Trading days (not calendar days) matching each horizon, for the Base-Rate
+# Keeper's rolling-return statistics.
+HORIZON_TRADING_DAYS: dict[str, int] = {"1d": 1, "1w": 5, "1m": 21, "1y": 252}
+
+
 # Full Tier I roster from the spec, even though only technician /
 # catalyst_seer / oracle_options are wired up as of Phase 1. Hardcoding the
 # whole table now avoids re-deriving it inconsistently in Phase 2.

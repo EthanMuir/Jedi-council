@@ -1,0 +1,12 @@
+{
+  "vote": "BULLISH",
+  "confidence": 0.571,
+  "entry": 162.0,
+  "exit": 172.0,
+  "invalidation": 155.0,
+  "stop": 155.0,
+  "expected_move_pct": 4.5,
+  "dissent_summary": "9 of 12 seats voted bullish (technician, fundamentalist, catalyst_seer, flow_cartographer, oracle_options, cross_market, estimate_scribe, transcript_linguist, structure_archivist); none voted bearish; 3 abstained (insider_reader, senate_watcher, macro_sage) citing genuinely thin or stale data rather than a contrary read. This is not manufactured unanimity: the Prosecutor found no correlated evidence behind the agreement, and several bullish seats explicitly hedged their own confidence (technician: 'not a fresh breakout'; oracle_options: 'directional lean is weak'; fundamentalist: 'weak at short horizons by design').",
+  "correlated_evidence_warning": null,
+  "reasoning": "The weighted vote (horizon-competence and data-quality adjusted) confirms the blind round's bullish lean without a single implausible target against the Reality Anchor. The Bear's strongest points -- staleness, hedged confidence, a lagged 13F -- were real but did not overturn the case; they capped confidence at moderate rather than converting it to a veto. The Prosecutor flagged one data-independent framing in round 1 that was substantially addressed by round 2 and did not veto. Cost Auditor's edge clears the assumed spread. Net: bullish, moderate conviction, not a high-confidence call."
+}
