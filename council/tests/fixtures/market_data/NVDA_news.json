@@ -1,0 +1,47 @@
+[
+  {
+    "headline": "NVIDIA unveils next-gen data center GPU roadmap at investor day",
+    "summary": "Executives detailed a multi-year roadmap extending the current architecture cadence, reiterating full-year data center demand visibility.",
+    "source": "Reuters",
+    "url": "https://example.com/nvda-roadmap",
+    "published_at": "2026-09-16T14:30:00",
+    "sentiment_score": 0.42,
+    "sentiment_label": "Somewhat-Bullish"
+  },
+  {
+    "headline": "Hyperscaler capex guidance raised, NVIDIA named primary beneficiary",
+    "summary": "Multiple cloud providers raised full-year capital expenditure guidance on earnings calls, with analysts citing AI accelerator demand.",
+    "source": "Bloomberg",
+    "url": "https://example.com/hyperscaler-capex",
+    "published_at": "2026-09-14T09:15:00",
+    "sentiment_score": 0.55,
+    "sentiment_label": "Bullish"
+  },
+  {
+    "headline": "Export control update targets advanced accelerator shipments to select markets",
+    "summary": "Regulators clarified licensing requirements for high-end AI chips; scope was narrower than some investors had feared.",
+    "source": "Wall Street Journal",
+    "url": "https://example.com/export-controls",
+    "published_at": "2026-09-12T11:00:00",
+    "sentiment_score": -0.18,
+    "sentiment_label": "Neutral"
+  },
+  {
+    "headline": "Sell-side note flags valuation stretch after recent run-up",
+    "summary": "One brokerage trimmed its rating to neutral, citing valuation, while maintaining an above-consensus price target.",
+    "source": "Barron's",
+    "url": "https://example.com/valuation-note",
+    "published_at": "2026-09-17T16:45:00",
+    "sentiment_score": -0.1,
+    "sentiment_label": "Neutral"
+  },
+  {
+    "headline": "Quarterly earnings date confirmed for next month",
+    "summary": "The company confirmed the date of its next quarterly report, in line with prior-year scheduling.",
+    "source": "PR Newswire",
+    "url": "https://example.com/earnings-date",
+    "published_at": "2026-09-10T08:00:00",
+    "sentiment_score": 0.05,
+    "sentiment_label": "Neutral"
+  }
+]

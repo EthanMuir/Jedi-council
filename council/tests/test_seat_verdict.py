@@ -1,0 +1,118 @@
+import pytest
+from pydantic import ValidationError
+
+from council.seats.base import DataIsolationError, SeatContext, SeatVerdict
+
+_VALID_COMPARISON_CLASS = {
+    "definition": "US large-cap semis after a >15% 1-month run",
+    "n_observations": 42,
+    "base_rate": 0.55,
+    "why_this_class": "closest analogue with enough history",
+}
+
+
+def _base_verdict(**overrides):
+    payload = dict(
+        vote="BULLISH",
+        probability=0.623,
+        comparison_class=_VALID_COMPARISON_CLASS,
+        entry=100.0,
+        exit=110.0,
+        invalidation=95.0,
+        expected_move_pct=5.0,
+        thesis="short thesis",
+        what_would_change_my_mind="a break below invalidation",
+        data_quality="GOOD",
+        abstain_reason=None,
+    )
+    payload.update(overrides)
+    return payload
+
+
+def test_valid_verdict_round_trips():
+    v = SeatVerdict(**_base_verdict())
+    assert v.probability == 0.623
+
+
+def test_probability_multiple_of_005_rejected():
+    with pytest.raises(ValidationError):
+        SeatVerdict(**_base_verdict(probability=0.600))
+
+
+def test_probability_requires_three_decimals():
+    with pytest.raises(ValidationError):
+        SeatVerdict(**_base_verdict(probability=0.6234))
+
+
+def test_no_read_requires_abstain_reason():
+    with pytest.raises(ValidationError):
+        SeatVerdict(
+            **_base_verdict(
+                vote="NO_READ",
+                probability=0.5,
+                comparison_class=None,
+                abstain_reason=None,
+            )
+        )
+
+
+def test_no_read_with_abstain_reason_is_valid_and_skips_granularity_rule():
+    v = SeatVerdict(
+        **_base_verdict(
+            vote="NO_READ",
+            probability=0.5,
+            comparison_class=None,
+            abstain_reason="no relevant signal at this horizon",
+        )
+    )
+    assert v.vote == "NO_READ"
+
+
+def test_directional_vote_requires_comparison_class():
+    with pytest.raises(ValidationError):
+        SeatVerdict(**_base_verdict(comparison_class=None))
+
+
+def test_thesis_over_120_words_rejected():
+    long_thesis = " ".join(["word"] * 121)
+    with pytest.raises(ValidationError):
+        SeatVerdict(**_base_verdict(thesis=long_thesis))
+
+
+def test_seat_context_blocks_ungranted_field_at_construction():
+    with pytest.raises(DataIsolationError):
+        SeatContext(
+            seat_id="technician",
+            allowed=frozenset({"ohlcv"}),
+            data={"ohlcv": [], "news": ["leaked headline"]},
+            ticker="NVDA",
+            as_of="2026-09-18",
+            horizon="1w",
+        )
+
+
+def test_seat_context_blocks_read_of_forbidden_field():
+    ctx = SeatContext(
+        seat_id="technician",
+        allowed=frozenset({"ohlcv"}),
+        data={"ohlcv": []},
+        ticker="NVDA",
+        as_of="2026-09-18",
+        horizon="1w",
+    )
+    with pytest.raises(DataIsolationError):
+        ctx["news"]
+    with pytest.raises(DataIsolationError):
+        ctx.get("news")
+
+
+def test_seat_context_allows_granted_field():
+    ctx = SeatContext(
+        seat_id="technician",
+        allowed=frozenset({"ohlcv"}),
+        data={"ohlcv": [1, 2, 3]},
+        ticker="NVDA",
+        as_of="2026-09-18",
+        horizon="1w",
+    )
+    assert ctx["ohlcv"] == [1, 2, 3]

@@ -1,0 +1,226 @@
+{
+  "underlying_price": 162.07,
+  "contracts": [
+    {
+      "strike": 145.0,
+      "expiry": "2026-09-25",
+      "option_type": "call",
+      "bid": 2.57,
+      "ask": 4.3,
+      "last": 3.12,
+      "volume": 8005,
+      "open_interest": 31447,
+      "implied_volatility": 0.496
+    },
+    {
+      "strike": 145.0,
+      "expiry": "2026-09-25",
+      "option_type": "put",
+      "bid": 3.41,
+      "ask": 3.15,
+      "last": 4.84,
+      "volume": 8427,
+      "open_interest": 49409,
+      "implied_volatility": 0.455
+    },
+    {
+      "strike": 155.0,
+      "expiry": "2026-09-25",
+      "option_type": "call",
+      "bid": 4.42,
+      "ask": 2.77,
+      "last": 4.39,
+      "volume": 6898,
+      "open_interest": 22774,
+      "implied_volatility": 0.433
+    },
+    {
+      "strike": 155.0,
+      "expiry": "2026-09-25",
+      "option_type": "put",
+      "bid": 3.27,
+      "ask": 4.71,
+      "last": 2.66,
+      "volume": 4991,
+      "open_interest": 55384,
+      "implied_volatility": 0.436
+    },
+    {
+      "strike": 160.0,
+      "expiry": "2026-09-25",
+      "option_type": "call",
+      "bid": 4.86,
+      "ask": 3.53,
+      "last": 2.21,
+      "volume": 8924,
+      "open_interest": 32241,
+      "implied_volatility": 0.355
+    },
+    {
+      "strike": 160.0,
+      "expiry": "2026-09-25",
+      "option_type": "put",
+      "bid": 3.41,
+      "ask": 3.72,
+      "last": 3.25,
+      "volume": 5372,
+      "open_interest": 57490,
+      "implied_volatility": 0.341
+    },
+    {
+      "strike": 170.0,
+      "expiry": "2026-09-25",
+      "option_type": "call",
+      "bid": 3.88,
+      "ask": 3.82,
+      "last": 2.5,
+      "volume": 12806,
+      "open_interest": 27420,
+      "implied_volatility": 0.391
+    },
+    {
+      "strike": 170.0,
+      "expiry": "2026-09-25",
+      "option_type": "put",
+      "bid": 4.03,
+      "ask": 4.3,
+      "last": 4.46,
+      "volume": 6425,
+      "open_interest": 43995,
+      "implied_volatility": 0.383
+    },
+    {
+      "strike": 180.0,
+      "expiry": "2026-09-25",
+      "option_type": "call",
+      "bid": 3.73,
+      "ask": 2.33,
+      "last": 4.99,
+      "volume": 2168,
+      "open_interest": 33418,
+      "implied_volatility": 0.488
+    },
+    {
+      "strike": 180.0,
+      "expiry": "2026-09-25",
+      "option_type": "put",
+      "bid": 2.7,
+      "ask": 2.14,
+      "last": 4.58,
+      "volume": 1733,
+      "open_interest": 34968,
+      "implied_volatility": 0.498
+    },
+    {
+      "strike": 145.0,
+      "expiry": "2026-10-18",
+      "option_type": "call",
+      "bid": 1.67,
+      "ask": 2.3,
+      "last": 4.67,
+      "volume": 2629,
+      "open_interest": 5403,
+      "implied_volatility": 0.495
+    },
+    {
+      "strike": 145.0,
+      "expiry": "2026-10-18",
+      "option_type": "put",
+      "bid": 4.76,
+      "ask": 2.99,
+      "last": 4.06,
+      "volume": 10746,
+      "open_interest": 5763,
+      "implied_volatility": 0.468
+    },
+    {
+      "strike": 155.0,
+      "expiry": "2026-10-18",
+      "option_type": "call",
+      "bid": 4.38,
+      "ask": 4.85,
+      "last": 3.0,
+      "volume": 5288,
+      "open_interest": 41577,
+      "implied_volatility": 0.431
+    },
+    {
+      "strike": 155.0,
+      "expiry": "2026-10-18",
+      "option_type": "put",
+      "bid": 4.08,
+      "ask": 4.89,
+      "last": 1.82,
+      "volume": 1221,
+      "open_interest": 15885,
+      "implied_volatility": 0.423
+    },
+    {
+      "strike": 160.0,
+      "expiry": "2026-10-18",
+      "option_type": "call",
+      "bid": 4.61,
+      "ask": 5.34,
+      "last": 4.24,
+      "volume": 7210,
+      "open_interest": 6951,
+      "implied_volatility": 0.358
+    },
+    {
+      "strike": 160.0,
+      "expiry": "2026-10-18",
+      "option_type": "put",
+      "bid": 3.9,
+      "ask": 2.14,
+      "last": 2.27,
+      "volume": 5006,
+      "open_interest": 59706,
+      "implied_volatility": 0.366
+    },
+    {
+      "strike": 170.0,
+      "expiry": "2026-10-18",
+      "option_type": "call",
+      "bid": 2.67,
+      "ask": 1.98,
+      "last": 2.92,
+      "volume": 7156,
+      "open_interest": 10040,
+      "implied_volatility": 0.382
+    },
+    {
+      "strike": 170.0,
+      "expiry": "2026-10-18",
+      "option_type": "put",
+      "bid": 2.96,
+      "ask": 4.21,
+      "last": 2.31,
+      "volume": 2968,
+      "open_interest": 5675,
+      "implied_volatility": 0.395
+    },
+    {
+      "strike": 180.0,
+      "expiry": "2026-10-18",
+      "option_type": "call",
+      "bid": 2.86,
+      "ask": 4.22,
+      "last": 3.4,
+      "volume": 9654,
+      "open_interest": 9879,
+      "implied_volatility": 0.477
+    },
+    {
+      "strike": 180.0,
+      "expiry": "2026-10-18",
+      "option_type": "put",
+      "bid": 3.69,
+      "ask": 3.42,
+      "last": 3.97,
+      "volume": 14827,
+      "open_interest": 53232,
+      "implied_volatility": 0.454
+    }
+  ],
+  "put_call_ratio": 0.87
+}
