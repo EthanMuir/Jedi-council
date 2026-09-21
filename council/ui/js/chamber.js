@@ -19,6 +19,91 @@ const TIER_I_SEATS = [
 let selectedHorizon = '1w';
 let seatDetails = {}; // seat_id -> full seat_result payload, for the holo-panel
 
+// Navigating to another screen and back used to reset the Chamber to a
+// blank "AWAITING DELIBERATION" state every time, discarding whatever had
+// just been shown -- even though the deliberation itself keeps running
+// server-side regardless of whether this tab is still listening (the SSE
+// stream's backing task isn't cancelled by a client disconnect). Everything
+// needed to re-render the last-seen state is snapshotted into
+// sessionStorage on every update and restored on load, so leaving the
+// Chamber and coming back shows what was last visible instead of nothing.
+// sessionStorage (not localStorage) on purpose: this is "don't lose it
+// within this session", not permanent history -- the Crypt is already the
+// permanent record of completed deliberations.
+const CHAMBER_STATE_KEY = 'chamberState';
+let debateRoundsLog = [];
+let lastRealityAnchor = null;
+let lastGatesPayload = null;
+let lastRiskPayload = null;
+let lastGrandMaster = null;
+let lastStatusText = '';
+
+function saveChamberState() {
+  const state = {
+    ticker: document.getElementById('ticker-input')?.value ?? '',
+    horizon: selectedHorizon,
+    statusText: lastStatusText,
+    seatDetails,
+    realityAnchor: lastRealityAnchor,
+    debateRounds: debateRoundsLog,
+    gatesPayload: lastGatesPayload,
+    riskPayload: lastRiskPayload,
+    grandMaster: lastGrandMaster,
+  };
+  try {
+    sessionStorage.setItem(CHAMBER_STATE_KEY, JSON.stringify(state));
+  } catch (e) {
+    /* storage unavailable (private browsing, quota, ...) -- degrade to the old behaviour */
+  }
+}
+
+function restoreChamberState() {
+  let raw;
+  try {
+    raw = sessionStorage.getItem(CHAMBER_STATE_KEY);
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+
+  let state;
+  try {
+    state = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+
+  if (state.ticker) document.getElementById('ticker-input').value = state.ticker;
+  if (state.horizon) {
+    selectedHorizon = state.horizon;
+    document.querySelectorAll('#horizon-toggle .toggle-option').forEach(b => {
+      b.classList.toggle('active', b.dataset.horizon === state.horizon);
+    });
+  }
+
+  resetRing(); // lays out the idle/deliberating baseline for this horizon first
+  for (const payload of Object.values(state.seatDetails || {})) {
+    updateSeatChair(payload, /* silent */ true);
+  }
+  if (state.realityAnchor) renderRealityAnchor(state.realityAnchor);
+  for (const payload of state.debateRounds || []) appendDebateRound(payload);
+  if (state.gatesPayload || state.riskPayload) {
+    renderAuditPanel(state.gatesPayload, state.riskPayload);
+  }
+  if (state.grandMaster) renderGrandMaster(state.grandMaster);
+
+  const status = document.getElementById('status-line');
+  if (state.statusText) {
+    // The stream itself can't be resumed client-side (a page navigation
+    // aborts the fetch), so this is honest about being a snapshot, not a
+    // live view -- the deliberation may already have finished server-side
+    // even if it looked mid-flight when you left.
+    status.textContent = `${state.statusText} (restored -- may have finished since you left)`;
+  }
+  lastStatusText = state.statusText || '';
+  return true;
+}
+
 function layoutRing() {
   const ring = document.getElementById('chamber-ring');
   const radius = ring.clientWidth < 500 ? ring.clientWidth * 0.38 : 260;
@@ -46,6 +131,11 @@ function layoutRing() {
 
 function resetRing() {
   seatDetails = {};
+  debateRoundsLog = [];
+  lastRealityAnchor = null;
+  lastGatesPayload = null;
+  lastRiskPayload = null;
+  lastGrandMaster = null;
   for (const seat of TIER_I_SEATS) {
     const chair = document.getElementById(`chair-${seat.id}`);
     if (!isCompetent(seat.id, selectedHorizon)) {
@@ -68,11 +158,13 @@ function resetRing() {
   document.getElementById('reality-anchor').innerHTML = '<span class="dim">Awaiting Phase B...</span>';
   document.getElementById('dissent-map').innerHTML = '<span class="dim">Awaiting verdicts...</span>';
   document.getElementById('debate-transcript').innerHTML = '<span class="dim">Awaiting Phase C...</span>';
-  document.getElementById('audit-panel').innerHTML = '<span class="dim">Awaiting Phase E...</span>';
+  const auditPanel = document.getElementById('audit-panel');
+  auditPanel.innerHTML = '<span class="dim">Awaiting Phase E...</span>';
+  auditPanel.dataset.gates = ''; // stale merge state from a prior run/restore must not leak in
   document.getElementById('grand-master-verdict').innerHTML = '<span class="dim">The council is deliberating...</span>';
 }
 
-function updateSeatChair(payload) {
+function updateSeatChair(payload, silent = false) {
   seatDetails[payload.seat_id] = payload;
   const chair = document.getElementById(`chair-${payload.seat_id}`);
   if (!chair) return;
@@ -82,21 +174,22 @@ function updateSeatChair(payload) {
     chair.className = 'seat-chair state-bullish';
     voteEl.textContent = `BULLISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bullish';
-    AudioBlips.blip(1046, 0.05);
+    if (!silent) AudioBlips.blip(1046, 0.05);
   } else if (payload.vote === 'BEARISH') {
     chair.className = 'seat-chair state-bearish';
     voteEl.textContent = `BEARISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bearish';
-    AudioBlips.blip(392, 0.05);
+    if (!silent) AudioBlips.blip(392, 0.05);
   } else {
     chair.className = 'seat-chair state-noread';
     voteEl.textContent = 'NO_READ';
     voteEl.className = 'seat-vote status-noread';
-    AudioBlips.blip(220, 0.04);
+    if (!silent) AudioBlips.blip(220, 0.04);
   }
 }
 
 function renderRealityAnchor(payload) {
+  lastRealityAnchor = payload;
   document.getElementById('reality-anchor').innerHTML = `
     max plausible move: <span class="amber">${fmtPct(payload.max_plausible_move_pct)}</span><br/>
     hit-rate-up: <span class="cyan">${fmtNum(payload.hit_rate_up)}</span><br/>
@@ -107,6 +200,7 @@ function renderRealityAnchor(payload) {
 }
 
 function appendDebateRound(payload) {
+  debateRoundsLog.push(payload);
   const el = document.getElementById('debate-transcript');
   if (el.querySelector('.dim')) el.innerHTML = '';
   const div = document.createElement('div');
@@ -122,6 +216,8 @@ function appendDebateRound(payload) {
 }
 
 function renderAuditPanel(gatesPayload, riskPayload) {
+  if (gatesPayload) lastGatesPayload = gatesPayload;
+  if (riskPayload) lastRiskPayload = riskPayload;
   const el = document.getElementById('audit-panel');
   const existing = el.dataset.gates ? JSON.parse(el.dataset.gates) : {};
   const merged = { ...existing, ...(gatesPayload || {}), ...(riskPayload ? { risk: riskPayload } : {}) };
@@ -136,6 +232,7 @@ function renderAuditPanel(gatesPayload, riskPayload) {
 }
 
 function renderGrandMaster(payload) {
+  lastGrandMaster = payload;
   const holocron = document.getElementById('holocron');
   const label = document.getElementById('holocron-label');
   if (payload.vote === 'BULLISH') {
@@ -184,19 +281,26 @@ function closeHoloPanel() {
   document.getElementById('holo-backdrop').classList.remove('open');
 }
 
+function setStatus(text) {
+  lastStatusText = text;
+  document.getElementById('status-line').textContent = text;
+}
+
 async function convene() {
   const ticker = document.getElementById('ticker-input').value.trim().toUpperCase();
   if (!ticker) return;
   const btn = document.getElementById('convene-btn');
-  const status = document.getElementById('status-line');
   btn.disabled = true;
   resetRing();
 
   const contextEl = document.getElementById('context-input');
   const context = contextEl ? contextEl.value.trim() : '';
-  status.textContent = context
-    ? `Convening the council for ${ticker} @ ${selectedHorizon} with your question...`
-    : `Convening the council for ${ticker} @ ${selectedHorizon}...`;
+  setStatus(
+    context
+      ? `Convening the council for ${ticker} @ ${selectedHorizon} with your question...`
+      : `Convening the council for ${ticker} @ ${selectedHorizon}...`
+  );
+  saveChamberState(); // persisted immediately -- if the tab is left right now, this (not a blank chamber) is what's restored
 
   let url = `/api/deliberate/stream?ticker=${encodeURIComponent(ticker)}&horizon=${selectedHorizon}`;
   if (context) url += `&context=${encodeURIComponent(context)}`;
@@ -209,12 +313,14 @@ async function convene() {
       else if (event === 'phase_e_gates') renderAuditPanel(payload, null);
       else if (event === 'risk_warden') renderAuditPanel(null, payload);
       else if (event === 'phase_f_synthesis') renderGrandMaster(payload);
-      else if (event === 'phase_g_crypt_write') status.textContent = `Written to the Crypt: ${payload.prediction_id}`;
-      else if (event === 'error') status.textContent = `ERROR: ${payload.message}`;
-      else if (event === 'done') status.textContent = `Deliberation complete -- ${ticker} @ ${selectedHorizon}`;
+      else if (event === 'phase_g_crypt_write') setStatus(`Written to the Crypt: ${payload.prediction_id}`);
+      else if (event === 'error') setStatus(`ERROR: ${payload.message}`);
+      else if (event === 'done') setStatus(`Deliberation complete -- ${ticker} @ ${selectedHorizon}`);
+      saveChamberState();
     });
   } catch (e) {
-    status.textContent = `ERROR: ${e.message}`;
+    setStatus(`ERROR: ${e.message}`);
+    saveChamberState();
   } finally {
     btn.disabled = false;
   }
@@ -238,4 +344,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('holo-backdrop').onclick = (e) => {
     if (e.target.id === 'holo-backdrop') closeHoloPanel();
   };
+
+  restoreChamberState();
 });
