@@ -134,11 +134,17 @@ def build_data_service(settings: Settings) -> DataService:
     if settings.resolved_use_data_fixtures:
         providers.append(FixtureProvider())
     else:
+        # YFinance first, not last: it's free with no hard daily cap, and it
+        # now genuinely covers OHLCV, news (empty, but that's a real answer,
+        # not a stub), and options -- the same domains Alpha Vantage's free
+        # tier caps at 25 requests/day. Trying it first means AV's scarce
+        # quota is spent only on what nothing else can serve (macro) or when
+        # Yahoo itself is down, not burned on things Yahoo already covers.
+        providers.append(YFinanceProvider())
         if settings.alpha_vantage_api_key:
             providers.append(AlphaVantageProvider(settings.alpha_vantage_api_key))
         if settings.fmp_api_key:
             providers.append(FMPProvider(settings.fmp_api_key))
-        providers.append(YFinanceProvider())  # backstop, per spec: "unreliable, use as fallback only"
     return DataService(providers=providers, cache=cache)
 
 
