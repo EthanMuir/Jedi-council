@@ -9,6 +9,30 @@ from pathlib import Path
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 GENESIS_HASH = "0" * 64
 
+# Columns added to `predictions` after its original CREATE TABLE shipped.
+# `CREATE TABLE IF NOT EXISTS` is a no-op against an already-existing table,
+# so an on-disk database created before one of these existed never picks it
+# up on its own -- pulling new code doesn't touch an already-created local
+# .db file. Each ALTER TABLE here is itself idempotent (skipped once the
+# column exists), so this runs safely on every connect(), fresh database or
+# old one alike. ALTER TABLE ADD COLUMN is DDL, not a row UPDATE, so it is
+# not blocked by the immutability triggers below.
+_PREDICTIONS_COLUMN_MIGRATIONS = [
+    ("p_raw", "REAL"),
+    ("p_extremized", "REAL"),
+    ("total_cost_usd", "REAL"),
+    ("total_input_tokens", "INTEGER"),
+    ("total_output_tokens", "INTEGER"),
+]
+
+
+def _migrate_predictions_table(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(predictions)")}
+    for column, sql_type in _PREDICTIONS_COLUMN_MIGRATIONS:
+        if column not in existing:
+            conn.execute(f"ALTER TABLE predictions ADD COLUMN {column} {sql_type}")
+    conn.commit()
+
 
 def connect(db_path: str) -> sqlite3.Connection:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -16,6 +40,7 @@ def connect(db_path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA_PATH.read_text())
     conn.commit()
+    _migrate_predictions_table(conn)
     return conn
 
 
