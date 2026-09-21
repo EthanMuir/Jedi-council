@@ -192,26 +192,6 @@ class LLMClient:
                     ],
                     tool_choice={"type": "tool", "name": tool_name},
                 )
-                latency_ms = (time.monotonic() - start) * 1000
-                tool_use = next(b for b in resp.content if b.type == "tool_use")
-                result = response_model(**tool_use.input)
-                self.call_log.append(
-                    LLMCallRecord(
-                        seat_id=seat_id,
-                        model=model,
-                        provider="anthropic",
-                        prompt_hash=prompt_hash,
-                        input_tokens=resp.usage.input_tokens,
-                        output_tokens=resp.usage.output_tokens,
-                        latency_ms=latency_ms,
-                        cost_usd=self._estimate_cost(
-                            model, resp.usage.input_tokens, resp.usage.output_tokens
-                        ),
-                        attempt=attempt,
-                        success=True,
-                    )
-                )
-                return result
             except _RETRYABLE_ANTHROPIC_ERRORS as exc:
                 last_error = exc
                 latency_ms = (time.monotonic() - start) * 1000
@@ -255,6 +235,41 @@ class LLMClient:
                 raise LLMCallFailed(
                     f"{seat_id}: non-retryable API error ({exc.__class__.__name__}): {exc}"
                 ) from exc
+            except Exception as exc:
+                # Anything else escaping the SDK call itself -- e.g. a
+                # TypeError from an unsupported kwarg on an unexpected SDK
+                # version -- is a code/environment problem, not the model's
+                # fault, and retrying it 2 more times will fail identically
+                # every time. Fail fast with a clear, single-layer message
+                # instead of silently burning retries and mislabeling this
+                # as a schema validation failure (the next except clause,
+                # which is specifically about the model's own output shape).
+                latency_ms = (time.monotonic() - start) * 1000
+                self.call_log.append(
+                    LLMCallRecord(
+                        seat_id=seat_id,
+                        model=model,
+                        provider="anthropic",
+                        prompt_hash=prompt_hash,
+                        input_tokens=0,
+                        output_tokens=0,
+                        latency_ms=latency_ms,
+                        cost_usd=0.0,
+                        attempt=attempt,
+                        success=False,
+                        error=str(exc),
+                    )
+                )
+                raise LLMCallFailed(
+                    f"{seat_id}: unexpected error calling the API ({exc.__class__.__name__}): {exc}"
+                ) from exc
+
+            # A response came back -- only failures from HERE on are
+            # genuinely "the model didn't produce a valid structured answer".
+            try:
+                latency_ms = (time.monotonic() - start) * 1000
+                tool_use = next(b for b in resp.content if b.type == "tool_use")
+                result = response_model(**tool_use.input)
             except (ValidationError, StopIteration, KeyError, TypeError) as exc:
                 last_error = exc
                 latency_ms = (time.monotonic() - start) * 1000
@@ -274,6 +289,24 @@ class LLMClient:
                     )
                 )
                 continue
+
+            self.call_log.append(
+                LLMCallRecord(
+                    seat_id=seat_id,
+                    model=model,
+                    provider="anthropic",
+                    prompt_hash=prompt_hash,
+                    input_tokens=resp.usage.input_tokens,
+                    output_tokens=resp.usage.output_tokens,
+                    latency_ms=latency_ms,
+                    cost_usd=self._estimate_cost(
+                        model, resp.usage.input_tokens, resp.usage.output_tokens
+                    ),
+                    attempt=attempt,
+                    success=True,
+                )
+            )
+            return result
 
         if isinstance(last_error, _RETRYABLE_ANTHROPIC_ERRORS):
             raise LLMCallFailed(

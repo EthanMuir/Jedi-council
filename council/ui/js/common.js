@@ -9,6 +9,30 @@ const NAV_LINKS = [
   { href: '/guide.html', label: 'The Guide' },
 ];
 
+// Mirrored from council/engine/horizons.py::COMPETENCE_MATRIX -- a seat at
+// 0.0 for a horizon is never actually called by the backend (the orchestrator
+// filters it out of eligible_seats entirely), so the UI must know this too:
+// without it, a chair optimistically marked "deliberating" at convene() never
+// gets an update and sits stuck forever.
+const COMPETENCE_MATRIX = {
+  technician:          { '1d': 1.0, '1w': 0.9, '1m': 0.6, '1y': 0.3 },
+  fundamentalist:      { '1d': 0.0, '1w': 0.2, '1m': 0.6, '1y': 1.0 },
+  catalyst_seer:       { '1d': 0.9, '1w': 1.0, '1m': 0.7, '1y': 0.4 },
+  insider_reader:      { '1d': 0.1, '1w': 0.4, '1m': 0.8, '1y': 0.9 },
+  senate_watcher:      { '1d': 0.1, '1w': 0.3, '1m': 0.7, '1y': 0.8 },
+  flow_cartographer:   { '1d': 0.2, '1w': 0.4, '1m': 0.8, '1y': 0.9 },
+  oracle_options:      { '1d': 1.0, '1w': 0.9, '1m': 0.6, '1y': 0.3 },
+  macro_sage:          { '1d': 0.0, '1w': 0.3, '1m': 0.8, '1y': 1.0 },
+  cross_market:        { '1d': 1.0, '1w': 0.8, '1m': 0.6, '1y': 0.4 },
+  estimate_scribe:     { '1d': 0.2, '1w': 0.5, '1m': 0.9, '1y': 0.9 },
+  transcript_linguist: { '1d': 0.3, '1w': 0.6, '1m': 0.8, '1y': 0.7 },
+  structure_archivist: { '1d': 0.4, '1w': 0.5, '1m': 0.7, '1y': 0.8 },
+};
+
+function isCompetent(seatId, horizon) {
+  return (COMPETENCE_MATRIX[seatId]?.[horizon] ?? 0) > 0;
+}
+
 function renderNav(activeHref) {
   const nav = document.createElement('div');
   nav.className = 'nav';

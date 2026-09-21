@@ -14,6 +14,8 @@ import asyncio
 from datetime import date, datetime, timedelta
 from typing import Any, Iterable, TypeVar
 
+from pydantic import ValidationError
+
 from council.data.cache import DiskCache
 from council.data.providers.base import MarketDataProvider
 from council.data.schemas import (
@@ -109,6 +111,15 @@ class DataService:
             return cached
         last_error: Exception | None = None
         for provider in self._providers:
+            # Not every provider implements every fetch method (that's the
+            # whole point of a fallback chain across providers with
+            # different coverage) -- move on immediately, no point retrying
+            # a method that will never exist no matter how many times we ask.
+            if not hasattr(provider, method_name):
+                last_error = AttributeError(
+                    f"{provider.__class__.__name__} has no {method_name}"
+                )
+                continue
             method = getattr(provider, method_name)
             # A couple of quick retries on the current provider before
             # falling through to the next one -- most failures at this layer
@@ -178,10 +189,19 @@ class DataService:
         # so staleness is measured against the snapshot's own as_of if the
         # provider supplied one, else assumed fresh at fetch time.
         staleness = raw.get("staleness_seconds", 0.0)
+        contracts = []
+        for c in raw["contracts"]:
+            # A single malformed contract (a provider sending a junk/sentinel
+            # expiry, seen in practice: "2099-99-99") must not invalidate an
+            # otherwise-good chain -- skip that one contract, keep the rest.
+            try:
+                contracts.append(OptionContract(**c))
+            except ValidationError:
+                continue
         return OptionChainSnapshot(
             ticker=ticker,
             underlying_price=raw["underlying_price"],
-            contracts=[OptionContract(**c) for c in raw["contracts"]],
+            contracts=contracts,
             put_call_ratio=raw.get("put_call_ratio"),
             as_of=as_of,
             staleness_seconds=staleness,

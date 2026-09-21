@@ -48,6 +48,16 @@ function resetRing() {
   seatDetails = {};
   for (const seat of TIER_I_SEATS) {
     const chair = document.getElementById(`chair-${seat.id}`);
+    if (!isCompetent(seat.id, selectedHorizon)) {
+      // This seat has 0 competence at the selected horizon -- the backend
+      // never calls it at all (see council/engine/horizons.py), so it will
+      // never emit a seat_result event. Mark it up front instead of leaving
+      // it stuck on "deliberating..." forever.
+      chair.className = 'seat-chair state-idle';
+      chair.querySelector('.seat-vote').textContent = `not called @ ${selectedHorizon}`;
+      chair.querySelector('.seat-vote').className = 'seat-vote dim';
+      continue;
+    }
     chair.className = 'seat-chair state-deliberating';
     chair.querySelector('.seat-vote').textContent = 'deliberating...';
     chair.querySelector('.seat-vote').className = 'seat-vote cyan';

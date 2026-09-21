@@ -13,6 +13,20 @@ from council.data.rate_limit import TokenBucket
 
 _BASE_URL = "https://www.alphavantage.co/query"
 
+# Alpha Vantage's rate limit (free tier especially) doesn't surface as an
+# HTTP error -- it's a 200 OK with one of these keys instead of the
+# expected payload. Left undetected, that parses as "zero results found",
+# a *successful* empty response that short-circuits provider fallback
+# (DataService._fetch_with_fallback returns on the first non-exception
+# result) instead of correctly falling through to the next provider.
+_LIMIT_OR_ERROR_KEYS = ("Note", "Information", "Error Message")
+
+
+class AlphaVantageRateLimited(Exception):
+    """Raised when Alpha Vantage's response body -- not its HTTP status --
+    indicates a rate limit or error, so the fallback/retry machinery in
+    DataService treats it as a real failure instead of an empty success."""
+
 
 class AlphaVantageProvider:
     name = "alpha_vantage"
@@ -27,7 +41,12 @@ class AlphaVantageProvider:
         params = {**params, "apikey": self._api_key}
         resp = await self._client.get(_BASE_URL, params=params)
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        if isinstance(data, dict):
+            for key in _LIMIT_OR_ERROR_KEYS:
+                if key in data:
+                    raise AlphaVantageRateLimited(f"Alpha Vantage {key}: {data[key]}")
+        return data
 
     async def fetch_ohlcv(self, ticker: str, start: date, end: date) -> list[dict[str, Any]]:
         data = await self._get(

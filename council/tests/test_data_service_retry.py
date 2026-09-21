@@ -87,3 +87,27 @@ async def test_all_providers_exhausted_raises_runtime_error(tmp_path, monkeypatc
     )
     with pytest.raises(RuntimeError):
         await service._fetch_with_fallback("fetch_thing", "test:key:3", 60)
+
+
+class _NoSuchMethodProvider:
+    """A real bug hit in practice: AlphaVantageProvider doesn't implement
+    fetch_analyst_estimates (only FMPProvider does), and resolving the
+    method via getattr() happened outside any try/except -- so a provider
+    simply not covering this data domain crashed immediately instead of
+    falling through to the next provider that does."""
+
+    name = "no_such_method"
+
+
+@pytest.mark.asyncio
+async def test_provider_missing_method_falls_through_immediately(tmp_path, monkeypatch):
+    _fast_backoff(monkeypatch)
+    missing = _NoSuchMethodProvider()
+    backstop = _BackstopProvider()
+    service = DataService(providers=[missing, backstop], cache=DiskCache(str(tmp_path / "cache.db")))
+
+    result = await service._fetch_with_fallback("fetch_thing", "test:key:4", 60)
+
+    assert result == "backstop result"
+    # no retries wasted on a method that will never exist
+    assert backstop.calls == 1
