@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +19,16 @@ class Settings(BaseSettings):
 
     no_llm: bool | None = None
     use_data_fixtures: bool | None = None
+
+    @field_validator("no_llm", "use_data_fixtures", mode="before")
+    @classmethod
+    def _blank_env_means_unset(cls, v):
+        """.env.example ships these two blank on purpose, to mean
+        "auto-detect" (see resolved_no_llm/resolved_use_data_fixtures below)
+        -- but an env var that's *present and empty* still reaches Pydantic
+        as the string "", which fails bool parsing outright rather than
+        falling back to the field's None default. Treat blank as unset."""
+        return None if v == "" else v
 
     council_db_path: str = "./data/council.db"
     cache_db_path: str = "./data/cache.db"
