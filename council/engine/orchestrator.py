@@ -32,6 +32,7 @@ from council.data.cache import DiskCache
 from council.data.providers.alpha_vantage import AlphaVantageProvider
 from council.data.providers.fixtures import FixtureProvider
 from council.data.providers.fmp import FMPProvider
+from council.data.providers.sec_edgar import SECEdgarProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
 from council.data.service import DataService
 from council.engine.aggregation import DATA_QUALITY_MULTIPLIER, extremize, weighted_vote
@@ -141,6 +142,11 @@ def build_data_service(settings: Settings) -> DataService:
         # quota is spent only on what nothing else can serve (macro) or when
         # Yahoo itself is down, not burned on things Yahoo already covers.
         providers.append(YFinanceProvider())
+        # SEC EDGAR next, also free and keyless, also ahead of FMP: it's the
+        # authoritative source for insider transactions / SEC filings, and
+        # unlike FMP's free tier it isn't plan-gated away from those two
+        # domains -- no point spending an HTTP round trip on FMP's 403 first.
+        providers.append(SECEdgarProvider(settings.resolved_sec_edgar_user_agent))
         if settings.alpha_vantage_api_key:
             providers.append(AlphaVantageProvider(settings.alpha_vantage_api_key))
         if settings.fmp_api_key:

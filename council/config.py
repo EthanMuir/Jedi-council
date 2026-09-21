@@ -17,14 +17,20 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     google_api_key: str = ""
 
+    # SEC EDGAR needs no key, but every request must carry a real contact
+    # per SEC's fair-access policy -- blank (as .env.example ships it) falls
+    # back to a placeholder via resolved_sec_edgar_user_agent below, which
+    # "works" but risks a 403 or an IP ban under any real load.
+    sec_edgar_user_agent: str | None = None
+
     no_llm: bool | None = None
     use_data_fixtures: bool | None = None
 
-    @field_validator("no_llm", "use_data_fixtures", mode="before")
+    @field_validator("no_llm", "use_data_fixtures", "sec_edgar_user_agent", mode="before")
     @classmethod
     def _blank_env_means_unset(cls, v):
-        """.env.example ships these two blank on purpose, to mean
-        "auto-detect" (see resolved_no_llm/resolved_use_data_fixtures below)
+        """.env.example ships these blank on purpose, to mean "auto-detect"
+        / "use the fallback default" (see the resolved_* properties below)
         -- but an env var that's *present and empty* still reaches Pydantic
         as the string "", which fails bool parsing outright rather than
         falling back to the field's None default. Treat blank as unset."""
@@ -67,6 +73,12 @@ class Settings(BaseSettings):
         if self.use_data_fixtures is not None:
             return self.use_data_fixtures
         return not bool(self.alpha_vantage_api_key or self.fmp_api_key)
+
+    @property
+    def resolved_sec_edgar_user_agent(self) -> str:
+        if self.sec_edgar_user_agent is not None:
+            return self.sec_edgar_user_agent
+        return "The High Council (unconfigured contact -- set SEC_EDGAR_USER_AGENT)"
 
     def ensure_dirs(self) -> None:
         for path in (self.council_db_path, self.cache_db_path):

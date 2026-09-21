@@ -11,12 +11,16 @@ Five LLM personas reading the same feed are one source wearing five robes.
 
 - **DataService** (`council/data/`) -- normalised schemas, SQLite disk
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
-  any record dated after `as_of`, and provider fallback (Alpha Vantage, FMP,
-  yfinance backstop, or a recorded-fixture provider for offline use). Covers
+  any record dated after `as_of`, and provider fallback (yfinance and SEC
+  EDGAR first -- both free, keyless, no hard daily cap -- then Alpha
+  Vantage, then FMP, or a recorded-fixture provider for offline use). Covers
   OHLCV, news/sentiment, options, fundamentals, insider transactions,
   congressional disclosures, 13F/institutional holdings, macro data,
   cross-market instruments, analyst estimates, earnings transcripts, and SEC
-  filings.
+  filings. SEC EDGAR (`council/data/providers/sec_edgar.py`) is the
+  alternative for insider transactions / SEC filings when FMP's plan
+  doesn't cover them -- set `SEC_EDGAR_USER_AGENT` in `.env` to a real
+  contact string (SEC requires one on every request).
 - **The Crypt** (`council/crypt/`) -- append-only, hash-chained SQLite
   ledger. `predictions` and `seat_votes` reject UPDATE/DELETE by trigger.
   `write_blind_prediction` refuses to write a prediction whose `resolve_at`
