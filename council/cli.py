@@ -10,7 +10,13 @@ from council.config import get_settings
 from council.crypt.db import connect
 from council.crypt.export import fetch_predictions_for_export, write_csv, write_json
 from council.engine.cost_estimate import CostEstimate, estimate_deliberation_cost
-from council.engine.orchestrator import TIER_I_SEATS, DeliberationResult, run_deliberation
+from council.engine.horizons import is_competent
+from council.engine.orchestrator import (
+    TIER_I_SEATS,
+    DeliberationResult,
+    build_data_service,
+    run_deliberation,
+)
 from council.engine.resolution_sweep import sweep_unresolved
 
 
@@ -155,6 +161,41 @@ def _print_sweep_results(settings, swept) -> None:
     print()
 
 
+async def _dump_data(ticker: str, horizon: str, settings) -> None:
+    """Runs each competent seat's real gather() and prints exactly what
+    came back -- no LLM call anywhere in this path, fixture or live. This
+    is the only way to actually verify the data layer works when
+    NO_LLM=true, since every seat's thesis/probability is a canned
+    placeholder in that mode regardless of what gather() actually fetched."""
+    import json
+
+    from council.api.serialize import to_jsonable
+
+    data_service = build_data_service(settings)
+    as_of = datetime.utcnow()
+    eligible = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
+
+    print(f"\n=== RAW DATA DUMP -- {ticker} @ {horizon} (no LLM call made, fixture or live) ===")
+    if len(eligible) < len(TIER_I_SEATS):
+        skipped = [s.id for s in TIER_I_SEATS if s not in eligible]
+        print(f"(not competent at this horizon, skipped: {', '.join(skipped)})")
+
+    for seat in eligible:
+        print(f"\n--- [{seat.id}] {seat.title} ---")
+        try:
+            ctx = await seat.gather(data_service, ticker, as_of, horizon)
+        except Exception as exc:  # noqa: BLE001 -- show every seat's result, don't stop at the first failure
+            print(f"  FAILED: {exc}")
+            continue
+        for key in sorted(seat.allowed_data):
+            if key not in ctx:
+                print(f"  {key}: <missing>")
+                continue
+            print(f"  {key}:")
+            print(json.dumps(to_jsonable(ctx.get(key)), indent=2, default=str))
+    print()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="council")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -182,6 +223,16 @@ def main(argv: list[str] | None = None) -> None:
     export.add_argument("--out", required=True, help="Output file path")
     export.add_argument("--ticker", default=None)
     export.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], default=None)
+
+    inspect_data = sub.add_parser(
+        "inspect-data",
+        help="Dump each seat's raw gathered data for a ticker -- no LLM call at all, fixture "
+        "or live, so this is the only way to verify the data layer works when NO_LLM=true "
+        "(every seat's thesis/probability is a canned placeholder in that mode regardless of "
+        "what was actually fetched).",
+    )
+    inspect_data.add_argument("ticker")
+    inspect_data.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], required=True)
 
     args = parser.parse_args(argv)
     settings = get_settings()
@@ -211,6 +262,8 @@ def main(argv: list[str] | None = None) -> None:
         else:
             write_json(rows, args.out)
         print(f"Exported {len(rows)} prediction(s) to {args.out}")
+    elif args.command == "inspect-data":
+        asyncio.run(_dump_data(args.ticker.upper(), args.horizon, settings))
 
 
 if __name__ == "__main__":
