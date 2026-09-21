@@ -56,6 +56,22 @@ def test_no_read_requires_abstain_reason():
         )
 
 
+def test_abstain_reason_conditional_requirement_is_visible_to_the_model():
+    # Task #66: this cross-field rule is enforced by a model_validator, not
+    # expressible in the JSON schema Pydantic generates -- the schema alone
+    # would show abstain_reason as a plain nullable string with no hint
+    # it's conditionally required. LLMClient sends model_json_schema()
+    # verbatim as the tool's input_schema (see get_structured), so if this
+    # field carries no description, the model has zero signal that a
+    # NO_READ without it will be rejected. Confirmed live: flow_cartographer,
+    # oracle_options, macro_sage, and structure_archivist all burned two
+    # real retries each on exactly this failure in a single deliberation.
+    schema = SeatVerdict.model_json_schema()
+    description = schema["properties"]["abstain_reason"].get("description", "")
+    assert "REQUIRED" in description
+    assert "NO_READ" in description
+
+
 def test_no_read_with_abstain_reason_is_valid_and_skips_granularity_rule():
     v = SeatVerdict(
         **_base_verdict(

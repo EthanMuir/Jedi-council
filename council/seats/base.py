@@ -134,7 +134,13 @@ class SeatVerdict(BaseModel):
         description="One or two sentences. Always include this field."
     )
     data_quality: Literal["GOOD", "PARTIAL", "POOR"]
-    abstain_reason: str | None = None
+    abstain_reason: str | None = Field(
+        default=None,
+        description="REQUIRED (a non-empty string) when vote is NO_READ -- explain what's "
+        "missing or unusable about the data. Enforced after generation: a NO_READ with this "
+        "left null is rejected outright and the call is wasted. Must be left null for any "
+        "other vote (BULLISH/BEARISH) -- do not use it as a hedge or caveat there.",
+    )
 
     @field_validator("probability")
     @classmethod
