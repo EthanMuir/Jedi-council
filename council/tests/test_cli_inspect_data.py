@@ -72,3 +72,42 @@ async def test_dump_data_reports_seat_gather_failure_without_stopping(
     # a later competent seat still gets its own section -- one seat
     # blowing up must not kill the rest of the dump
     assert "[oracle_options]" in out
+
+
+# Task #71 -- the full 12-seat dump routinely exceeds a terminal's
+# scrollback (confirmed live: a user unable to see macro_sage's output
+# because a later seat's error had pushed it off screen). --seat narrows
+# the dump to exactly one seat.
+
+
+@pytest.mark.asyncio
+async def test_dump_data_seat_filter_prints_only_that_seat(fixture_settings, capsys):
+    await cli._dump_data("NVDA", "1w", fixture_settings, seat_id="macro_sage")
+    out = capsys.readouterr().out
+
+    assert "[macro_sage]" in out
+    assert "[technician]" not in out
+    assert "[oracle_options]" not in out
+    assert "skipped:" not in out  # not relevant when only one seat was asked for
+
+
+@pytest.mark.asyncio
+async def test_dump_data_seat_filter_rejects_unknown_seat_id(fixture_settings, capsys):
+    await cli._dump_data("NVDA", "1w", fixture_settings, seat_id="not_a_real_seat")
+    out = capsys.readouterr().out
+
+    assert "Unknown seat 'not_a_real_seat'" in out
+    assert "macro_sage" in out  # the valid-ids list is printed to help
+
+
+@pytest.mark.asyncio
+async def test_dump_data_seat_filter_rejects_seat_not_competent_at_horizon(
+    fixture_settings, capsys
+):
+    # macro_sage is 0.0-competence at 1d -- asking for it there should say
+    # so clearly, not silently print nothing.
+    await cli._dump_data("NVDA", "1d", fixture_settings, seat_id="macro_sage")
+    out = capsys.readouterr().out
+
+    assert "not competent at 1d" in out
+    assert "[macro_sage]" not in out

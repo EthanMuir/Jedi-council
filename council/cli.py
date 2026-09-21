@@ -188,22 +188,40 @@ def _print_sweep_results(settings, swept) -> None:
     print()
 
 
-async def _dump_data(ticker: str, horizon: str, settings) -> None:
+async def _dump_data(ticker: str, horizon: str, settings, seat_id: str | None = None) -> None:
     """Runs each competent seat's real gather() and prints exactly what
     came back -- no LLM call anywhere in this path, fixture or live. This
     is the only way to actually verify the data layer works when
     NO_LLM=true, since every seat's thesis/probability is a canned
-    placeholder in that mode regardless of what gather() actually fetched."""
+    placeholder in that mode regardless of what gather() actually fetched.
+
+    seat_id narrows the dump to a single seat -- the full 12-seat output
+    routinely exceeds a terminal's scrollback (confirmed live: a user
+    unable to see macro_sage's output because transcript_linguist's error
+    further down had already pushed it off screen), so this is the
+    practical way to check one specific seat/provider without redirecting
+    to a file."""
     import json
 
     from council.api.serialize import to_jsonable
 
+    if seat_id is not None:
+        known_ids = {s.id for s in TIER_I_SEATS}
+        if seat_id not in known_ids:
+            print(f"\nUnknown seat '{seat_id}'. Valid seat ids: {', '.join(sorted(known_ids))}")
+            return
+        if not is_competent(seat_id, horizon):
+            print(f"\n'{seat_id}' is not competent at {horizon} -- it would never be called here.")
+            return
+
     data_service = build_data_service(settings)
     as_of = datetime.utcnow()
     eligible = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
+    if seat_id is not None:
+        eligible = [s for s in eligible if s.id == seat_id]
 
     print(f"\n=== RAW DATA DUMP -- {ticker} @ {horizon} (no LLM call made, fixture or live) ===")
-    if len(eligible) < len(TIER_I_SEATS):
+    if seat_id is None and len(eligible) < len(TIER_I_SEATS):
         skipped = [s.id for s in TIER_I_SEATS if s not in eligible]
         print(f"(not competent at this horizon, skipped: {', '.join(skipped)})")
 
@@ -260,6 +278,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     inspect_data.add_argument("ticker")
     inspect_data.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], required=True)
+    inspect_data.add_argument(
+        "--seat",
+        default=None,
+        help="Only dump this one seat (e.g. macro_sage) instead of all competent seats -- "
+        "the full dump routinely exceeds a terminal's scrollback.",
+    )
 
     args = parser.parse_args(argv)
     settings = get_settings()
@@ -291,7 +315,7 @@ def main(argv: list[str] | None = None) -> None:
             write_json(rows, args.out)
         print(f"Exported {len(rows)} prediction(s) to {args.out}")
     elif args.command == "inspect-data":
-        asyncio.run(_dump_data(args.ticker.upper(), args.horizon, settings))
+        asyncio.run(_dump_data(args.ticker.upper(), args.horizon, settings, seat_id=args.seat))
 
 
 if __name__ == "__main__":
