@@ -52,7 +52,17 @@ class Settings(BaseSettings):
 
     # Phase 3: Tiers II-IV
     debate_rounds: int = 2
-    min_participating_seats: int = 6
+    # A fraction of seats actually CALLED at this horizon, not a fixed
+    # absolute count (Task #69) -- the seat count called varies by horizon
+    # already (competence 0.0 drops fundamentalist/macro_sage at 1d) and,
+    # with senate_watcher/transcript_linguist now permanently NO_READ
+    # (Option 1 on congress trades / earnings transcripts: no solid free
+    # alternative exists), a fixed "6" quietly got harder to clear on every
+    # single run for a reason that has nothing to do with that run's data
+    # quality. Scaling to the called count means both effects wash out
+    # automatically instead of needing a manual retune every time the
+    # called/available seat count changes.
+    min_participating_seats_pct: float = 0.5
     assumed_spread_bps: float = 5.0  # no live bid/ask feed yet -- see Cost Auditor
     risk_budget_pct: float = 1.0
     kelly_cap: float = 0.25  # quarter-Kelly default

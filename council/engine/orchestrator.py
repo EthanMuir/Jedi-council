@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Awaitable, Callable
@@ -128,6 +129,42 @@ class DeliberationResult:
     risk_sizing: RiskSizing
     grand_master_verdict: GrandMasterVerdict
     call_log: list = field(default_factory=list)
+
+
+# Seats with no implemented data source for their domain (Task #69):
+# congressional trading disclosures and earnings call transcripts have no
+# solid free/official API -- researched directly, not assumed. FMP's plan
+# doesn't cover either and there's no clean free alternative the way SEC
+# EDGAR/FRED were for insider trades/macro. Both seats are still called
+# (they're genuinely competent at these horizons) and still get a logged,
+# real abstain_reason every run -- but they will return NO_READ on
+# literally every call until one of them gets a working provider, so
+# counting them toward the participation gate's denominator would be
+# counting seats that can structurally never contribute, making every
+# run's real signal look thinner than it is. Remove a seat from this set
+# the moment it has a working data source (as insider_reader and
+# structure_archivist's own gaps already were, via SEC EDGAR).
+_STRUCTURALLY_NO_DATA_SEATS = frozenset({"senate_watcher", "transcript_linguist"})
+
+
+def _gate_eligible_seat_count(seat_ids) -> int:
+    """How many of the seats called this run could ever contribute a
+    directional vote -- excludes _STRUCTURALLY_NO_DATA_SEATS, which return
+    NO_READ on literally every call regardless of this run's real data
+    quality. Extracted for direct unit testing (Task #69)."""
+    return sum(1 for sid in seat_ids if sid not in _STRUCTURALLY_NO_DATA_SEATS)
+
+
+def _min_seats_required(eligible_count: int, pct: float) -> int:
+    """Extracted for direct unit testing (Task #69) -- the minimum-
+    participating-seats gate scales to how many seats could actually
+    contribute a directional vote this run (see _gate_eligible_seat_count),
+    not a fixed absolute number, so it doesn't quietly get harder to clear
+    on horizons that call fewer seats (competence 0.0 drops some) or
+    because of seats that were never going to vote directionally regardless
+    of this run's real data quality (see min_participating_seats_pct's own
+    comment in config.py)."""
+    return math.ceil(eligible_count * pct)
 
 
 def build_data_service(settings: Settings) -> DataService:
@@ -391,7 +428,9 @@ async def run_deliberation(
 
     # ---- Phase E: audit gates -----------------------------------------------
     directional_count = sum(1 for v in verdicts_by_id.values() if v.vote != "NO_READ")
-    min_seats_gate = directional_count >= settings.min_participating_seats
+    gate_eligible_count = _gate_eligible_seat_count(verdicts_by_id.keys())
+    min_seats_required = _min_seats_required(gate_eligible_count, settings.min_participating_seats_pct)
+    min_seats_gate = directional_count >= min_seats_required
 
     implausible_count = sum(1 for f in plausibility_flags.values() if f == "IMPLAUSIBLE")
     base_rate_gate = not (plausibility_flags and implausible_count > len(plausibility_flags) / 2)
@@ -410,7 +449,9 @@ async def run_deliberation(
     gate_failure_reasons = []
     if not min_seats_gate:
         gate_failure_reasons.append(
-            f"only {directional_count} directional seats, minimum is {settings.min_participating_seats}"
+            f"only {directional_count} directional seats, minimum is {min_seats_required} "
+            f"({settings.min_participating_seats_pct:.0%} of {gate_eligible_count} seats "
+            "able to contribute a directional vote)"
         )
     if not base_rate_gate:
         gate_failure_reasons.append(
