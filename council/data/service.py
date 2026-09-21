@@ -314,11 +314,22 @@ class DataService:
         cache_key = "macro:latest"
         raw = await self._fetch_with_fallback("fetch_macro", cache_key, _TTL_SECONDS["macro"])
         beta = await self._estimate_beta(ticker, "SPY", as_of)
+        # Computed here, not required of every fetch_macro implementation --
+        # it's a pure derivative of two fields every provider already
+        # returns, and requiring each one to compute it independently is
+        # exactly how a provider that forgot to (Alpha Vantage's own
+        # fetch_macro never did) would silently crash MacroSnapshot's
+        # required field the first time it actually succeeded. Never caught
+        # in practice because AV's daily cap meant fetch_macro had never
+        # once succeeded against live data before this was noticed.
+        raw = {k: v for k, v in raw.items() if k != "curve_10y_minus_2y"}
+        curve = round(raw.get("treasury_10y", 0.0) - raw.get("treasury_2y", 0.0), 3)
         return MacroSnapshot(
             as_of=as_of,
             staleness_seconds=0.0,
             source=self._providers[0].name,
             ticker_beta_to_spx=beta,
+            curve_10y_minus_2y=curve,
             **raw,
         )
 

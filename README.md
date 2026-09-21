@@ -11,8 +11,8 @@ Five LLM personas reading the same feed are one source wearing five robes.
 
 - **DataService** (`council/data/`) -- normalised schemas, SQLite disk
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
-  any record dated after `as_of`, and provider fallback (yfinance and SEC
-  EDGAR first -- both free, keyless, no hard daily cap -- then Alpha
+  any record dated after `as_of`, and provider fallback (yfinance, SEC
+  EDGAR, and FRED first -- all free with no hard daily cap -- then Alpha
   Vantage, then FMP, or a recorded-fixture provider for offline use). Covers
   OHLCV, news/sentiment, options, fundamentals, insider transactions,
   congressional disclosures, 13F/institutional holdings, macro data,
@@ -20,7 +20,12 @@ Five LLM personas reading the same feed are one source wearing five robes.
   filings. SEC EDGAR (`council/data/providers/sec_edgar.py`) is the
   alternative for insider transactions / SEC filings when FMP's plan
   doesn't cover them -- set `SEC_EDGAR_USER_AGENT` in `.env` to a real
-  contact string (SEC requires one on every request).
+  contact string (SEC requires one on every request). FRED
+  (`council/data/providers/fred.py`) is the alternative for macro data,
+  the one domain Alpha Vantage's free tier is otherwise required for --
+  get a free key at fred.stlouisfed.org and set `FRED_API_KEY` in `.env`;
+  without it, macro still falls back to Alpha Vantage's 25-requests/day
+  cap, which a single macro fetch burns 7 of by itself.
 - **The Crypt** (`council/crypt/`) -- append-only, hash-chained SQLite
   ledger. `predictions` and `seat_votes` reject UPDATE/DELETE by trigger.
   `write_blind_prediction` refuses to write a prediction whose `resolve_at`

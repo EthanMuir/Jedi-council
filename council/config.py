@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     alpha_vantage_api_key: str = ""
     fmp_api_key: str = ""
+    # Free (https://fred.stlouisfed.org/docs/api/api_key.html), 120
+    # req/min with no hard daily cap -- the alternative to Alpha Vantage
+    # for macro data, the one domain nothing else in the chain covers.
+    fred_api_key: str = ""
     openai_api_key: str = ""
     google_api_key: str = ""
 

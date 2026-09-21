@@ -32,6 +32,7 @@ from council.data.cache import DiskCache
 from council.data.providers.alpha_vantage import AlphaVantageProvider
 from council.data.providers.fixtures import FixtureProvider
 from council.data.providers.fmp import FMPProvider
+from council.data.providers.fred import FREDProvider
 from council.data.providers.sec_edgar import SECEdgarProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
 from council.data.service import DataService
@@ -147,6 +148,13 @@ def build_data_service(settings: Settings) -> DataService:
         # unlike FMP's free tier it isn't plan-gated away from those two
         # domains -- no point spending an HTTP round trip on FMP's 403 first.
         providers.append(SECEdgarProvider(settings.resolved_sec_edgar_user_agent))
+        # FRED next, also ahead of Alpha Vantage: macro is AV's only
+        # remaining domain in this chain (everything else is covered by
+        # yfinance/SEC EDGAR/FMP), and a single macro_sage gather() burns 7
+        # of AV's 25-requests/day free-tier cap by itself. With a FRED key
+        # configured, AV's quota is never touched at all.
+        if settings.fred_api_key:
+            providers.append(FREDProvider(settings.fred_api_key))
         if settings.alpha_vantage_api_key:
             providers.append(AlphaVantageProvider(settings.alpha_vantage_api_key))
         if settings.fmp_api_key:
