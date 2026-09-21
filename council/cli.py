@@ -114,9 +114,36 @@ def _print_result(result: DeliberationResult) -> None:
     print(f"\nLLM calls: {len(result.call_log)}   total estimated cost: ${total_cost:.4f}\n")
 
 
+def _print_llm_mode(settings) -> None:
+    """Printed before any command that could spend real money, so the
+    active mode is something you can *see*, not something you have to
+    trust a .env value got read correctly. A real deliberation billed real
+    money once despite NO_LLM=true being set -- the most likely cause was
+    never a bug in the gate itself (LLMClient checks settings.resolved_no_llm
+    before every single call, the only place the SDK is ever touched) but a
+    misconfiguration that went unnoticed until the Anthropic bill showed it."""
+    if settings.resolved_no_llm:
+        print("\nLLM MODE: FIXTURE -- no Anthropic API calls will be made. $0 cost, guaranteed.")
+    else:
+        key_state = (
+            "a key is configured" if settings.anthropic_api_key
+            else "NO KEY CONFIGURED -- live calls will fail outright, not silently succeed"
+        )
+        print(
+            f"\nLLM MODE: LIVE -- real Anthropic API calls will be made and billed ({key_state})."
+            "\n  To force fixture mode instead: set NO_LLM=true in .env (or remove"
+            "\n  ANTHROPIC_API_KEY entirely -- fixture mode is then auto-detected, and"
+            "\n  with no key configured a real call cannot succeed even if this check"
+            "\n  had a bug)."
+        )
+
+
 def _print_cost_estimate(estimate: CostEstimate) -> None:
     print(f"\n=== DRY RUN -- estimated cost for {estimate.ticker} @ {estimate.horizon} ===")
-    print("(no network calls made -- rough per-call token constants, not measured usage)\n")
+    if estimate.is_fixture:
+        print("LLM MODE: FIXTURE -- every line item below is $0, no network call will be made.\n")
+    else:
+        print("(no network calls made -- rough per-call token constants, not measured usage)\n")
     for li in estimate.line_items:
         print(
             f"  {li.label:<32} model={li.model:<18} calls={li.call_count:<3}"
@@ -239,6 +266,7 @@ def main(argv: list[str] | None = None) -> None:
     settings.ensure_dirs()
 
     if args.command == "deliberate":
+        _print_llm_mode(settings)
         if args.dry_run_cost:
             estimate = estimate_deliberation_cost(args.ticker.upper(), args.horizon, settings)
             _print_cost_estimate(estimate)

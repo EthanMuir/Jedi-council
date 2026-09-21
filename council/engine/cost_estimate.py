@@ -35,6 +35,7 @@ class CostLineItem:
 class CostEstimate:
     ticker: str
     horizon: str
+    is_fixture: bool = False
     line_items: list[CostLineItem] = field(default_factory=list)
 
     @property
@@ -46,7 +47,15 @@ class CostEstimate:
         return sum(li.call_count for li in self.line_items)
 
 
-def _cost_for(model: str, calls: int, tokens: dict) -> float:
+def _cost_for(model: str, calls: int, tokens: dict, is_fixture: bool) -> float:
+    # A run in fixture mode (settings.resolved_no_llm) makes zero network
+    # calls -- pricing it as if every seat/debate/synthesis call were live
+    # was actively misleading (Task #63: a real deliberation billed real
+    # money despite the user believing NO_LLM=true made it free; this
+    # dry-run's own estimate never having reflected that was part of why
+    # it wasn't caught sooner).
+    if is_fixture:
+        return 0.0
     pricing = _PRICING_PER_MTOK.get(model)
     if not pricing:
         return 0.0
@@ -63,7 +72,8 @@ def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) ->
     # roster is unnecessary work for every other caller of this module.
     from council.engine.orchestrator import TIER_I_SEATS
 
-    estimate = CostEstimate(ticker=ticker, horizon=horizon)
+    is_fixture = settings.resolved_no_llm
+    estimate = CostEstimate(ticker=ticker, horizon=horizon, is_fixture=is_fixture)
     eligible = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
     n_samples = settings.n_samples_per_seat
 
@@ -76,7 +86,7 @@ def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) ->
                 call_count=n_samples,
                 est_input_tokens=_TIER_I_TOKENS["input"] * n_samples,
                 est_output_tokens=_TIER_I_TOKENS["output"] * n_samples,
-                est_cost_usd=round(_cost_for(route.model, n_samples, _TIER_I_TOKENS), 6),
+                est_cost_usd=round(_cost_for(route.model, n_samples, _TIER_I_TOKENS, is_fixture), 6),
             )
         )
 
@@ -90,7 +100,7 @@ def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) ->
                 call_count=rounds,
                 est_input_tokens=_ADVOCATE_TOKENS["input"] * rounds,
                 est_output_tokens=_ADVOCATE_TOKENS["output"] * rounds,
-                est_cost_usd=round(_cost_for(route.model, rounds, _ADVOCATE_TOKENS), 6),
+                est_cost_usd=round(_cost_for(route.model, rounds, _ADVOCATE_TOKENS, is_fixture), 6),
             )
         )
 
@@ -102,7 +112,7 @@ def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) ->
             call_count=rounds,
             est_input_tokens=_PROSECUTOR_TOKENS["input"] * rounds,
             est_output_tokens=_PROSECUTOR_TOKENS["output"] * rounds,
-            est_cost_usd=round(_cost_for(prosecutor_route.model, rounds, _PROSECUTOR_TOKENS), 6),
+            est_cost_usd=round(_cost_for(prosecutor_route.model, rounds, _PROSECUTOR_TOKENS, is_fixture), 6),
         )
     )
 
@@ -114,7 +124,7 @@ def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) ->
             call_count=1,
             est_input_tokens=_GRAND_MASTER_TOKENS["input"],
             est_output_tokens=_GRAND_MASTER_TOKENS["output"],
-            est_cost_usd=round(_cost_for(gm_route.model, 1, _GRAND_MASTER_TOKENS), 6),
+            est_cost_usd=round(_cost_for(gm_route.model, 1, _GRAND_MASTER_TOKENS, is_fixture), 6),
         )
     )
 

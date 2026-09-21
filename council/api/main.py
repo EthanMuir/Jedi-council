@@ -44,6 +44,24 @@ async def deliberate_stream(
         async def progress(event: str, payload: dict) -> None:
             await queue.put((event, to_jsonable(payload)))
 
+        # Emitted before anything else so a client can show whether this
+        # run is about to spend real money -- a real deliberation billed
+        # real money once despite the user believing NO_LLM=true made it
+        # free, and nothing in the stream said otherwise until the bill did.
+        await queue.put(
+            (
+                "mode",
+                {
+                    "is_fixture": settings.resolved_no_llm,
+                    "message": (
+                        "FIXTURE -- no Anthropic API calls, $0 cost"
+                        if settings.resolved_no_llm
+                        else "LIVE -- real Anthropic API calls will be made and billed"
+                    ),
+                },
+            )
+        )
+
         async def run() -> None:
             try:
                 result = await run_deliberation(

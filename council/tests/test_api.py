@@ -40,6 +40,27 @@ def test_deliberate_stream_emits_seat_results_then_done(client):
     assert events[-1] == "done"
 
 
+def test_deliberate_stream_emits_mode_first_and_it_is_fixture(client):
+    # The `client` fixture runs with no_llm=True -- the very first event
+    # must say so, so a UI (or a human watching curl) can see whether a
+    # run is about to spend real money before any seat call happens. This
+    # is the fix for a real deliberation billing real money despite the
+    # user believing NO_LLM=true made it free: nothing in the stream said
+    # otherwise until the bill did.
+    test_client, _settings = client
+    with test_client.stream(
+        "GET", "/api/deliberate/stream", params={"ticker": "NVDA", "horizon": "1w"}
+    ) as response:
+        lines = list(response.iter_lines())
+
+    first_event = next(l for l in lines if l.startswith("event: ")).removeprefix("event: ")
+    assert first_event == "mode"
+    first_data = next(l for l in lines if l.startswith("data: ")).removeprefix("data: ")
+    payload = json.loads(first_data)
+    assert payload["is_fixture"] is True
+    assert "FIXTURE" in payload["message"]
+
+
 def test_deliberate_stream_rejects_invalid_horizon(client):
     test_client, _settings = client
     response = test_client.get(
