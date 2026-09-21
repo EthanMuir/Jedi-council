@@ -142,6 +142,43 @@ class YFinanceProvider:
     async def fetch_option_chain(self, ticker: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._fetch_option_chain_sync, ticker)
 
+    def _resolve_underlying_price(self, ticker_obj, chain) -> float:
+        """chain.underlying.get("regularMarketPrice") alone silently falls
+        back to 0.0 on any parsing hiccup -- and oracle_options picks its
+        "ATM" contract as whichever strike is *closest* to this number
+        (`min(contracts, key=lambda c: abs(c.strike - underlying_price))`).
+        A price of 0.0 means that picks the single LOWEST-strike contract
+        in the whole chain instead -- typically a deep, near-worthless,
+        zero-volume one, which is exactly the shape of "ATM IV wildly
+        inconsistent with the rest of the chain" seen live on every ticker
+        tested so far (0.78% specifically, on two unrelated tickers -- too
+        exact to be two independent bad quotes, much more likely the same
+        systematic wrong-contract selection every time). Tries progressively
+        more reliable fallbacks before giving up."""
+        try:
+            price = float(chain.underlying.get("regularMarketPrice", 0.0) or 0.0)
+            if price > 0:
+                return price
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+        try:
+            price = float(ticker_obj.fast_info.get("lastPrice", 0.0) or 0.0)
+            if price > 0:
+                return price
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+        try:
+            info = ticker_obj.info or {}
+            price = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0.0)
+            if price > 0:
+                return price
+        except (AttributeError, TypeError, ValueError):
+            pass
+
+        return 0.0
+
     def _fetch_option_chain_sync(self, ticker: str) -> dict[str, Any]:
         import yfinance as yf
 
@@ -152,12 +189,7 @@ class YFinanceProvider:
 
         expiry = expiries[0]
         chain = t.option_chain(expiry)
-
-        underlying_price = 0.0
-        try:
-            underlying_price = float(chain.underlying.get("regularMarketPrice", 0.0) or 0.0)
-        except (AttributeError, TypeError, ValueError):
-            pass
+        underlying_price = self._resolve_underlying_price(t, chain)
 
         contracts = []
         total_call_volume = 0

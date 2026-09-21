@@ -69,6 +69,25 @@ class OracleOptionsSeat:
                 abstain_reason="no_data",
             )
 
+        if chain.underlying_price <= 0:
+            # "ATM" is picked as whichever strike is closest to
+            # underlying_price -- with no real underlying price, that pick
+            # is meaningless (it silently becomes the lowest-strike
+            # contract in the whole chain, usually a near-worthless,
+            # zero-volume one). Abstaining here mechanically, without
+            # spending a real LLM call on data already known to be
+            # unusable, instead of letting the model discover the same
+            # thing after the fact.
+            return SeatVerdict(
+                vote="NO_READ",
+                probability=0.5,
+                expected_move_pct=0.0,
+                thesis="Underlying price unavailable, so the ATM contract can't be identified.",
+                what_would_change_my_mind="A resolvable underlying price for this ticker.",
+                data_quality="POOR",
+                abstain_reason="no_underlying_price",
+            )
+
         atm = min(chain.contracts, key=lambda c: abs(c.strike - chain.underlying_price))
         near_expiry = min(c.expiry for c in chain.contracts)
         near_month_ivs = [

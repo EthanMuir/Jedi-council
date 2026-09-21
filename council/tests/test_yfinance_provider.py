@@ -80,6 +80,86 @@ async def test_option_chain_parses_real_and_nan_rows(fake_yfinance):
     assert result["put_call_ratio"] == pytest.approx(0.4)
 
 
+# Task #73 -- chain.underlying.get("regularMarketPrice") alone silently
+# fell back to 0.0 on any parsing hiccup, and oracle_options picks its
+# "ATM" contract as whichever strike is closest to that number -- a price
+# of 0.0 makes that pick the lowest-strike contract in the whole chain
+# instead of the real ATM one, very likely the cause of "ATM IV wildly
+# inconsistent with the chain" showing up on every ticker tested live so
+# far. These test the fallback chain that replaced the single lookup.
+
+
+@pytest.mark.asyncio
+async def test_underlying_price_falls_back_to_fast_info(monkeypatch):
+    calls_df = pd.DataFrame(
+        [{"strike": 100.0, "bid": 2.1, "ask": 2.3, "lastPrice": 2.2, "volume": 50, "openInterest": 200, "impliedVolatility": 0.32}]
+    )
+    fake_chain = MagicMock()
+    fake_chain.calls = calls_df
+    fake_chain.puts = pd.DataFrame(columns=calls_df.columns)
+    fake_chain.underlying = {}  # regularMarketPrice missing -- the live failure shape
+
+    fake_ticker = MagicMock()
+    fake_ticker.options = ("2026-10-16",)
+    fake_ticker.option_chain.return_value = fake_chain
+    fake_ticker.fast_info = {"lastPrice": 87.3}
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    result = await provider.fetch_option_chain("NFLX")
+    assert result["underlying_price"] == 87.3
+
+
+@pytest.mark.asyncio
+async def test_underlying_price_falls_back_to_info_when_fast_info_also_empty(monkeypatch):
+    calls_df = pd.DataFrame(
+        [{"strike": 100.0, "bid": 2.1, "ask": 2.3, "lastPrice": 2.2, "volume": 50, "openInterest": 200, "impliedVolatility": 0.32}]
+    )
+    fake_chain = MagicMock()
+    fake_chain.calls = calls_df
+    fake_chain.puts = pd.DataFrame(columns=calls_df.columns)
+    fake_chain.underlying = None  # some yfinance versions/tickers -- not even a dict
+
+    fake_ticker = MagicMock()
+    fake_ticker.options = ("2026-10-16",)
+    fake_ticker.option_chain.return_value = fake_chain
+    fake_ticker.fast_info = {}
+    fake_ticker.info = {"currentPrice": 42.1}
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    result = await provider.fetch_option_chain("MP")
+    assert result["underlying_price"] == 42.1
+
+
+@pytest.mark.asyncio
+async def test_underlying_price_zero_when_every_source_is_empty(monkeypatch):
+    calls_df = pd.DataFrame(
+        [{"strike": 100.0, "bid": 2.1, "ask": 2.3, "lastPrice": 2.2, "volume": 50, "openInterest": 200, "impliedVolatility": 0.32}]
+    )
+    fake_chain = MagicMock()
+    fake_chain.calls = calls_df
+    fake_chain.puts = pd.DataFrame(columns=calls_df.columns)
+    fake_chain.underlying = {}
+
+    fake_ticker = MagicMock()
+    fake_ticker.options = ("2026-10-16",)
+    fake_ticker.option_chain.return_value = fake_chain
+    fake_ticker.fast_info = {}
+    fake_ticker.info = {}
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    result = await provider.fetch_option_chain("OBSCURETICKER")
+    assert result["underlying_price"] == 0.0
+
+
 @pytest.mark.asyncio
 async def test_option_chain_with_no_expiries_returns_empty_not_an_error(monkeypatch):
     fake_ticker = MagicMock()
