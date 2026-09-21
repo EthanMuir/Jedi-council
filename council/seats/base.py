@@ -123,9 +123,16 @@ class SeatVerdict(BaseModel):
     invalidation: float | None = None
     expected_move_pct: float
 
-    thesis: str
+    thesis: str = Field(
+        description="120 words or fewer. This is a hard limit enforced after "
+        "generation -- a thesis over 120 words is rejected outright and the "
+        "call is wasted. Be concise: state the read and the strongest reason "
+        "for it, not every supporting detail."
+    )
     key_evidence: list[EvidenceItem] = Field(default_factory=list)
-    what_would_change_my_mind: str
+    what_would_change_my_mind: str = Field(
+        description="One or two sentences. Always include this field."
+    )
     data_quality: Literal["GOOD", "PARTIAL", "POOR"]
     abstain_reason: str | None = None
 

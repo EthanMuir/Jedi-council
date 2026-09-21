@@ -178,7 +178,12 @@ class LLMClient:
             try:
                 resp = await self._client.messages.create(
                     model=model,
-                    max_tokens=1500,
+                    # A verbose model can run out of room mid-structure and
+                    # drop a later required field entirely (seen in practice:
+                    # what_would_change_my_mind missing outright) rather than
+                    # just writing a too-long thesis -- some headroom above
+                    # the realistic size of one SeatVerdict's fields.
+                    max_tokens=2000,
                     # Addendum A3's original rationale -- fix temperature across
                     # providers so dispersion measures model behaviour, not
                     # sampling config drift -- no longer applies: this model
