@@ -25,6 +25,7 @@ import anthropic
 from pydantic import BaseModel, ValidationError
 
 from council.config import Settings
+from council.engine.model_catalog import get_model
 from council.engine.routing import resolve_route
 from council.seats.base import SeatVerdict, format_memory_context
 
@@ -46,14 +47,143 @@ _BACKOFF_CAP_SECONDS = 8.0
 def _backoff_seconds(attempt: int) -> float:
     return min(_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)), _BACKOFF_CAP_SECONDS)
 
-# Rough $ per million tokens. Approximate on purpose -- good enough for the
-# Cost Auditor's relative comparisons, not an invoice.
-_PRICING_PER_MTOK = {
-    "claude-sonnet-5": {"input": 3.0, "output": 15.0},
-    "claude-opus-5": {"input": 15.0, "output": 75.0},
-}
 
 T = TypeVar("T", bound=BaseModel)
+
+
+class _RetryableProviderError(Exception):
+    """A one-shot provider call failed transiently (connection, timeout,
+    rate limit, 5xx) -- worth retrying with backoff. Every provider adapter
+    below translates its own SDK's exceptions into this or
+    _NonRetryableProviderError so the retry loop in get_structured stays
+    provider-agnostic instead of special-casing three different exception
+    hierarchies."""
+
+
+class _NonRetryableProviderError(Exception):
+    """A one-shot provider call failed for a reason retrying won't fix
+    (auth, bad request, permission, ...)."""
+
+
+async def _call_anthropic(
+    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str
+) -> tuple[dict, int, int]:
+    try:
+        resp = await client.messages.create(
+            model=model,
+            # A verbose model can run out of room mid-structure and drop a
+            # later required field entirely rather than just writing a
+            # too-long thesis -- some headroom above the realistic size of
+            # one SeatVerdict's fields.
+            max_tokens=3000,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            tools=[
+                {
+                    "name": tool_name,
+                    "description": f"Submit your structured {tool_name}.",
+                    "input_schema": schema,
+                }
+            ],
+            tool_choice={"type": "tool", "name": tool_name},
+        )
+    except _RETRYABLE_ANTHROPIC_ERRORS as exc:
+        raise _RetryableProviderError(str(exc)) from exc
+    except anthropic.APIStatusError as exc:
+        raise _NonRetryableProviderError(str(exc)) from exc
+    tool_use = next(b for b in resp.content if b.type == "tool_use")
+    return tool_use.input, resp.usage.input_tokens, resp.usage.output_tokens
+
+
+async def _call_openai(
+    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str
+) -> tuple[dict, int, int]:
+    """Built and tested against a faked SDK object, same caveat as every
+    other provider integration built this session without a real key to
+    test against: this is the OpenAI SDK's long-stable function-calling
+    shape (tools/tool_choice forcing a named function), not verified
+    against a live response."""
+    import openai as openai_sdk
+
+    try:
+        resp = await client.chat.completions.create(
+            model=model,
+            max_tokens=3000,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            tools=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "description": f"Submit your structured {tool_name}.",
+                        "parameters": schema,
+                    },
+                }
+            ],
+            tool_choice={"type": "function", "function": {"name": tool_name}},
+        )
+    except (
+        openai_sdk.APIConnectionError,
+        openai_sdk.APITimeoutError,
+        openai_sdk.RateLimitError,
+        openai_sdk.InternalServerError,
+    ) as exc:
+        raise _RetryableProviderError(str(exc)) from exc
+    except openai_sdk.APIStatusError as exc:
+        raise _NonRetryableProviderError(str(exc)) from exc
+    tool_call = resp.choices[0].message.tool_calls[0]
+    raw = json.loads(tool_call.function.arguments)
+    usage = resp.usage
+    return raw, usage.prompt_tokens, usage.completion_tokens
+
+
+async def _call_gemini(
+    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str
+) -> tuple[dict, int, int]:
+    """Built and tested against a faked SDK object -- unverified against a
+    live Gemini response, same caveat as _call_openai above. Uses Gemini's
+    native structured-output support (response_schema + a JSON mime type)
+    rather than function calling, since it needs no named-tool indirection
+    for a single-shape response the way Anthropic/OpenAI's tool-call
+    pattern does."""
+    from google.genai import errors as genai_errors
+    from google.genai import types as genai_types
+
+    try:
+        resp = await client.aio.models.generate_content(
+            model=model,
+            contents=user_prompt,
+            config=genai_types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_schema=schema,
+                max_output_tokens=3000,
+            ),
+        )
+    except genai_errors.ServerError as exc:
+        raise _RetryableProviderError(str(exc)) from exc
+    except genai_errors.ClientError as exc:
+        raise _NonRetryableProviderError(str(exc)) from exc
+    raw = json.loads(resp.text)
+    usage = resp.usage_metadata
+    input_tokens = getattr(usage, "prompt_token_count", 0) or 0
+    output_tokens = getattr(usage, "candidates_token_count", 0) or 0
+    return raw, input_tokens, output_tokens
+
+
+# provider name -> (client attribute on LLMClient, one-shot call adapter).
+# "_client" (not "_anthropic_client") for anthropic on purpose -- that's
+# the attribute name every existing test already monkeypatches to inject a
+# fake SDK object; renaming it would silently break them rather than fail
+# loudly, since they'd be setting an attribute nothing reads anymore.
+_PROVIDER_ADAPTERS = {
+    "anthropic": ("_client", _call_anthropic),
+    "openai": ("_openai_client", _call_openai),
+    "google": ("_gemini_client", _call_gemini),
+}
 
 
 def _repair_seat_verdict_input(raw: dict) -> dict:
@@ -127,18 +257,33 @@ class LLMClient:
         self.settings = settings
         self.call_log: list[LLMCallRecord] = call_log if call_log is not None else []
         self._client = None
+        self._openai_client = None
+        self._gemini_client = None
         if not settings.resolved_no_llm:
             import anthropic
 
             self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            # Only constructed when routing could actually pick these --
+            # resolve_route (Addendum A3) only ever resolves a seat to
+            # openai/google when that provider's own key is configured, so
+            # a seat can never reach _call_openai/_call_gemini with a None
+            # client here.
+            if settings.openai_api_key:
+                import openai
+
+                self._openai_client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+            if settings.google_api_key:
+                from google import genai
+
+                self._gemini_client = genai.Client(api_key=settings.google_api_key)
 
     def _estimate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
-        pricing = _PRICING_PER_MTOK.get(model)
-        if not pricing:
+        model_info = get_model(model)
+        if not model_info:
             return 0.0
-        return (input_tokens / 1_000_000) * pricing["input"] + (
+        return (input_tokens / 1_000_000) * model_info.input_price_per_mtok + (
             output_tokens / 1_000_000
-        ) * pricing["output"]
+        ) * model_info.output_price_per_mtok
 
     def _prompt_hash(self, system_prompt: str, user_prompt: str) -> str:
         return hashlib.sha256((system_prompt + "\x00" + user_prompt).encode()).hexdigest()[:16]
@@ -190,67 +335,31 @@ class LLMClient:
             )
 
         route = resolve_route(seat_id, self.settings, default_model=model)
-        if route.provider != "anthropic":
-            # Routing infrastructure (Addendum A3) exists and correctly
-            # resolved a heterogeneous provider -- but live calling for
-            # anything other than Anthropic isn't wired up yet. This should
-            # be unreachable until an OPENAI_API_KEY / GOOGLE_API_KEY is
-            # actually configured, at which point it's the next thing to build.
-            raise NotImplementedError(
-                f"seat '{seat_id}' routed to provider '{route.provider}' "
-                f"(model '{route.model}'), but live calling for non-Anthropic "
-                "providers is not implemented yet -- only routing resolution is."
-            )
         model = route.model
+        client_attr, call_adapter = _PROVIDER_ADAPTERS[route.provider]
+        client = getattr(self, client_attr)
 
         schema = response_model.model_json_schema()
         prompt_hash = self._prompt_hash(system_prompt, user_prompt)
         last_error: Exception | None = None
+        last_error_retryable = False
         tool_name = f"submit_{response_model.__name__.lower()}"
 
         for attempt in range(1, max_retries + 2):  # initial attempt + max_retries
             start = time.monotonic()
             try:
-                resp = await self._client.messages.create(
-                    model=model,
-                    # A verbose model can run out of room mid-structure and
-                    # drop a later required field entirely (seen in practice:
-                    # what_would_change_my_mind missing outright) rather than
-                    # just writing a too-long thesis -- some headroom above
-                    # the realistic size of one SeatVerdict's fields. 2000
-                    # wasn't enough on its own (Task #67, still seen live) --
-                    # raised further, alongside reordering SeatVerdict so the
-                    # short required fields aren't the ones stranded after a
-                    # verbose thesis if truncation happens anyway.
-                    max_tokens=3000,
-                    # Addendum A3's original rationale -- fix temperature across
-                    # providers so dispersion measures model behaviour, not
-                    # sampling config drift -- no longer applies: this model
-                    # generation rejects the parameter outright (confirmed via
-                    # a live 400: "temperature is deprecated for this model"),
-                    # not merely moved it. There is no longer a sampling lever
-                    # to fix, so dispersion (council/engine/sampling.py) now
-                    # measures whatever run-to-run variation the model exhibits
-                    # under its own default/managed sampling.
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}],
-                    tools=[
-                        {
-                            "name": tool_name,
-                            "description": f"Submit your structured {response_model.__name__}.",
-                            "input_schema": schema,
-                        }
-                    ],
-                    tool_choice={"type": "tool", "name": tool_name},
+                raw_input, input_tokens, output_tokens = await call_adapter(
+                    client, model, system_prompt, user_prompt, schema, tool_name
                 )
-            except _RETRYABLE_ANTHROPIC_ERRORS as exc:
+            except _RetryableProviderError as exc:
                 last_error = exc
+                last_error_retryable = True
                 latency_ms = (time.monotonic() - start) * 1000
                 self.call_log.append(
                     LLMCallRecord(
                         seat_id=seat_id,
                         model=model,
-                        provider="anthropic",
+                        provider=route.provider,
                         prompt_hash=prompt_hash,
                         input_tokens=0,
                         output_tokens=0,
@@ -264,7 +373,7 @@ class LLMClient:
                 if attempt <= max_retries:
                     await asyncio.sleep(_backoff_seconds(attempt))
                 continue
-            except anthropic.APIStatusError as exc:
+            except _NonRetryableProviderError as exc:
                 # Auth, bad request, permission, not found, conflict,
                 # unprocessable -- a client-side problem no retry fixes.
                 latency_ms = (time.monotonic() - start) * 1000
@@ -272,7 +381,7 @@ class LLMClient:
                     LLMCallRecord(
                         seat_id=seat_id,
                         model=model,
-                        provider="anthropic",
+                        provider=route.provider,
                         prompt_hash=prompt_hash,
                         input_tokens=0,
                         output_tokens=0,
@@ -287,7 +396,7 @@ class LLMClient:
                     f"{seat_id}: non-retryable API error ({exc.__class__.__name__}): {exc}"
                 ) from exc
             except Exception as exc:
-                # Anything else escaping the SDK call itself -- e.g. a
+                # Anything else escaping the adapter's own call -- e.g. a
                 # TypeError from an unsupported kwarg on an unexpected SDK
                 # version -- is a code/environment problem, not the model's
                 # fault, and retrying it 2 more times will fail identically
@@ -300,7 +409,7 @@ class LLMClient:
                     LLMCallRecord(
                         seat_id=seat_id,
                         model=model,
-                        provider="anthropic",
+                        provider=route.provider,
                         prompt_hash=prompt_hash,
                         input_tokens=0,
                         output_tokens=0,
@@ -319,19 +428,18 @@ class LLMClient:
             # genuinely "the model didn't produce a valid structured answer".
             try:
                 latency_ms = (time.monotonic() - start) * 1000
-                tool_use = next(b for b in resp.content if b.type == "tool_use")
-                raw_input = tool_use.input
                 if response_model is SeatVerdict:
                     raw_input = _repair_seat_verdict_input(raw_input)
                 result = response_model(**raw_input)
             except (ValidationError, StopIteration, KeyError, TypeError) as exc:
                 last_error = exc
+                last_error_retryable = False
                 latency_ms = (time.monotonic() - start) * 1000
                 self.call_log.append(
                     LLMCallRecord(
                         seat_id=seat_id,
                         model=model,
-                        provider="anthropic",
+                        provider=route.provider,
                         prompt_hash=prompt_hash,
                         input_tokens=0,
                         output_tokens=0,
@@ -348,21 +456,19 @@ class LLMClient:
                 LLMCallRecord(
                     seat_id=seat_id,
                     model=model,
-                    provider="anthropic",
+                    provider=route.provider,
                     prompt_hash=prompt_hash,
-                    input_tokens=resp.usage.input_tokens,
-                    output_tokens=resp.usage.output_tokens,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
                     latency_ms=latency_ms,
-                    cost_usd=self._estimate_cost(
-                        model, resp.usage.input_tokens, resp.usage.output_tokens
-                    ),
+                    cost_usd=self._estimate_cost(model, input_tokens, output_tokens),
                     attempt=attempt,
                     success=True,
                 )
             )
             return result
 
-        if isinstance(last_error, _RETRYABLE_ANTHROPIC_ERRORS):
+        if last_error_retryable:
             raise LLMCallFailed(
                 f"{seat_id}: still failing after {max_retries} retries: {last_error}"
             ) from last_error

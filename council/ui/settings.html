@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The High Council -- Settings</title>
+<link rel="stylesheet" href="/css/theme.css" />
+<link rel="stylesheet" href="/css/settings.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1 style="text-align:center; margin-bottom: 8px;">Settings</h1>
+  <p class="dim" style="text-align:center; margin-bottom: 24px;">Assign a model to each seat. Sorted most to least expensive; the recommended model is starred.</p>
+
+  <div class="panel" style="margin-bottom: 20px;">
+    <h2 style="margin-top:0;">Estimated Cost Per Run</h2>
+    <div class="toggle-row" id="horizon-toggle">
+      <button class="toggle-option" data-horizon="1d">1D</button>
+      <button class="toggle-option" data-horizon="1w">1W</button>
+      <button class="toggle-option" data-horizon="1m">1M</button>
+      <button class="toggle-option" data-horizon="1y">1Y</button>
+    </div>
+    <div class="cost-summary" style="margin-top:16px;" id="cost-summary">
+      <span class="dim">Loading...</span>
+    </div>
+    <table class="cost-lineitems mono" id="cost-lineitems"></table>
+  </div>
+
+  <div class="panel">
+    <table class="settings-table mono" id="settings-table">
+      <thead>
+        <tr>
+          <th>Seat</th><th>Provider</th><th>Model</th><th>Est. $/call</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="settings-tbody">
+        <tr><td colspan="5" class="dim">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/settings.js"></script>
+</body>
+</html>

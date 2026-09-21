@@ -13,19 +13,37 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from council.api.serialize import to_jsonable
 from council.calibration.benchmark import compute_benchmark
 from council.calibration.officer import compute_seat_calibration, rank_for_seat
 from council.config import get_settings
 from council.crypt.db import connect
+from council.engine import model_settings
+from council.engine.cost_estimate import estimate_deliberation_cost
+from council.engine.model_catalog import ALL_ROLES, RECOMMENDED, models_sorted_by_cost
 from council.engine.orchestrator import TIER_I_SEATS, run_deliberation
 from council.engine.resolution_sweep import sweep_unresolved
+from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
+from council.seats.grand_master import GrandMasterSeat
+from council.seats.prosecutor import ProsecutorSeat
 
 app = FastAPI(title="The High Council")
 
 _UI_DIR = Path(__file__).resolve().parents[1] / "ui"
 _SEAT_TITLES = {seat.id: seat.title for seat in TIER_I_SEATS}
+# Task #74 -- every role model_catalog.ALL_ROLES covers has a display
+# title somewhere: Tier I seats carry theirs on TIER_I_SEATS already
+# (above), Tier II-IV roles carry theirs on their own seat classes, which
+# aren't collected into a single roster the way Tier I is.
+_ROLE_TITLES = {
+    **_SEAT_TITLES,
+    BullAdvocateSeat.id: BullAdvocateSeat.title,
+    BearAdvocateSeat.id: BearAdvocateSeat.title,
+    ProsecutorSeat.id: ProsecutorSeat.title,
+    GrandMasterSeat.id: GrandMasterSeat.title,
+}
 
 
 @app.get("/api/deliberate/stream")
@@ -184,6 +202,85 @@ async def archives():
         return {"seats": seats_summary, "benchmark": benchmark}
     finally:
         conn.close()
+
+
+class _ModelOverrideRequest(BaseModel):
+    role: str
+    model_id: str | None = None  # None clears the override back to recommended
+
+
+@app.get("/api/settings/models")
+async def get_model_settings():
+    settings = get_settings()
+    settings.ensure_dirs()
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        overrides = model_settings.get_overrides(conn)
+    finally:
+        conn.close()
+
+    catalog = [
+        {
+            "id": m.id,
+            "provider": m.provider,
+            "display_name": m.display_name,
+            "input_price_per_mtok": m.input_price_per_mtok,
+            "output_price_per_mtok": m.output_price_per_mtok,
+            "typical_call_cost_usd": m.typical_call_cost_usd,
+        }
+        for m in models_sorted_by_cost(descending=True)
+    ]
+    roles = [
+        {
+            "role": role,
+            "title": _ROLE_TITLES.get(role, role),
+            "recommended_model": RECOMMENDED[role],
+            "current_model": overrides.get(role, RECOMMENDED[role]),
+            "is_override": role in overrides,
+        }
+        for role in ALL_ROLES
+    ]
+    return {"catalog": catalog, "roles": roles}
+
+
+@app.post("/api/settings/models")
+async def set_model_setting(body: _ModelOverrideRequest):
+    if body.role not in RECOMMENDED:
+        raise HTTPException(400, f"unknown role '{body.role}'")
+    settings = get_settings()
+    settings.ensure_dirs()
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        if body.model_id is None:
+            model_settings.clear_override(conn, body.role)
+        else:
+            try:
+                model_settings.set_override(conn, body.role, body.model_id)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        current = model_settings.get_effective_model(conn, body.role)
+    finally:
+        conn.close()
+    return {"role": body.role, "current_model": current, "is_override": body.model_id is not None}
+
+
+@app.get("/api/settings/cost-estimate")
+async def get_settings_cost_estimate(horizon: str = "1w"):
+    if horizon not in ("1d", "1w", "1m", "1y"):
+        raise HTTPException(400, f"invalid horizon '{horizon}'")
+    settings = get_settings()
+    settings.ensure_dirs()
+    # The ticker is a placeholder -- cost depends only on which models are
+    # routed to and how many calls each seat/round makes, never on the
+    # symbol itself, so any value here estimates identically.
+    estimate = estimate_deliberation_cost("EST", horizon, settings)
+    return {
+        "horizon": horizon,
+        "is_fixture": estimate.is_fixture,
+        "total_cost_usd": estimate.total_cost_usd,
+        "total_calls": estimate.total_calls,
+        "line_items": [dataclasses.asdict(li) for li in estimate.line_items],
+    }
 
 
 if _UI_DIR.exists():

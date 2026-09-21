@@ -42,6 +42,13 @@ class Settings(BaseSettings):
 
     council_db_path: str = "./data/council.db"
     cache_db_path: str = "./data/cache.db"
+    # Per-seat model overrides from the Settings pane (Task #74) -- a
+    # separate small store on purpose, not a table in council_db_path: the
+    # Crypt there is append-only/hash-chained by design (crypt/schema.sql),
+    # the wrong place for a value that must be freely overwritten, and
+    # cache_db_path's DiskCache entries expire on a TTL, wrong for a choice
+    # meant to persist until the user changes it again.
+    settings_db_path: str = "./data/settings.db"
 
     seat_model: str = "claude-sonnet-5"
     synthesis_model: str = "claude-opus-5"
@@ -95,7 +102,7 @@ class Settings(BaseSettings):
         return "The High Council (unconfigured contact -- set SEC_EDGAR_USER_AGENT)"
 
     def ensure_dirs(self) -> None:
-        for path in (self.council_db_path, self.cache_db_path):
+        for path in (self.council_db_path, self.cache_db_path, self.settings_db_path):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
 
 

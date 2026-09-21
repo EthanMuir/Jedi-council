@@ -1,0 +1,107 @@
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.settings-table th, .settings-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid #2a3348;
+  vertical-align: middle;
+}
+
+.settings-table th {
+  color: var(--cyan);
+  font-family: var(--font-header);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.settings-table tr.overridden {
+  background: rgba(79, 214, 232, 0.04);
+}
+
+select.model-select {
+  font-family: var(--font-data);
+  font-size: 13px;
+  background: var(--navy-deep);
+  border: 2px solid #131722;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.6);
+  color: var(--bone);
+  padding: 8px 10px;
+  min-width: 260px;
+}
+
+select.model-select:focus {
+  outline: none;
+  border-color: var(--cyan-dim);
+}
+
+.provider-badge {
+  font-family: var(--font-header);
+  font-size: 8px;
+  padding: 4px 7px;
+  display: inline-block;
+  border: 1px solid;
+  text-transform: uppercase;
+}
+
+.provider-anthropic { color: var(--amber); border-color: var(--amber-dim); }
+.provider-openai { color: #9fe6ce; border-color: #4a9b7f; }
+.provider-google { color: var(--cyan); border-color: var(--cyan-dim); }
+
+.override-badge {
+  font-family: var(--font-header);
+  font-size: 8px;
+  color: var(--cyan);
+}
+
+.reset-link {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: var(--bone-dim);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 8px;
+}
+
+.reset-link:hover {
+  color: var(--cyan);
+}
+
+.cost-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.cost-summary .big-number {
+  font-family: var(--font-header);
+  font-size: 26px;
+  color: var(--amber);
+}
+
+.cost-summary .big-number.fixture {
+  color: var(--green);
+}
+
+.cost-lineitems {
+  margin-top: 14px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cost-lineitems td {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-bottom: 1px solid #1c2233;
+}
+
+.cost-lineitems td:last-child {
+  text-align: right;
+  color: var(--amber);
+}

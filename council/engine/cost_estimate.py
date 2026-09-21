@@ -1,17 +1,19 @@
 """Phase 6: estimate the $ cost of a real deliberation before running it,
 without making a single network call. Token counts below are rough
 constants per call type, not measured -- good enough to tell whether a run
-costs a dollar or a nickel, not an invoice. Same honesty caveat as
-llm_client._PRICING_PER_MTOK on the price side, and the same graceful
-fallback: a model with no pricing entry (e.g. gpt-5, gemini-3-pro, still
-routing-only per Addendum A3) prices at $0.00, not a crash."""
+costs a dollar or a nickel, not an invoice. Pricing comes from
+model_catalog.py, the single source of truth also used by LLMClient's own
+cost logging and the Settings pane -- same honesty caveat as that file's
+own docstring on prices being a point-in-time snapshot. A model with no
+catalog entry prices at $0.00, not a crash (shouldn't happen for anything
+resolve_route can actually return, but stay defensive)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from council.config import Settings
 from council.engine.horizons import is_competent
-from council.engine.llm_client import _PRICING_PER_MTOK
+from council.engine.model_catalog import get_model
 from council.engine.routing import resolve_route
 
 # Rough per-call token counts, by call type.
@@ -56,12 +58,12 @@ def _cost_for(model: str, calls: int, tokens: dict, is_fixture: bool) -> float:
     # it wasn't caught sooner).
     if is_fixture:
         return 0.0
-    pricing = _PRICING_PER_MTOK.get(model)
-    if not pricing:
+    model_info = get_model(model)
+    if not model_info:
         return 0.0
     return calls * (
-        (tokens["input"] / 1_000_000) * pricing["input"]
-        + (tokens["output"] / 1_000_000) * pricing["output"]
+        (tokens["input"] / 1_000_000) * model_info.input_price_per_mtok
+        + (tokens["output"] / 1_000_000) * model_info.output_price_per_mtok
     )
 
 
