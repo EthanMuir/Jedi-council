@@ -12,6 +12,7 @@ dependencies = [
     "anyio>=4.4",
     "anthropic>=0.34",
     "pyyaml>=6.0",
+    "yfinance>=0.2",
 ]
 
 [project.optional-dependencies]
