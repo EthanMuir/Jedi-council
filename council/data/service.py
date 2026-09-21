@@ -105,7 +105,9 @@ class DataService:
         self._providers = providers
         self._cache = cache
 
-    async def _fetch_with_fallback(self, method_name: str, cache_key: str, ttl: int, *args):
+    async def _fetch_with_fallback(
+        self, method_name: str, cache_key: str, ttl: int, *args, cache_empty: bool = True
+    ):
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
@@ -128,7 +130,13 @@ class DataService:
             for attempt in range(1, _PROVIDER_MAX_RETRIES + 2):
                 try:
                     result = await method(*args)
-                    self._cache.set(cache_key, result, ttl)
+                    # cache_empty=False (get_ohlcv's own choice, not every
+                    # domain's) exists because an empty result there is
+                    # essentially always a provider-side problem, never a
+                    # true answer -- caching it for a full hour would let one
+                    # bad response silently outlive whatever bug caused it.
+                    if result or cache_empty:
+                        self._cache.set(cache_key, result, ttl)
                     return result
                 except Exception as exc:  # noqa: BLE001 -- graceful provider degradation
                     last_error = exc
@@ -145,7 +153,7 @@ class DataService:
         end = as_of.date()
         cache_key = f"ohlcv:{ticker}:{start}:{end}"
         raw = await self._fetch_with_fallback(
-            "fetch_ohlcv", cache_key, _TTL_SECONDS["ohlcv"], ticker, start, end
+            "fetch_ohlcv", cache_key, _TTL_SECONDS["ohlcv"], ticker, start, end, cache_empty=False
         )
         filtered = filter_point_in_time(raw, as_of, "trade_date")
         latest = _latest_timestamp(filtered, "trade_date")
