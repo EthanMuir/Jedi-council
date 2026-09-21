@@ -56,6 +56,24 @@ def test_no_read_requires_abstain_reason():
         )
 
 
+def test_short_required_fields_ordered_before_truncation_prone_ones():
+    # Task #67: confirmed live -- what_would_change_my_mind came back as
+    # `Field required [type=missing]` (the key was never started, not just
+    # empty), alongside an over-length thesis, on the same failed call.
+    # Anthropic's tool use doesn't hard-enforce the schema's required list
+    # server-side, so a truncated generation can still parse as valid JSON
+    # short of its later keys. Both short required fields must be declared
+    # (and therefore requested) before the two fields most likely to run
+    # long: key_evidence (a variable-length list) and thesis (free text).
+    schema = SeatVerdict.model_json_schema()
+    order = list(schema["properties"].keys())
+    for required_field in ("data_quality", "what_would_change_my_mind"):
+        for truncation_prone_field in ("key_evidence", "thesis"):
+            assert order.index(required_field) < order.index(truncation_prone_field), (
+                f"{required_field} must be ordered before {truncation_prone_field}"
+            )
+
+
 def test_abstain_reason_conditional_requirement_is_visible_to_the_model():
     # Task #66: this cross-field rule is enforced by a model_validator, not
     # expressible in the JSON schema Pydantic generates -- the schema alone

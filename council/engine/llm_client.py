@@ -182,8 +182,12 @@ class LLMClient:
                     # drop a later required field entirely (seen in practice:
                     # what_would_change_my_mind missing outright) rather than
                     # just writing a too-long thesis -- some headroom above
-                    # the realistic size of one SeatVerdict's fields.
-                    max_tokens=2000,
+                    # the realistic size of one SeatVerdict's fields. 2000
+                    # wasn't enough on its own (Task #67, still seen live) --
+                    # raised further, alongside reordering SeatVerdict so the
+                    # short required fields aren't the ones stranded after a
+                    # verbose thesis if truncation happens anyway.
+                    max_tokens=3000,
                     # Addendum A3's original rationale -- fix temperature across
                     # providers so dispersion measures model behaviour, not
                     # sampling config drift -- no longer applies: this model

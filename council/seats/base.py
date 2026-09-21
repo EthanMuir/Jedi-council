@@ -123,23 +123,35 @@ class SeatVerdict(BaseModel):
     invalidation: float | None = None
     expected_move_pct: float
 
-    thesis: str = Field(
-        description="120 words or fewer. This is a hard limit enforced after "
-        "generation -- a thesis over 120 words is rejected outright and the "
-        "call is wasted. Be concise: state the read and the strongest reason "
-        "for it, not every supporting detail."
-    )
-    key_evidence: list[EvidenceItem] = Field(default_factory=list)
+    # data_quality / what_would_change_my_mind / abstain_reason are declared
+    # ahead of key_evidence/thesis on purpose (Task #67): a verbose model
+    # can run out of room mid-tool-call and never reach later keys at all --
+    # seen live as what_would_change_my_mind coming back as
+    # `Field required [type=missing]`, not empty, meaning generation was cut
+    # off before that key was ever started. Anthropic's tool use doesn't
+    # hard-enforce the schema's required list server-side, so a truncated
+    # call can still parse as syntactically valid JSON short of its later
+    # keys. Putting the short, always-required fields first means a
+    # truncation-prone field (thesis, free text; key_evidence, a
+    # variable-length list) is the one left incomplete, not a field whose
+    # absence fails validation outright.
+    data_quality: Literal["GOOD", "PARTIAL", "POOR"]
     what_would_change_my_mind: str = Field(
         description="One or two sentences. Always include this field."
     )
-    data_quality: Literal["GOOD", "PARTIAL", "POOR"]
     abstain_reason: str | None = Field(
         default=None,
         description="REQUIRED (a non-empty string) when vote is NO_READ -- explain what's "
         "missing or unusable about the data. Enforced after generation: a NO_READ with this "
         "left null is rejected outright and the call is wasted. Must be left null for any "
         "other vote (BULLISH/BEARISH) -- do not use it as a hedge or caveat there.",
+    )
+    key_evidence: list[EvidenceItem] = Field(default_factory=list)
+    thesis: str = Field(
+        description="120 words or fewer. This is a hard limit enforced after "
+        "generation -- a thesis over 120 words is rejected outright and the "
+        "call is wasted. Be concise: state the read and the strongest reason "
+        "for it, not every supporting detail."
     )
 
     @field_validator("probability")
