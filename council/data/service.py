@@ -112,6 +112,13 @@ class DataService:
         if cached is not None:
             return cached
         last_error: Exception | None = None
+        # One entry per provider, not just the last one -- an aggregate
+        # failure message that only shows the final (often least useful,
+        # e.g. the Yahoo backstop's expected "doesn't cover this domain")
+        # provider's error hides what actually went wrong with the earlier,
+        # more likely-to-matter providers (an unset key, a blocked
+        # free-tier endpoint, ...), making real problems hard to diagnose.
+        failures: list[str] = []
         for provider in self._providers:
             # Not every provider implements every fetch method (that's the
             # whole point of a fallback chain across providers with
@@ -121,6 +128,7 @@ class DataService:
                 last_error = AttributeError(
                     f"{provider.__class__.__name__} has no {method_name}"
                 )
+                failures.append(f"{provider.name}: no {method_name}")
                 continue
             method = getattr(provider, method_name)
             # A couple of quick retries on the current provider before
@@ -142,8 +150,9 @@ class DataService:
                     last_error = exc
                     if attempt <= _PROVIDER_MAX_RETRIES:
                         await asyncio.sleep(_provider_backoff_seconds(attempt))
+            failures.append(f"{provider.name}: {last_error}")
         raise RuntimeError(
-            f"All providers failed for {method_name}({args}): {last_error}"
+            f"All providers failed for {method_name}({args}): " + "; ".join(failures)
         ) from last_error
 
     async def get_ohlcv(

@@ -179,13 +179,15 @@ class LLMClient:
                 resp = await self._client.messages.create(
                     model=model,
                     max_tokens=1500,
-                    # Addendum A3: fixed across providers so dispersion measures
-                    # model behaviour, not sampling config drift. Passed via
-                    # extra_body, not as a direct kwarg -- the installed SDK's
-                    # typed messages.create() signature (anthropic>=1.x) no
-                    # longer has `temperature` in its Python-level surface, but
-                    # the API itself still accepts it in the request body.
-                    extra_body={"temperature": 0.3},
+                    # Addendum A3's original rationale -- fix temperature across
+                    # providers so dispersion measures model behaviour, not
+                    # sampling config drift -- no longer applies: this model
+                    # generation rejects the parameter outright (confirmed via
+                    # a live 400: "temperature is deprecated for this model"),
+                    # not merely moved it. There is no longer a sampling lever
+                    # to fix, so dispersion (council/engine/sampling.py) now
+                    # measures whatever run-to-run variation the model exhibits
+                    # under its own default/managed sampling.
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_prompt}],
                     tools=[

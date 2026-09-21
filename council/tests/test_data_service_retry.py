@@ -89,6 +89,38 @@ async def test_all_providers_exhausted_raises_runtime_error(tmp_path, monkeypatc
         await service._fetch_with_fallback("fetch_thing", "test:key:3", 60)
 
 
+class _NamedFailure:
+    """A real bug hit in practice: the final RuntimeError only ever showed
+    the LAST provider's failure -- usually the Yahoo backstop's expected
+    "doesn't cover this domain" -- hiding what actually went wrong with the
+    earlier providers (an unset key, a blocked free-tier endpoint, ...),
+    the ones actually worth diagnosing."""
+
+    def __init__(self, name: str, message: str):
+        self.name = name
+        self._message = message
+
+    async def fetch_thing(self, *args):
+        raise RuntimeError(self._message)
+
+
+@pytest.mark.asyncio
+async def test_all_provider_failures_are_reported_not_just_the_last(tmp_path, monkeypatch):
+    _fast_backoff(monkeypatch)
+    service = DataService(
+        providers=[
+            _NamedFailure("alpha_vantage", "rate limited"),
+            _NamedFailure("fmp", "endpoint requires a paid plan"),
+        ],
+        cache=DiskCache(str(tmp_path / "cache.db")),
+    )
+    with pytest.raises(RuntimeError) as excinfo:
+        await service._fetch_with_fallback("fetch_thing", "test:key:5", 60)
+    message = str(excinfo.value)
+    assert "alpha_vantage" in message and "rate limited" in message
+    assert "fmp" in message and "endpoint requires a paid plan" in message
+
+
 class _NoSuchMethodProvider:
     """A real bug hit in practice: AlphaVantageProvider doesn't implement
     fetch_analyst_estimates (only FMPProvider does), and resolving the
