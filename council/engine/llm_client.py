@@ -179,8 +179,13 @@ class LLMClient:
                 resp = await self._client.messages.create(
                     model=model,
                     max_tokens=1500,
-                    temperature=0.3,  # Addendum A3: fixed across providers so dispersion
-                    # measures model behaviour, not sampling config drift
+                    # Addendum A3: fixed across providers so dispersion measures
+                    # model behaviour, not sampling config drift. Passed via
+                    # extra_body, not as a direct kwarg -- the installed SDK's
+                    # typed messages.create() signature (anthropic>=1.x) no
+                    # longer has `temperature` in its Python-level surface, but
+                    # the API itself still accepts it in the request body.
+                    extra_body={"temperature": 0.3},
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_prompt}],
                     tools=[
