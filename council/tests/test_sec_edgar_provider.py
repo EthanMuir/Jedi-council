@@ -5,7 +5,13 @@ this sandbox's egress policy, so this verifies the parsing logic against a
 faked httpx transport shaped like the two officially-documented schemas
 involved (the submissions.json filing list, and the Form 3/4/5
 "ownershipDocument" XML) -- it cannot verify that shape is what EDGAR
-actually returns today."""
+actually returns today.
+
+Task #64: the first live run of this provider hit 403 Forbidden on every
+request -- confirmed to be SEC's fair-access policy rejecting a missing or
+placeholder User-Agent (https://www.sec.gov/os/webmaster-faq#developers),
+not a code bug. SECEdgarForbidden makes that self-diagnosing instead of a
+bare "403 Forbidden" the user has to reverse-engineer."""
 from __future__ import annotations
 
 from datetime import date
@@ -13,7 +19,7 @@ from datetime import date
 import httpx
 import pytest
 
-from council.data.providers.sec_edgar import SECEdgarProvider
+from council.data.providers.sec_edgar import SECEdgarForbidden, SECEdgarProvider
 
 _TICKERS_PAYLOAD = {
     "0": {"cik_str": 1045810, "ticker": "NVDA", "title": "NVIDIA CORP"},
@@ -193,3 +199,42 @@ async def test_fetch_insider_transactions_survives_unreachable_form4_document():
     provider = _make_provider(handler)
     txns = await provider.fetch_insider_transactions("NVDA", date(2026, 1, 1), date(2026, 12, 31))
     assert txns == []
+
+
+def _forbidden_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(403, text="<html>Forbidden</html>")
+
+
+@pytest.mark.asyncio
+async def test_403_on_ticker_lookup_raises_actionable_forbidden_error():
+    provider = _make_provider(_forbidden_handler)
+    with pytest.raises(SECEdgarForbidden, match="SEC_EDGAR_USER_AGENT"):
+        await provider.fetch_sec_filings("NVDA", date(2026, 1, 1), date(2026, 12, 31))
+
+
+@pytest.mark.asyncio
+async def test_403_on_submissions_raises_actionable_forbidden_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "company_tickers.json" in str(request.url):
+            return httpx.Response(200, json=_TICKERS_PAYLOAD)
+        return httpx.Response(403, text="<html>Forbidden</html>")
+
+    provider = _make_provider(handler)
+    with pytest.raises(SECEdgarForbidden, match="SEC_EDGAR_USER_AGENT"):
+        await provider.fetch_insider_transactions("NVDA", date(2026, 1, 1), date(2026, 12, 31))
+
+
+@pytest.mark.asyncio
+async def test_403_is_not_silently_swallowed_as_a_missing_form4_document():
+    # A systemic 403 (misconfigured User-Agent) must propagate as a real
+    # failure, unlike a single missing/malformed Form 4 document (see the
+    # 404 test above) -- silently returning [] would hide a config problem
+    # behind what looks like "no insider activity this window".
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("form4.xml"):
+            return httpx.Response(403, text="<html>Forbidden</html>")
+        return _default_handler(request)
+
+    provider = _make_provider(handler)
+    with pytest.raises(SECEdgarForbidden):
+        await provider.fetch_insider_transactions("NVDA", date(2026, 1, 1), date(2026, 12, 31))

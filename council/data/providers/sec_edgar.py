@@ -134,6 +134,17 @@ def _parse_form4_xml(xml_text: str) -> list[dict[str, Any]]:
     return transactions
 
 
+class SECEdgarForbidden(Exception):
+    """SEC EDGAR returned 403 -- confirmed live (Task #64): this is almost
+    always the User-Agent header, not the request itself. SEC's fair-access
+    policy requires a real contact on every request
+    (https://www.sec.gov/os/webmaster-faq#developers) and its edge rejects
+    a missing or placeholder one outright. Distinct from a generic
+    httpx.HTTPStatusError so the failure message that reaches a seat's
+    abstain_reason names the actual fix instead of a bare "403 Forbidden"
+    the user has to reverse-engineer."""
+
+
 class SECEdgarProvider:
     name = "sec_edgar"
 
@@ -144,16 +155,28 @@ class SECEdgarProvider:
         self._limiter = TokenBucket(rate_per_second=requests_per_second)
         self._cik_cache: dict[str, int] | None = None
 
+    def _raise_for_status(self, resp: httpx.Response) -> None:
+        if resp.status_code == 403:
+            raise SECEdgarForbidden(
+                f"SEC EDGAR returned 403 Forbidden for {resp.request.url} -- SEC requires a "
+                "real contact in the User-Agent on every request "
+                "(https://www.sec.gov/os/webmaster-faq#developers) and rejects a missing or "
+                'placeholder one. Set SEC_EDGAR_USER_AGENT in .env to something like '
+                '"YourApp your-real-email@example.com" and retry. Current User-Agent sent: '
+                f"{self._client.headers.get('user-agent')!r}"
+            )
+        resp.raise_for_status()
+
     async def _get_json(self, url: str) -> Any:
         await self._limiter.acquire()
         resp = await self._client.get(url)
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         return resp.json()
 
     async def _get_text(self, url: str) -> str:
         await self._limiter.acquire()
         resp = await self._client.get(url)
-        resp.raise_for_status()
+        self._raise_for_status(resp)
         return resp.text
 
     async def _resolve_cik(self, ticker: str) -> int:
