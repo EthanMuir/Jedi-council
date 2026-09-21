@@ -56,6 +56,41 @@ _PRICING_PER_MTOK = {
 T = TypeVar("T", bound=BaseModel)
 
 
+def _repair_seat_verdict_input(raw: dict) -> dict:
+    """Two SeatVerdict failure modes keep recurring in live use even after
+    telling the model about them via schema descriptions (Task #66's
+    abstain_reason description, Task #67's max_tokens raise + field
+    reorder) -- fixed here in code instead of spending two more real
+    retries hoping the model gets it right this time:
+
+    - vote=NO_READ with abstain_reason missing or empty. If the model
+      instead put its reasoning in `thesis` -- a common substitution,
+      since that's the field it's used to writing an explanation into --
+      reuse that text rather than lose it; otherwise fall back to a
+      generic placeholder. The model plainly tried to explain itself
+      somewhere in the response; this just uses it in the right field.
+    - thesis over the enforced 120-word cap. The model doesn't count
+      words precisely; truncated to 120 rather than rejected outright.
+
+    Only touches what's actually wrong -- everything else passes through
+    for Pydantic to validate normally, including a genuinely malformed
+    response that this can't repair (e.g. a bad vote/probability type),
+    which still fails and still retries as before."""
+    repaired = dict(raw)
+
+    if repaired.get("vote") == "NO_READ" and not repaired.get("abstain_reason"):
+        fallback = repaired.get("thesis") or "Seat abstained; no explicit reason was provided."
+        repaired["abstain_reason"] = str(fallback)[:500]
+
+    thesis = repaired.get("thesis")
+    if isinstance(thesis, str):
+        words = thesis.split()
+        if len(words) > 120:
+            repaired["thesis"] = " ".join(words[:120])
+
+    return repaired
+
+
 @dataclass
 class LLMCallRecord:
     seat_id: str
@@ -285,7 +320,10 @@ class LLMClient:
             try:
                 latency_ms = (time.monotonic() - start) * 1000
                 tool_use = next(b for b in resp.content if b.type == "tool_use")
-                result = response_model(**tool_use.input)
+                raw_input = tool_use.input
+                if response_model is SeatVerdict:
+                    raw_input = _repair_seat_verdict_input(raw_input)
+                result = response_model(**raw_input)
             except (ValidationError, StopIteration, KeyError, TypeError) as exc:
                 last_error = exc
                 latency_ms = (time.monotonic() - start) * 1000
