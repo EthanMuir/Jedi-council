@@ -248,3 +248,102 @@ async def test_analyst_estimates_survives_missing_tables(monkeypatch):
     assert result["consensus_eps_next_q"] == 0.0
     assert result["price_target_dispersion"] == 0.0
     assert result["historical_surprises"] == []
+
+
+# fetch_news used to be a permanent `return []` stub -- because
+# YFinanceProvider is tried first in the provider chain and any
+# non-exception result (even an empty list) short-circuits
+# DataService._fetch_with_fallback, that stub silently blocked Alpha
+# Vantage's real NEWS_SENTIMENT feed from ever being tried. Confirmed live:
+# a seat reporting "no news" for a ticker with real recent news. Both of
+# yfinance's known news shapes (old flat, new nested-under-"content") are
+# tested here since which one a given yfinance version returns isn't
+# something this sandbox can check against live Yahoo data.
+
+
+@pytest.mark.asyncio
+async def test_news_parses_new_nested_content_shape(monkeypatch):
+    raw_items = [
+        {
+            "content": {
+                "title": "Company announces new contract",
+                "summary": "Details of the contract.",
+                "pubDate": "2026-09-19T14:30:00Z",
+                "provider": {"displayName": "Reuters"},
+                "canonicalUrl": {"url": "https://example.com/story"},
+            }
+        }
+    ]
+    fake_ticker = MagicMock()
+    fake_ticker.news = raw_items
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    items = await provider.fetch_news("MP", datetime(2026, 9, 1), datetime(2026, 9, 21))
+
+    assert len(items) == 1
+    assert items[0]["headline"] == "Company announces new contract"
+    assert items[0]["source"] == "Reuters"
+    assert items[0]["url"] == "https://example.com/story"
+    assert items[0]["published_at"] == "2026-09-19T14:30:00"
+
+
+@pytest.mark.asyncio
+async def test_news_parses_legacy_flat_shape(monkeypatch):
+    raw_items = [
+        {
+            "title": "Older-style headline",
+            "summary": "Older-style summary.",
+            "publisher": "AP",
+            "link": "https://example.com/older-story",
+            "providerPublishTime": 1758290400,  # unix timestamp
+        }
+    ]
+    fake_ticker = MagicMock()
+    fake_ticker.news = raw_items
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    items = await provider.fetch_news("MP", datetime(2026, 9, 1), datetime(2026, 9, 21))
+
+    assert len(items) == 1
+    assert items[0]["headline"] == "Older-style headline"
+    assert items[0]["source"] == "AP"
+    assert items[0]["url"] == "https://example.com/older-story"
+
+
+@pytest.mark.asyncio
+async def test_news_skips_items_missing_required_fields_instead_of_crashing(monkeypatch):
+    raw_items = [
+        {"content": {"title": None, "summary": "no title, skip me"}},
+        {"title": "Has everything", "link": "https://example.com/ok", "providerPublishTime": 1758290400},
+        {"title": "No link at all", "providerPublishTime": 1758290400},
+    ]
+    fake_ticker = MagicMock()
+    fake_ticker.news = raw_items
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    items = await provider.fetch_news("MP", datetime(2026, 9, 1), datetime(2026, 9, 21))
+
+    assert len(items) == 1
+    assert items[0]["headline"] == "Has everything"
+
+
+@pytest.mark.asyncio
+async def test_news_survives_no_news_attribute_or_empty_list(monkeypatch):
+    fake_ticker = MagicMock()
+    fake_ticker.news = []
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    provider = YFinanceProvider()
+    items = await provider.fetch_news("OBSCURETICKER", datetime(2026, 9, 1), datetime(2026, 9, 21))
+    assert items == []

@@ -1,24 +1,34 @@
-"""yfinance fallback -- OHLCV, news (stubbed, Yahoo has no clean feed for
-it), options, fundamentals, institutional holdings, and analyst estimates.
-Free, no key, no official rate limit, per spec: "free, unreliable, use as
-backstop only".
+"""yfinance fallback -- OHLCV, news, options, fundamentals, institutional
+holdings, and analyst estimates. Free, no key, no official rate limit, per
+spec: "free, unreliable, use as backstop only".
 
-The three newest methods (fundamentals, institutional holdings, analyst
-estimates) lean on yfinance's `Ticker.info` dict and a handful of
-purpose-built DataFrames (`institutional_holders`, `major_holders`,
-`analyst_price_targets`, `earnings_estimate`, `revenue_estimate`,
-`eps_trend`, `earnings_history`). None of this is a documented, stable
-Yahoo API -- yfinance scrapes it, field availability varies by ticker and
-by yfinance version, and this couldn't be verified against live Yahoo data
-from the sandbox that built it (network policy blocks it same as it blocks
-most external hosts). Every extraction below is wrapped defensively and
-falls back to the same "unavailable" defaults FMPProvider already uses for
-fields it can't fill either -- a missing number here should degrade the
-seat's data_quality, not crash it."""
+fetch_news used to be a permanent `return []` stub -- harmless-looking, but
+because YFinanceProvider is tried first in the provider chain (see
+orchestrator.build_data_service) and DataService._fetch_with_fallback
+treats *any* non-exception result as success, that empty list silently
+"succeeded" and permanently blocked Alpha Vantage's real NEWS_SENTIMENT
+feed (the only other implementation of fetch_news in this chain -- FMP
+doesn't have one) from ever being tried. Confirmed live: catalyst_seer
+reporting "No news items in the lookback window" for a ticker with real
+recent news. Wired up for real now, same spirit as fetch_option_chain's
+own former-stub history (see test_yfinance_provider.py's docstring).
+
+The three fundamentals/holdings/estimates methods lean on yfinance's
+`Ticker.info` dict and a handful of purpose-built DataFrames
+(`institutional_holders`, `major_holders`, `analyst_price_targets`,
+`earnings_estimate`, `revenue_estimate`, `eps_trend`, `earnings_history`).
+None of this is a documented, stable Yahoo API -- yfinance scrapes it,
+field availability varies by ticker and by yfinance version, and this
+couldn't be verified against live Yahoo data from the sandbox that built it
+(network policy blocks it same as it blocks most external hosts). Every
+extraction below is wrapped defensively and falls back to the same
+"unavailable" defaults FMPProvider already uses for fields it can't fill
+either -- a missing number here should degrade the seat's data_quality,
+not crash it."""
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 
@@ -36,6 +46,58 @@ def _safe_float(value: Any) -> float | None:
 def _safe_int(value: Any) -> int | None:
     f = _safe_float(value)
     return None if f is None else int(f)
+
+
+def _parse_news_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
+        except (ValueError, OSError, OverflowError):
+            return None
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            return None
+    return None
+
+
+def _parse_news_item(raw: dict) -> dict[str, Any] | None:
+    """yfinance's news shape has changed across versions -- newer releases
+    nest the real fields under "content" (title/summary/pubDate/provider/
+    canonicalUrl), older ones are flat (title/publisher/link/
+    providerPublishTime as a unix timestamp). Handle both; skip an item
+    that matches neither rather than guess at a headline/url/timestamp."""
+    content = raw.get("content")
+    if isinstance(content, dict):
+        title = content.get("title")
+        summary = content.get("summary") or content.get("description") or ""
+        provider = content.get("provider")
+        source = provider.get("displayName") if isinstance(provider, dict) else None
+        url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl")
+        url = url_obj.get("url") if isinstance(url_obj, dict) else None
+        published_at = _parse_news_timestamp(content.get("pubDate") or content.get("displayTime"))
+    else:
+        title = raw.get("title")
+        summary = raw.get("summary") or ""
+        source = raw.get("publisher")
+        url = raw.get("link")
+        published_at = _parse_news_timestamp(raw.get("providerPublishTime"))
+
+    if not title or not url or published_at is None:
+        return None
+
+    return {
+        "headline": title,
+        "summary": summary,
+        "source": source or "yahoo",
+        "url": url,
+        "published_at": published_at.isoformat(),
+        "sentiment_score": None,
+        "sentiment_label": None,
+    }
 
 
 class YFinanceProvider:
@@ -63,8 +125,19 @@ class YFinanceProvider:
             )
         return bars
 
-    async def fetch_news(self, ticker, start, end) -> list[dict[str, Any]]:
-        return []
+    async def fetch_news(self, ticker: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._fetch_news_sync, ticker)
+
+    def _fetch_news_sync(self, ticker: str) -> list[dict[str, Any]]:
+        import yfinance as yf
+
+        raw_items = yf.Ticker(ticker).news or []
+        items = []
+        for raw in raw_items:
+            parsed = _parse_news_item(raw)
+            if parsed is not None:
+                items.append(parsed)
+        return items
 
     async def fetch_option_chain(self, ticker: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._fetch_option_chain_sync, ticker)
