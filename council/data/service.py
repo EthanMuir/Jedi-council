@@ -85,6 +85,10 @@ def _latest_timestamp(records: list[dict[str, Any]], time_field: str) -> datetim
     return datetime.fromisoformat(latest) if isinstance(latest, str) else latest
 
 
+def _parse_ts(raw: str | datetime) -> datetime:
+    return datetime.fromisoformat(raw) if isinstance(raw, str) else raw
+
+
 _PROVIDER_MAX_RETRIES = 2
 _PROVIDER_BACKOFF_BASE_SECONDS = 0.5
 _PROVIDER_BACKOFF_CAP_SECONDS = 4.0
@@ -155,6 +159,66 @@ class DataService:
             f"All providers failed for {method_name}({args}): " + "; ".join(failures)
         ) from last_error
 
+    async def _fetch_news_merged(
+        self, ticker: str, start: datetime, end: datetime, cache_key: str, ttl: int
+    ) -> list[dict[str, Any]]:
+        """News is the one domain that doesn't stop at the first success.
+        Every other _fetch_with_fallback call treats "a provider answered
+        without raising" as done -- correct when providers are interchangeable
+        covers of the same ground truth (an OHLCV bar is an OHLCV bar), wrong
+        for news: yfinance's Ticker.news is whatever Yahoo currently has
+        cached for a ticker, with no guarantee it covers everything published
+        in the requested window, and it almost never raises -- so a thin,
+        genuinely-stale-but-technically-successful result would permanently
+        block Alpha Vantage's or FMP's real, properly time-windowed feeds from
+        ever being tried (Task #75; a live run on a low-news-volume ticker
+        showed exactly this: a handful of 3-5-day-old headlines and nothing
+        newer, because nothing else was ever asked). So every provider that
+        implements fetch_news is always queried and the results unioned,
+        deduped by URL -- a missed headline is a worse failure mode here than
+        one extra (cheap, cached-15-minutes) API call."""
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        merged: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        failures: list[str] = []
+        any_succeeded = False
+
+        for provider in self._providers:
+            if not hasattr(provider, "fetch_news"):
+                failures.append(f"{provider.name}: no fetch_news")
+                continue
+            last_error: Exception | None = None
+            for attempt in range(1, _PROVIDER_MAX_RETRIES + 2):
+                try:
+                    items = await provider.fetch_news(ticker, start, end)
+                    any_succeeded = True
+                    last_error = None
+                    for item in items:
+                        key = item.get("url") or f"{item.get('headline')}|{item.get('published_at')}"
+                        if key not in seen:
+                            seen.add(key)
+                            merged.append(item)
+                    break
+                except Exception as exc:  # noqa: BLE001 -- graceful provider degradation
+                    last_error = exc
+                    if attempt <= _PROVIDER_MAX_RETRIES:
+                        await asyncio.sleep(_provider_backoff_seconds(attempt))
+            if last_error is not None:
+                failures.append(f"{provider.name}: {last_error}")
+
+        if not any_succeeded:
+            raise RuntimeError(
+                f"All providers failed for fetch_news(({ticker!r}, {start!r}, {end!r})): "
+                + "; ".join(failures)
+            )
+
+        merged.sort(key=lambda i: i["published_at"], reverse=True)
+        self._cache.set(cache_key, merged, ttl)
+        return merged
+
     async def get_ohlcv(
         self, ticker: str, as_of: datetime, lookback_days: int = 180
     ) -> OHLCVSeries:
@@ -181,19 +245,26 @@ class DataService:
     ) -> NewsFeed:
         start = as_of - timedelta(days=lookback_days)
         cache_key = f"news:{ticker}:{start.date()}:{as_of.date()}"
-        raw = await self._fetch_with_fallback(
-            "fetch_news", cache_key, _TTL_SECONDS["news"], ticker, start, as_of
-        )
+        raw = await self._fetch_news_merged(ticker, start, as_of, cache_key, _TTL_SECONDS["news"])
         filtered = filter_point_in_time(raw, as_of, "published_at")
+        # A provider's start/end args are a request, not a guarantee --
+        # yfinance's fetch_news ignores them entirely and returns whatever
+        # Yahoo currently has cached, which is not necessarily inside the
+        # requested lookback window. filter_point_in_time only enforces the
+        # upper bound (no lookahead); enforce the lower bound here too, so
+        # a provider's non-compliance can't hand a seat news older than it
+        # asked for without at least being dropped centrally.
+        cutoff = _naive(start)
+        filtered = [item for item in filtered if _naive(_parse_ts(item["published_at"])) >= cutoff]
         latest = _latest_timestamp(filtered, "published_at")
         staleness = (as_of - latest).total_seconds() if latest else None
-        source = self._providers[0].name
+        sources = [p.name for p in self._providers if hasattr(p, "fetch_news")]
         return NewsFeed(
             ticker=ticker,
             items=[NewsItem(**n) for n in filtered],
             as_of=as_of,
             staleness_seconds=staleness,
-            source=source,
+            source=", ".join(sources) if sources else "none",
         )
 
     async def get_option_chain(self, ticker: str, as_of: datetime) -> OptionChainSnapshot:

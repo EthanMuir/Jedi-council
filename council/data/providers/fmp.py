@@ -1,6 +1,10 @@
 """Financial Modeling Prep adapter. Covers the seats spec section 3 assigns
 to FMP: Fundamentalist, Insider Reader, Senate Watcher, Flow Cartographer,
-Estimate Scribe, Transcript Linguist, Structure Archivist.
+Estimate Scribe, Transcript Linguist, Structure Archivist. Also supplies
+fetch_news (Task #75) -- Catalyst Seer's domain isn't FMP-assigned by spec,
+but yfinance's news was the only source ever actually reachable in
+practice (see DataService._fetch_news_merged's own docstring for why);
+FMP's stock_news is now unioned in alongside it.
 
 Endpoint paths follow FMP's documented v3/v4 REST conventions. Untested
 against a live key (none configured yet -- see README) -- FixtureProvider is
@@ -129,6 +133,36 @@ class FMPProvider:
                 }
             )
         return {"trades": trades, "pending_legislation": []}
+
+    async def fetch_news(self, ticker: str, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        # Task #75 -- FMP was never wired up as a news source at all before
+        # this (only yfinance and, if keyed, Alpha Vantage were), despite
+        # having a real stock-news endpoint the whole time. stock_news has
+        # no server-side date filter, only `limit` -- over-fetch and filter
+        # client-side, same pattern as fetch_insider_transactions above.
+        raw = await self._get(f"{_BASE_V3}/stock_news", {"tickers": ticker, "limit": 100})
+        out = []
+        for row in raw or []:
+            title = row.get("title")
+            url = row.get("url")
+            raw_date = row.get("publishedDate")
+            if not title or not url or not raw_date:
+                continue
+            published = datetime.fromisoformat(raw_date.replace(" ", "T"))
+            if not (start <= published <= end):
+                continue
+            out.append(
+                {
+                    "headline": title,
+                    "summary": row.get("text", ""),
+                    "source": row.get("site", "fmp"),
+                    "url": url,
+                    "published_at": published.isoformat(),
+                    "sentiment_score": None,
+                    "sentiment_label": None,
+                }
+            )
+        return out
 
     async def fetch_institutional_holdings(self, ticker: str) -> dict[str, Any]:
         raw = await self._get(f"{_BASE_V4}/institutional-ownership/symbol-ownership", {"symbol": ticker})
