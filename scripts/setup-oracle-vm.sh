@@ -66,12 +66,20 @@ if [ -z "$PYTHON_BIN" ] && python3 -c 'import sys; sys.exit(0 if sys.version_inf
   PYTHON_BIN="python3"
 fi
 if [ -z "$PYTHON_BIN" ]; then
-  echo "==> System Python is older than 3.11 -- installing Python 3.11 via the deadsnakes PPA"
-  sudo apt-get install -y software-properties-common
-  sudo add-apt-repository -y ppa:deadsnakes/ppa
-  sudo apt-get update -y
-  sudo apt-get install -y python3.11 python3.11-venv
-  PYTHON_BIN="python3.11"
+  # The deadsnakes PPA (a common fix for this) only ships builds for
+  # Ubuntu releases Canonical still supports -- it drops a release
+  # entirely once that release hits end-of-life, silently leaving
+  # `apt install python3.11` with nothing to find. Rather than depend on
+  # apt/PPA support for whatever Ubuntu image this VM happens to be
+  # running, fetch a real standalone Python build directly via uv
+  # (astral.sh) -- works the same regardless of how old the OS is.
+  echo "==> System Python is older than 3.11 -- fetching a standalone Python 3.11 via uv"
+  if ! command -v uv >/dev/null 2>&1; then
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+  uv python install 3.11
+  PYTHON_BIN="$(uv python find 3.11)"
 fi
 echo "==> Using $PYTHON_BIN ($($PYTHON_BIN --version))"
 
