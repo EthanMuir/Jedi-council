@@ -33,6 +33,14 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
 sudo apt-get update -y
 sudo apt-get install -y caddy
 
+echo "==> Opening ports 80 and 443 in this VM's own iptables (separate from ufw/Security List)"
+# Must happen BEFORE Caddy (re)starts: it requests its Let's Encrypt
+# certificate immediately on startup, over port 80 -- opening these ports
+# afterwards means that very first attempt fails because port 80 was still
+# blocked at the exact moment it mattered.
+open_iptables_port 80
+open_iptables_port 443
+
 echo "==> Writing /etc/caddy/Caddyfile for $DOMAIN -> localhost:$PORT"
 sudo tee /etc/caddy/Caddyfile > /dev/null <<EOF
 $DOMAIN {
@@ -41,10 +49,6 @@ $DOMAIN {
 EOF
 
 sudo systemctl restart caddy
-
-echo "==> Opening ports 80 and 443 in this VM's own iptables (separate from ufw/Security List)"
-open_iptables_port 80
-open_iptables_port 443
 
 echo ""
 echo "==> Done."
