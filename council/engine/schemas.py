@@ -90,12 +90,25 @@ def format_debate_transcript(debate: list[DebateArgument]) -> str:
 
 class GrandMasterVerdict(BaseModel):
     vote: Literal["BULLISH", "BEARISH", "NO_CONVICTION"]
-    confidence: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="REQUIRED. Your calibrated confidence in `vote`, 0-1 (use 0.5 for "
+        "NO_CONVICTION). Should track the weighted council vote's own confidence unless "
+        "the debate or Prosecutor findings gave you a specific reason to move it. Missing "
+        "or malformed output here is rejected outright and this synthesis is discarded in "
+        "favor of an uninformative NO_CONVICTION fallback -- don't leave it out.",
+    )
     entry: float | None = None
     exit: float | None = None
     invalidation: float | None = None
     stop: float | None = None
-    expected_move_pct: float
+    expected_move_pct: float = Field(
+        description="REQUIRED (use 0.0 for NO_CONVICTION). Your own synthesized estimate "
+        "of the expected magnitude of the underlying's price move over this horizon, as a "
+        "percentage (e.g. 3.5 means +/-3.5%, not 0.035) -- weigh the Tier I seats' own "
+        "estimates and the Reality Anchor's options-implied move, don't just copy one.",
+    )
     # Hard rule (spec section 3, Tier IV): must report the STRUCTURE of
     # disagreement, not just a consensus number. Unanimity among correlated
     # agents is a warning sign, not a green light.

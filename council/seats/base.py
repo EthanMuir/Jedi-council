@@ -112,7 +112,16 @@ class SeatVerdict(BaseModel):
     # Addendum A1: three decimals, reject anything rounded to a multiple of
     # 0.05 for a directional call -- superforecaster-grade granularity is a
     # measured habit, not decoration.
-    probability: float = Field(ge=0.0, le=1.0)
+    probability: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="REQUIRED for every vote, including NO_READ (use 0.5 there). For a "
+        "directional vote (BULLISH/BEARISH) this must be a genuine probability estimate "
+        "given to exactly three decimal places, and must NOT round to a multiple of 0.05 "
+        "(0.700, 0.650, 0.500, etc. are all rejected) -- state real granularity, e.g. 0.632 "
+        "or 0.714, not a round number rounded off. Both rules are enforced after generation: "
+        "a violation is rejected outright and the call is wasted.",
+    )
 
     comparison_class: ComparisonClass | None = None
     decomposition: list[DecompositionItem] = Field(default_factory=list)
@@ -121,7 +130,14 @@ class SeatVerdict(BaseModel):
     entry: float | None = None
     exit: float | None = None
     invalidation: float | None = None
-    expected_move_pct: float
+    expected_move_pct: float = Field(
+        description="REQUIRED for every vote, including NO_READ (use 0.0 there). The "
+        "expected magnitude of the underlying's price move over this horizon, as a "
+        "percentage (e.g. 3.5 means +/-3.5%, not 0.035) -- a distribution width, not a "
+        "directional target. Base it on whatever your seat's own data actually supports "
+        "(realized volatility, an options-implied straddle, a historical base rate for "
+        "similar setups); do not leave it at a placeholder value for a directional vote.",
+    )
 
     # data_quality / what_would_change_my_mind / abstain_reason are declared
     # ahead of key_evidence/thesis on purpose (Task #67): a verbose model
