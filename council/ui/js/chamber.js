@@ -120,7 +120,7 @@ function layoutRing() {
     chair.style.left = `calc(50% + ${x}px)`;
     chair.style.top = `calc(50% + ${y}px)`;
     chair.innerHTML = `
-      <div class="seat-bust"></div>
+      <div class="seat-bust"><div class="seat-bust-fill" id="fill-${seat.id}"></div></div>
       <div class="seat-title">${seat.title}</div>
       <div class="seat-vote dim">idle</div>
     `;
@@ -138,6 +138,9 @@ function resetRing() {
   lastGrandMaster = null;
   for (const seat of TIER_I_SEATS) {
     const chair = document.getElementById(`chair-${seat.id}`);
+    const fill = document.getElementById(`fill-${seat.id}`);
+    fill.className = 'seat-bust-fill';
+    fill.style.width = '0%';
     if (!isCompetent(seat.id, selectedHorizon)) {
       // This seat has 0 competence at the selected horizon -- the backend
       // never calls it at all (see council/engine/horizons.py), so it will
@@ -151,6 +154,7 @@ function resetRing() {
     chair.className = 'seat-chair state-deliberating';
     chair.querySelector('.seat-vote').textContent = 'deliberating...';
     chair.querySelector('.seat-vote').className = 'seat-vote cyan';
+    fill.className = 'seat-bust-fill stage-active';
   }
   const holocron = document.getElementById('holocron');
   holocron.className = 'holocron';
@@ -164,28 +168,55 @@ function resetRing() {
   document.getElementById('grand-master-verdict').innerHTML = '<span class="dim">The council is deliberating...</span>';
 }
 
+// Maps a "seat_stage" event to a fill percentage. Gathering data is usually
+// quick relative to the N sampled LLM calls that follow, so it only claims
+// a small slice up front; the rest is spent scaling smoothly across however
+// many samples this seat actually takes (n_samples_per_seat), so a seat
+// sampled more times doesn't look like it's stalling between updates.
+function stageToPct(payload) {
+  if (payload.stage === 'gathering') return 15;
+  if (payload.stage === 'deliberating') {
+    const total = payload.samples_total || 1;
+    const done = payload.samples_done || 0;
+    return 20 + Math.round((done / total) * 70);
+  }
+  return 0;
+}
+
+function updateSeatProgress(payload) {
+  const fill = document.getElementById(`fill-${payload.seat_id}`);
+  if (!fill) return;
+  fill.className = 'seat-bust-fill stage-active';
+  fill.style.width = `${stageToPct(payload)}%`;
+}
+
 function updateSeatChair(payload, silent = false) {
   seatDetails[payload.seat_id] = payload;
   const chair = document.getElementById(`chair-${payload.seat_id}`);
   if (!chair) return;
   const voteEl = chair.querySelector('.seat-vote');
+  const fill = document.getElementById(`fill-${payload.seat_id}`);
 
   if (payload.vote === 'BULLISH') {
     chair.className = 'seat-chair state-bullish';
     voteEl.textContent = `BULLISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bullish';
+    if (fill) fill.className = 'seat-bust-fill vote-bullish';
     if (!silent) AudioBlips.blip(1046, 0.05);
   } else if (payload.vote === 'BEARISH') {
     chair.className = 'seat-chair state-bearish';
     voteEl.textContent = `BEARISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bearish';
+    if (fill) fill.className = 'seat-bust-fill vote-bearish';
     if (!silent) AudioBlips.blip(392, 0.05);
   } else {
     chair.className = 'seat-chair state-noread';
     voteEl.textContent = 'NO_READ';
     voteEl.className = 'seat-vote status-noread';
+    if (fill) fill.className = 'seat-bust-fill vote-noread';
     if (!silent) AudioBlips.blip(220, 0.04);
   }
+  if (fill) fill.style.width = '100%';
 }
 
 function renderRealityAnchor(payload) {
@@ -308,6 +339,7 @@ async function convene() {
   try {
     await consumeSSE(url, (event, payload) => {
       if (event === 'seat_result') updateSeatChair(payload);
+      else if (event === 'seat_stage') updateSeatProgress(payload);
       else if (event === 'phase_b_reality_anchor') renderRealityAnchor(payload);
       else if (event === 'debate_round') appendDebateRound(payload);
       else if (event === 'phase_e_gates') renderAuditPanel(payload, null);

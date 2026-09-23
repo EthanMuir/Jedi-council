@@ -268,12 +268,46 @@ async def run_deliberation(
 
     async def run_seat(seat) -> tuple:
         try:
+            await emit("seat_stage", {"seat_id": seat.id, "stage": "gathering"})
             async with semaphore:
                 ctx = await seat.gather(data_service, ticker, as_of, horizon)
             retrieved = memory.retrieve(seat_id=seat.id, ticker=ticker, as_of=as_of, limit=5)
             memory_lessons = [to_seat_memory_lesson(e) for e in retrieved]
+
+            # samples_done is only ever mutated between awaits inside this
+            # single coroutine's event-loop turn, never truly in parallel --
+            # asyncio is cooperative, so this plain counter is safe to share
+            # across all n_samples concurrent calls without a lock, and each
+            # sample still fires its own completion event the instant it
+            # lands rather than waiting for its siblings.
+            samples_done = 0
+
+            async def deliberate_one_tracked(i):
+                nonlocal samples_done
+                verdict = await deliberate_one(seat, ctx, i, memory_lessons)
+                samples_done += 1
+                await emit(
+                    "seat_stage",
+                    {
+                        "seat_id": seat.id,
+                        "stage": "deliberating",
+                        "samples_done": samples_done,
+                        "samples_total": n_samples,
+                    },
+                )
+                return verdict
+
+            await emit(
+                "seat_stage",
+                {
+                    "seat_id": seat.id,
+                    "stage": "deliberating",
+                    "samples_done": 0,
+                    "samples_total": n_samples,
+                },
+            )
             samples = await asyncio.gather(
-                *(deliberate_one(seat, ctx, i, memory_lessons) for i in range(n_samples))
+                *(deliberate_one_tracked(i) for i in range(n_samples))
             )
             sampled = aggregate_samples(seat.id, list(samples))
         except Exception as exc:  # noqa: BLE001 -- one seat's data/LLM failure
