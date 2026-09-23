@@ -631,8 +631,14 @@
    the wizard's own pose (idle -> thinking -> bullish/bearish/noread) is the
    progress signal here, so there's deliberately no separate fill bar for
    this style; council/ui/js/centerpiece.js's drawWizardBust() draws onto
-   the canvas whenever the seat's state changes. */
-.chair-style-wizard { padding-top: 10px; }
+   the canvas whenever the seat's state changes. Taller than every other
+   chair style on purpose -- a standing figure plus its title and vote text
+   never fit the original 92px bust-bar budget, which was clipping text
+   against the card's own border. */
+.seat-chair.chair-style-wizard {
+  height: 108px;
+  padding-top: 6px;
+}
 .wiz-chair-stage {
   position: relative;
   height: 46px;
@@ -643,12 +649,12 @@
 .wiz-chair-glow {
   position: absolute;
   left: 50%;
-  bottom: 4px;
-  width: 38px;
-  height: 38px;
+  bottom: 6px;
+  width: 34px;
+  height: 34px;
   transform: translateX(-50%);
   border-radius: 50%;
-  filter: blur(10px);
+  filter: blur(9px);
   opacity: 0.3;
   background: radial-gradient(circle, var(--violet), transparent 70%);
   animation: nebula-breathe 3s ease-in-out infinite;
@@ -660,11 +666,18 @@
 .wiz-chair-canvas {
   position: relative;
   image-rendering: pixelated;
-  width: 32px;
-  height: 44px;
+  width: 31px;
+  height: 40px;
+  animation: wiz-chair-bob 2.2s ease-in-out infinite;
+}
+.seat-chair.state-deliberating .wiz-chair-canvas { animation-duration: 1.2s; }
+@keyframes wiz-chair-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
 }
 @media (prefers-reduced-motion: reduce) {
   .wiz-chair-glow { animation: none; }
+  .wiz-chair-canvas { animation: none; }
 }
 
 /* ---- holo panel modal ------------------------------------------------------ */

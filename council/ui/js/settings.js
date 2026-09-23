@@ -196,11 +196,11 @@ function renderChairGrid() {
     visual.className = 'appearance-swatch-visual';
     if (style.id === 'wizard') {
       visual.innerHTML = `
-        <div class="chair-preview-wrap">
+        <div class="chair-preview-wrap" style="height:108px;">
           <div class="seat-chair chair-style-wizard state-bullish">
             <div class="wiz-chair-stage">
               <div class="wiz-chair-glow"></div>
-              <canvas class="wiz-chair-canvas" width="30" height="40"></canvas>
+              <canvas class="wiz-chair-canvas" width="36" height="46"></canvas>
             </div>
             <div class="seat-title">Keeper of the Charts</div>
             <div class="seat-vote status-bullish">BULLISH 0.612</div>

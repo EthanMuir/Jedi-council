@@ -106,7 +106,13 @@ function restoreChamberState() {
 
 function layoutRing() {
   const ring = document.getElementById('chamber-ring');
-  const radius = ring.clientWidth < 500 ? ring.clientWidth * 0.38 : 260;
+  // Seat Wizards' chairs are taller than every other chair style (a
+  // standing figure needs more room than a flat bust-bar), so vertically
+  // adjacent chairs need more separation too or they overlap -- widen the
+  // ring itself for this style rather than shrinking the character back
+  // down to fit the old spacing.
+  const baseRadius = getSeatChairStyle() === 'wizard' ? 282 : 260;
+  const radius = ring.clientWidth < 500 ? ring.clientWidth * 0.38 : baseRadius;
   const n = TIER_I_SEATS.length;
 
   TIER_I_SEATS.forEach((seat, i) => {
@@ -123,7 +129,7 @@ function layoutRing() {
       ? `
         <div class="wiz-chair-stage">
           <div class="wiz-chair-glow"></div>
-          <canvas class="wiz-chair-canvas" id="wizcanvas-${seat.id}" width="30" height="40"></canvas>
+          <canvas class="wiz-chair-canvas" id="wizcanvas-${seat.id}" width="36" height="46"></canvas>
         </div>
         <div class="seat-title">${seat.title}</div>
         <div class="seat-vote dim">idle</div>

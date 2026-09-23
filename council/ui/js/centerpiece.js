@@ -215,13 +215,38 @@ const WIZARD_PALETTES = {
 
 // hunch: how far the hood drops from resting (bigger = more compressed/defeated)
 // hatTilt: -1..1, which way the hat's flopped tip leans
+// armAngle: degrees the wand-arm rotates from hanging straight down (0);
+// a positive angle here swings the arm LEFT/across the body -- see the
+// rotation-math note above drawWizardArm -- so "raised and out to the
+// side" uses a negative angle, not what intuition suggests.
+// staffLen: wand shaft length in this cramped a canvas
 const WIZARD_POSES = {
-  idle:     { hunch: 0, hatTilt: 0.15 },
-  thinking: { hunch: 1, hatTilt: 0.5 },
-  bullish:  { hunch: -1, hatTilt: -0.5 },
-  bearish:  { hunch: 3, hatTilt: 0.6 },
-  noread:   { hunch: 1, hatTilt: -0.3 },
+  idle:     { hunch: 0, hatTilt: 0.15,  armAngle: 6,    staffLen: 10 },
+  thinking: { hunch: 1, hatTilt: 0.5,   armAngle: 16,   staffLen: 9 },
+  bullish:  { hunch: -1, hatTilt: -0.5, armAngle: -155, staffLen: 12 },
+  bearish:  { hunch: 3, hatTilt: 0.6,   armAngle: -50,  staffLen: 9 },
+  noread:   { hunch: 1, hatTilt: -0.3,  armAngle: -85,  staffLen: 8 },
 };
+
+// Rotation convention (canvas rotate() is clockwise-positive in this
+// y-down coordinate system): starting from the local +y axis (straight
+// down), a positive angle swings the wand LEFT and across the body, a
+// negative angle swings it RIGHT and away from it. Verified against a
+// screenshot after getting this backwards once already for the full-body
+// gallery version -- bearish/no-read need negative angles to droop
+// outward instead of vanishing behind the robe.
+function drawWizardArm(ctx, cx, shoulderY, palette, pose) {
+  ctx.save();
+  ctx.translate(cx + 6, shoulderY);
+  ctx.rotate((pose.armAngle * Math.PI) / 180);
+  ctx.fillStyle = palette.base;
+  ctx.fillRect(-1.5, -2, 3, 4);
+  ctx.fillStyle = palette.mid;
+  ctx.fillRect(-1, 0, 2, pose.staffLen);
+  ctx.fillStyle = palette.accent;
+  ctx.fillRect(-2.5, pose.staffLen - 3, 5, 5);
+  ctx.restore();
+}
 
 // Draws the hat/face/beard relative to chinY (the bottom of the beard /
 // top of the shoulders) -- a proper brimmed, curve-tipped hat with a star
@@ -279,7 +304,7 @@ function drawWizardBust(canvas, state) {
   const W = canvas.width, H = canvas.height, cx = W / 2;
   ctx.clearRect(0, 0, W, H);
 
-  const chinY = H - 12;
+  const chinY = H - 16 + pose.hunch;
   drawWizardHead(ctx, cx, chinY, palette, pose);
 
   const shoulderTop = chinY + 3, shoulderBottom = H - 1;
@@ -289,6 +314,8 @@ function drawWizardBust(canvas, state) {
     ctx.fillStyle = palette.base;
     ctx.fillRect(Math.round(cx - halfW), y, Math.round(halfW * 2), 1);
   }
+
+  drawWizardArm(ctx, cx, shoulderTop + 2, palette, pose);
 }
 
 // Maps a seat chair's state-* class to the wizard state key (only naming
