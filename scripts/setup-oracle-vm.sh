@@ -19,6 +19,9 @@ PORT="${PORT:-8000}"
 echo "==> Repo:    $REPO_DIR"
 echo "==> Service: runs as $SERVICE_USER, port $PORT"
 
+# shellcheck source=_iptables_lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_iptables_lib.sh"
+
 if [ ! -f "$REPO_DIR/.env" ]; then
   echo ""
   echo "ERROR: $REPO_DIR/.env not found."
@@ -125,15 +128,17 @@ if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active";
   echo "==> Opening port $PORT in ufw"
   sudo ufw allow "${PORT}/tcp"
 fi
+open_iptables_port "$PORT"
 
 echo ""
 echo "==> Done."
 echo "    Status: sudo systemctl status $SERVICE_NAME"
 echo "    Logs:   sudo journalctl -u $SERVICE_NAME -f"
 echo ""
-echo "IMPORTANT (Oracle Cloud specifically): the VM's own firewall isn't"
-echo "the only thing blocking traffic -- Oracle blocks incoming ports at"
-echo "the network level by default via your VCN's Security List / Network"
-echo "Security Group. Add an Ingress Rule there for TCP port $PORT (or"
-echo "80/443 if you run scripts/setup-https.sh next) before this is"
-echo "reachable from outside the VM. See the README's hosting section."
+echo "IMPORTANT (Oracle Cloud specifically): this VM's own firewalls (ufw"
+echo "and iptables, both handled above) aren't the only thing blocking"
+echo "traffic -- Oracle also blocks incoming ports at the network level by"
+echo "default via your VCN's Security List / Network Security Group. Add"
+echo "an Ingress Rule there for TCP port $PORT (or 80/443 if you run"
+echo "scripts/setup-https.sh next) before this is reachable from outside"
+echo "the VM. See the README's hosting section."

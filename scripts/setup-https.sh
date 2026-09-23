@@ -20,6 +20,9 @@ fi
 DOMAIN="$1"
 PORT="${PORT:-8000}"
 
+# shellcheck source=_iptables_lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_iptables_lib.sh"
+
 echo "==> Installing Caddy from its official apt repo"
 sudo apt-get update -y
 sudo apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -39,6 +42,10 @@ EOF
 
 sudo systemctl restart caddy
 
+echo "==> Opening ports 80 and 443 in this VM's own iptables (separate from ufw/Security List)"
+open_iptables_port 80
+open_iptables_port 443
+
 echo ""
 echo "==> Done."
 echo "Caddy will automatically obtain (and keep renewing) a free Let's"
@@ -50,8 +57,10 @@ echo "Now that HTTPS is live, harden the session cookie: set"
 echo "COOKIE_SECURE=true in .env, then:"
 echo "  sudo systemctl restart jedi-council"
 echo ""
-echo "IMPORTANT (Oracle Cloud specifically): open BOTH port 80 (Caddy needs"
-echo "it for the Let's Encrypt HTTP challenge) and port 443 (actual HTTPS"
-echo "traffic) as Ingress Rules in your VCN's Security List -- not just the"
-echo "app's own port $PORT, which no longer needs to be open to the public"
-echo "internet at all once Caddy is proxying for it."
+echo "IMPORTANT (Oracle Cloud specifically): this VM's own firewall is"
+echo "handled above, but Oracle separately blocks incoming ports at the"
+echo "network level by default -- open BOTH port 80 (Caddy needs it for"
+echo "the Let's Encrypt HTTP challenge) and port 443 (actual HTTPS traffic)"
+echo "as Ingress Rules in your VCN's Security List. The app's own port"
+echo "$PORT no longer needs to be open to the public internet at all once"
+echo "Caddy is proxying for it."
