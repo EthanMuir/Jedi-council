@@ -13,7 +13,7 @@
   <h1 style="text-align:center; margin-bottom: 24px;">The High Council Chamber</h1>
 
   <div class="panel" style="margin-bottom: 20px;">
-    <div class="row" style="align-items:flex-end; justify-content: center; gap: 24px;">
+    <div class="row" style="align-items:flex-end; justify-content: center; gap: 24px; flex-wrap: wrap;">
       <div>
         <h3>Ticker</h3>
         <input type="text" id="ticker-input" value="NVDA" maxlength="8" />
@@ -30,6 +30,10 @@
       <div>
         <button class="btn btn-lever" id="convene-btn">Convene the Council</button>
       </div>
+    </div>
+    <div style="margin-top:16px;">
+      <h3>Question <span class="dim" style="font-weight:normal;">(optional)</span></h3>
+      <input type="text" id="context-input" style="width:100%;" placeholder="e.g. Is the recent capex guidance already priced in? -- framing for the Grand Master's synthesis only; every seat's own data is still ticker-driven and unaffected." />
     </div>
     <div id="status-line" class="dim mono" style="text-align:center; margin-top: 12px; min-height: 18px;"></div>
   </div>

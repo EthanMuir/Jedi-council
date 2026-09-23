@@ -50,6 +50,7 @@
     <ol class="step-list mono">
       <li>Type a ticker (fixture data only covers <b>NVDA</b> until a real market-data provider key is configured in <code>.env</code> -- everything else will run the full pipeline but fail at the data-fetch step).</li>
       <li>Pick a horizon: Next Day / Next Week / Next Month / Next Year. Not every seat is competent at every horizon -- see the competence table below -- so fewer seats light up at 1d than at 1y.</li>
+      <li>Optionally, type a free-form question (e.g. "Is the recent capex guidance already priced in?"). It's handed to the Grand Master as explicit framing for the final synthesis only -- it does not change what any Tier I seat itself is allowed to see or how it votes; a ticker is still required regardless, since every seat's data domain is fetched per-ticker.</li>
       <li>Click <b>Convene the Council</b>. Seats light up live as each finishes its isolated read (Phase A, the blind round). Click any seat chair to open its full reasoning in the holo-panel.</li>
       <li>Once all Tier I seats report: the Reality Anchor appears (Phase B), then the Bull/Bear debate with the Prosecutor's rulings (Phase C), then the audit gates and Risk Warden's position size, and finally the Grand Master's synthesis fills the center holocron (Phase F). The whole run is written to the Crypt automatically (Phase G).</li>
     </ol>
@@ -70,15 +71,6 @@
     <ol class="step-list mono">
       <li>Once real resolutions accumulate in the Crypt, this shows each seat's actual track record: hit rate, Brier score, log loss, and a calibration curve (predicted probability vs. how often that was actually right).</li>
       <li>Rank (Youngling &rarr; Grand Master) requires at least 20 resolved predictions before it can move at all -- a lucky streak cannot mint a Grand Master, and a seat's Crypt-derived weight in future votes only starts shifting once it clears that same floor.</li>
-    </ol>
-  </div>
-
-  <div class="panel screen-panel" style="margin-bottom: 16px;">
-    <h3 class="cyan">The Oracle</h3>
-    <ol class="step-list mono">
-      <li>Runs the exact same pipeline as the Chamber, plus a free-form question field.</li>
-      <li>A ticker is still required -- every Tier I seat's data domain (OHLCV, filings, options, ...) is fetched per-ticker, so there's no ticker-free market data to isolate seats around.</li>
-      <li>Your question is handed to the Grand Master as explicit framing for the final synthesis only -- it does not change what any Tier I seat itself is allowed to see or how it votes.</li>
     </ol>
   </div>
 

@@ -5,7 +5,6 @@ const NAV_LINKS = [
   { href: '/index.html', label: 'The Chamber' },
   { href: '/crypt.html', label: 'The Crypt' },
   { href: '/archives.html', label: 'The Archives' },
-  { href: '/oracle.html', label: 'The Oracle' },
   { href: '/settings.html', label: 'Settings' },
   { href: '/guide.html', label: 'The Guide' },
 ];
