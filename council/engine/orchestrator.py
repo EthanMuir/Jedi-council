@@ -20,7 +20,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Awaitable, Callable
@@ -147,24 +146,33 @@ class DeliberationResult:
 _STRUCTURALLY_NO_DATA_SEATS = frozenset({"senate_watcher", "transcript_linguist"})
 
 
-def _gate_eligible_seat_count(seat_ids) -> int:
-    """How many of the seats called this run could ever contribute a
-    directional vote -- excludes _STRUCTURALLY_NO_DATA_SEATS, which return
-    NO_READ on literally every call regardless of this run's real data
-    quality. Extracted for direct unit testing (Task #69)."""
-    return sum(1 for sid in seat_ids if sid not in _STRUCTURALLY_NO_DATA_SEATS)
+def _gate_eligible_weight(seat_ids, horizon: str) -> float:
+    """Competence-weighted denominator for the participation gate (Task
+    #76). A plain headcount treats every seat's abstention the same, but a
+    seat that's only 20-30% competent at this horizon (fundamentalist,
+    macro_sage at 1w) is *expected* to abstain most weeks -- that's the
+    seat correctly declining to manufacture a signal, not a sign the run
+    lacks real conviction, and shouldn't weigh on the gate as heavily as a
+    90%-competent seat (technician, oracle_options at 1w) abstaining does.
+    Real case that motivated this: an ENB/1w run with 4/10 seats voting
+    directionally failed the old >=50% headcount gate by exactly one seat,
+    even though the 6 abstentions were mostly low-competence-at-1w seats
+    giving genuinely well-reasoned "nothing here" answers -- the
+    competence-weighted version of that same run clears 50% (52.5%).
+    Still excludes _STRUCTURALLY_NO_DATA_SEATS -- they can't contribute
+    regardless of their competence score."""
+    return round(
+        sum(competence(sid, horizon) for sid in seat_ids if sid not in _STRUCTURALLY_NO_DATA_SEATS), 4
+    )
 
 
-def _min_seats_required(eligible_count: int, pct: float) -> int:
-    """Extracted for direct unit testing (Task #69) -- the minimum-
-    participating-seats gate scales to how many seats could actually
-    contribute a directional vote this run (see _gate_eligible_seat_count),
-    not a fixed absolute number, so it doesn't quietly get harder to clear
-    on horizons that call fewer seats (competence 0.0 drops some) or
-    because of seats that were never going to vote directionally regardless
-    of this run's real data quality (see min_participating_seats_pct's own
-    comment in config.py)."""
-    return math.ceil(eligible_count * pct)
+def _directional_weight(verdicts_by_id: dict[str, SeatVerdict], horizon: str) -> float:
+    """Competence-weighted numerator: sum of horizon-competence across
+    every seat that actually voted a direction (not NO_READ). Extracted
+    for direct unit testing (Task #76), same as its denominator above."""
+    return round(
+        sum(competence(sid, horizon) for sid, v in verdicts_by_id.items() if v.vote != "NO_READ"), 4
+    )
 
 
 def build_data_service(settings: Settings) -> DataService:
@@ -428,9 +436,16 @@ async def run_deliberation(
 
     # ---- Phase E: audit gates -----------------------------------------------
     directional_count = sum(1 for v in verdicts_by_id.values() if v.vote != "NO_READ")
-    gate_eligible_count = _gate_eligible_seat_count(verdicts_by_id.keys())
-    min_seats_required = _min_seats_required(gate_eligible_count, settings.min_participating_seats_pct)
-    min_seats_gate = directional_count >= min_seats_required
+    gate_eligible_weight = _gate_eligible_weight(verdicts_by_id.keys(), horizon)
+    directional_weight = _directional_weight(verdicts_by_id, horizon)
+    # gate_eligible_weight == 0 only when every called seat is in
+    # _STRUCTURALLY_NO_DATA_SEATS -- nothing could ever have contributed
+    # regardless of this run's data, so this gate has nothing to check
+    # (aggregation.py's own "zero directional votes" fallback still applies).
+    min_seats_gate = (
+        gate_eligible_weight == 0
+        or directional_weight >= gate_eligible_weight * settings.min_participating_seats_pct
+    )
 
     implausible_count = sum(1 for f in plausibility_flags.values() if f == "IMPLAUSIBLE")
     base_rate_gate = not (plausibility_flags and implausible_count > len(plausibility_flags) / 2)
@@ -448,10 +463,14 @@ async def run_deliberation(
 
     gate_failure_reasons = []
     if not min_seats_gate:
+        participation_pct = (
+            0.0 if gate_eligible_weight == 0 else round(100 * directional_weight / gate_eligible_weight, 1)
+        )
         gate_failure_reasons.append(
-            f"only {directional_count} directional seats, minimum is {min_seats_required} "
-            f"({settings.min_participating_seats_pct:.0%} of {gate_eligible_count} seats "
-            "able to contribute a directional vote)"
+            f"competence-weighted participation is {participation_pct}% "
+            f"(directional weight {directional_weight} of eligible weight {gate_eligible_weight}, "
+            f"{directional_count} seats voted directionally), minimum is "
+            f"{settings.min_participating_seats_pct:.0%}"
         )
     if not base_rate_gate:
         gate_failure_reasons.append(

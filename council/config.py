@@ -59,16 +59,16 @@ class Settings(BaseSettings):
 
     # Phase 3: Tiers II-IV
     debate_rounds: int = 2
-    # A fraction of seats actually CALLED at this horizon, not a fixed
-    # absolute count (Task #69) -- the seat count called varies by horizon
-    # already (competence 0.0 drops fundamentalist/macro_sage at 1d) and,
-    # with senate_watcher/transcript_linguist now permanently NO_READ
+    # A fraction of horizon-COMPETENCE-weighted seats, not a plain headcount
+    # (Task #76, building on Task #69) -- a seat only 20-30% competent at
+    # this horizon abstaining is expected, correct behaviour, not a sign the
+    # run lacks real conviction, so it shouldn't count against this gate as
+    # heavily as a 90%-competent seat abstaining does. senate_watcher and
+    # transcript_linguist are excluded from the weighted total entirely
     # (Option 1 on congress trades / earnings transcripts: no solid free
-    # alternative exists), a fixed "6" quietly got harder to clear on every
-    # single run for a reason that has nothing to do with that run's data
-    # quality. Scaling to the called count means both effects wash out
-    # automatically instead of needing a manual retune every time the
-    # called/available seat count changes.
+    # alternative exists, so they're permanently NO_READ regardless of their
+    # own competence score). See orchestrator._gate_eligible_weight /
+    # _directional_weight for the actual computation.
     min_participating_seats_pct: float = 0.5
     assumed_spread_bps: float = 5.0  # no live bid/ask feed yet -- see Cost Auditor
     risk_budget_pct: float = 1.0
