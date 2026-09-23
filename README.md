@@ -251,9 +251,75 @@ network:
    scores past predictions and the Archives/calibration data never
    accumulates.
 
-**Security note:** there is no authentication on any of this -- anyone who
-can reach the port can run deliberations (spending your configured API
-keys) and read every prediction in the Crypt. That's an acceptable risk on
-your own home network, where only devices you control can reach it. Do
-**not** port-forward this out to the public internet without adding real
-auth first; that's a separate piece of work this repo doesn't have yet.
+**Security note:** with `APP_PASSWORD` unset (the default), there is no
+authentication on any of this -- anyone who can reach the port can run
+deliberations (spending your configured API keys) and read every
+prediction in the Crypt. That's an acceptable risk on your own home
+network, where only devices you control can reach it. Do **not**
+port-forward this out to the public internet without setting
+`APP_PASSWORD` in `.env` first (see "Host it on the public internet,
+for free" below) -- it's a single shared password gating the whole app,
+not real per-user accounts, but it's the minimum needed before this is
+reachable by strangers.
+
+## Host it on the public internet, for free
+
+Most "free" hosting doesn't actually fit this app: it needs a persistent
+SQLite file (the Crypt -- your prediction history and calibration data),
+long-lived Server-Sent-Events connections (the live Chamber view), and
+outbound HTTPS to several different APIs. That rules out most serverless/
+PaaS free tiers -- Render's free web services have an *ephemeral*
+filesystem (any SQLite file is wiped on every redeploy or 15-minute-idle
+spin-down), and PythonAnywhere's free tier restricts outbound requests to
+an allowlist of approved APIs (Yahoo Finance, which `yfinance` depends on,
+isn't an official public API and almost certainly isn't on it).
+
+What actually fits: a real, always-on Linux VM. **Oracle Cloud's "Always
+Free" tier** (currently 2 OCPUs / 12GB RAM, genuinely free forever, no
+time limit -- sign up at oracle.com/cloud/free) is the best fit -- you run
+this exactly like the local always-on setup above, just on a machine
+that's always on with a public IP instead of your own PC. Signup/capacity
+for the free ARM shape is known to be flaky; it can take a couple of
+retries to get an instance provisioned in your region.
+
+Once you have a fresh Ubuntu VM and can SSH into it:
+
+```bash
+git clone https://github.com/EthanMuir/jedi-council
+cd jedi-council
+cp .env.example .env   # fill in at minimum ANTHROPIC_API_KEY and APP_PASSWORD
+bash scripts/setup-oracle-vm.sh
+```
+
+This installs Python, creates the venv, installs dependencies, and sets
+the app up as a systemd service (`jedi-council`) that auto-restarts on
+crash and starts on boot -- `sudo systemctl status jedi-council` /
+`sudo journalctl -u jedi-council -f` to check on it. **`APP_PASSWORD` is
+not optional here** -- the script warns and asks for confirmation if it's
+blank, because a public IP with no password means anyone who finds it can
+run deliberations billed to your API keys.
+
+Two things Oracle-specific that the script can't do for you:
+- **Open the port in your VCN's Security List** (Networking -> Virtual
+  Cloud Networks -> your VCN -> Security Lists -> Add Ingress Rule, source
+  `0.0.0.0/0`, TCP, port 8000). Oracle blocks incoming traffic at the
+  network level by default, separately from the VM's own firewall.
+- **Get HTTPS**, which matters more here than usual: without it, the
+  password you just set is sent in cleartext on every login. Point any
+  domain at the VM's public IP (a free subdomain from duckdns.org works
+  fine) and run:
+  ```bash
+  bash scripts/setup-https.sh yourdomain.example.com
+  ```
+  This installs Caddy as a reverse proxy and gets you a free,
+  auto-renewing Let's Encrypt certificate with no manual cert management.
+  Afterwards, set `COOKIE_SECURE=true` in `.env` and restart the service
+  so the session cookie can't leak over plain HTTP, and open ports 80/443
+  in the Security List instead of (or alongside) 8000.
+
+Finally, schedule `council resolve` to run daily so predictions actually
+get scored -- a cron entry, run via `crontab -e`:
+
+```
+0 6 * * * cd /path/to/jedi-council && .venv/bin/python -m council resolve >> /tmp/council-resolve.log 2>&1
+```
