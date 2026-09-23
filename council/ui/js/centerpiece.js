@@ -189,7 +189,117 @@ const SEAT_CHAIR_STYLES = [
   { id: 'hex', name: 'Hex Plate', blurb: 'A hexagonal panel silhouette.' },
   { id: 'holocard', name: 'Holo-Card', blurb: 'Rounded, with a glowing top edge and a thin underline progress bar.' },
   { id: 'terminal', name: 'Terminal Readout', blurb: 'Black background, green monospace, a segmented ASCII-style bar.' },
+  { id: 'wizard', name: 'Seat Wizards', blurb: 'Each seat as a small pixel-art spellcaster -- a thinking stance while deliberating, a distinct reaction per verdict.' },
 ];
+
+// ---- Seat Wizards (chair-style-wizard) ------------------------------------
+// A canvas-drawn bust (hat/face/beard/shoulders only -- the seat chair's
+// 92px height has no room for a full standing figure) whose pose and
+// palette both follow that seat's current state. Skin and beard are fixed
+// neutral tones on purpose -- only the robe/hat/eye-glow recolor per
+// verdict, the same way a person's face doesn't change color with their
+// mood. Deliberately a *bearded, brimmed-hat* wizard with a visible face,
+// not a plain pointed hood over a featureless robe -- that silhouette
+// read as something else entirely and was the whole reason this exists.
+const WIZARD_SKIN = '#d9c0a0';
+const WIZARD_BEARD = '#e8e4d8';
+const WIZARD_DARK = '#241a14';
+
+const WIZARD_PALETTES = {
+  idle:     { base: '#4f3785', mid: '#7952c4', accent: '#4fd6e8', eye: '#4fd6e8' },
+  thinking: { base: '#4f3785', mid: '#7952c4', accent: '#4fd6e8', eye: '#4fd6e8' },
+  bullish:  { base: '#2f6e39', mid: '#48a35a', accent: '#4fd6e8', eye: '#c3f7cc' },
+  bearish:  { base: '#6e2724', mid: '#a3392f', accent: '#e8b04f', eye: '#f7c4c1' },
+  noread:   { base: '#746e2c', mid: '#a89e3f', accent: '#e8b04f', eye: '#f7f0b8' },
+};
+
+// hunch: how far the hood drops from resting (bigger = more compressed/defeated)
+// hatTilt: -1..1, which way the hat's flopped tip leans
+const WIZARD_POSES = {
+  idle:     { hunch: 0, hatTilt: 0.15 },
+  thinking: { hunch: 1, hatTilt: 0.5 },
+  bullish:  { hunch: -1, hatTilt: -0.5 },
+  bearish:  { hunch: 3, hatTilt: 0.6 },
+  noread:   { hunch: 1, hatTilt: -0.3 },
+};
+
+// Draws the hat/face/beard relative to chinY (the bottom of the beard /
+// top of the shoulders) -- a proper brimmed, curve-tipped hat with a star
+// at the flop, not a straight cone, and a visible bearded face instead of
+// glowing eye-slits in an empty hood.
+function drawWizardHead(ctx, cx, chinY, palette, pose) {
+  const faceTop = chinY - 9;
+  ctx.fillStyle = WIZARD_SKIN;
+  for (let y = faceTop; y < chinY - 3; y++) ctx.fillRect(Math.round(cx - 3.5), y, 7, 1);
+
+  ctx.fillStyle = WIZARD_DARK;
+  ctx.fillRect(Math.round(cx - 2.5), faceTop + 2, 1.5, 1.5);
+  ctx.fillRect(Math.round(cx + 1), faceTop + 2, 1.5, 1.5);
+  ctx.fillStyle = palette.eye;
+  ctx.fillRect(Math.round(cx - 2.2), faceTop + 2.2, 0.8, 0.8);
+  ctx.fillRect(Math.round(cx + 1.3), faceTop + 2.2, 0.8, 0.8);
+
+  const beardTop = chinY - 4, beardBottom = chinY + 3;
+  for (let y = beardTop; y < beardBottom; y++) {
+    const t = (y - beardTop) / (beardBottom - beardTop);
+    const halfW = 4 - t * 3.3;
+    ctx.fillStyle = WIZARD_BEARD;
+    ctx.fillRect(Math.round(cx - halfW), y, Math.round(halfW * 2), 1);
+  }
+
+  const brimY = faceTop - 2;
+  ctx.fillStyle = palette.base;
+  ctx.fillRect(Math.round(cx - 9), brimY, 18, 2);
+  ctx.fillStyle = palette.mid;
+  ctx.fillRect(Math.round(cx - 9), brimY, 18, 1);
+
+  const hatBottom = brimY, hatTop = hatBottom - 13;
+  const dir = pose.hatTilt >= 0 ? 1 : -1;
+  for (let y = hatTop; y < hatBottom; y++) {
+    const t = (y - hatTop) / (hatBottom - hatTop); // 0 at tip, 1 at brim
+    const halfW = 1 + t * 4.5;
+    const bend = (1 - t) * (1 - t) * 7 * dir; // tip curves/flops over, doesn't run straight up
+    const xOff = pose.hatTilt * (1 - t) * 4 + bend;
+    ctx.fillStyle = palette.base;
+    ctx.fillRect(Math.round(cx - halfW + xOff), y, Math.round(halfW * 2), 1);
+  }
+  const tipBend = 0.9025 * 7 * dir; // (1-0.05)^2 at t=0.05, just below the very tip
+  const tipX = cx + pose.hatTilt * 0.95 * 4 + tipBend;
+  ctx.fillStyle = palette.accent;
+  ctx.fillRect(Math.round(tipX - 1), hatTop - 1, 2, 2);
+}
+
+// The only mode actually used in the app: a compact bust that fits the
+// seat chair's existing space. width=30 height=40 native resolution,
+// displayed scaled up with image-rendering:pixelated for the blocky look.
+function drawWizardBust(canvas, state) {
+  const ctx = canvas.getContext('2d');
+  const palette = WIZARD_PALETTES[state] || WIZARD_PALETTES.idle;
+  const pose = WIZARD_POSES[state] || WIZARD_POSES.idle;
+  const W = canvas.width, H = canvas.height, cx = W / 2;
+  ctx.clearRect(0, 0, W, H);
+
+  const chinY = H - 12;
+  drawWizardHead(ctx, cx, chinY, palette, pose);
+
+  const shoulderTop = chinY + 3, shoulderBottom = H - 1;
+  for (let y = shoulderTop; y < shoulderBottom; y++) {
+    const t = (y - shoulderTop) / (shoulderBottom - shoulderTop);
+    const halfW = 5 + t * 3;
+    ctx.fillStyle = palette.base;
+    ctx.fillRect(Math.round(cx - halfW), y, Math.round(halfW * 2), 1);
+  }
+}
+
+// Maps a seat chair's state-* class to the wizard state key (only naming
+// differs -- "deliberating" reads better as a chair state, "thinking" as
+// a pose).
+function wizardStateFor(chairState) {
+  if (chairState === 'deliberating') return 'thinking';
+  if (chairState === 'bullish' || chairState === 'bearish') return chairState;
+  if (chairState === 'noread') return 'noread';
+  return 'idle';
+}
 
 // Rebuilds el's contents for the given centerpiece style id, preserving
 // every class el already has except swapping whichever "style-*" token

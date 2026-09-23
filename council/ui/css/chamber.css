@@ -627,6 +627,46 @@
   .seat-chair.chair-style-terminal .seat-bust-fill.stage-active { animation: none; }
 }
 
+/* ---- seat wizards: a canvas bust instead of the bust-bar progress track --
+   the wizard's own pose (idle -> thinking -> bullish/bearish/noread) is the
+   progress signal here, so there's deliberately no separate fill bar for
+   this style; council/ui/js/centerpiece.js's drawWizardBust() draws onto
+   the canvas whenever the seat's state changes. */
+.chair-style-wizard { padding-top: 10px; }
+.wiz-chair-stage {
+  position: relative;
+  height: 46px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.wiz-chair-glow {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 38px;
+  height: 38px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  filter: blur(10px);
+  opacity: 0.3;
+  background: radial-gradient(circle, var(--violet), transparent 70%);
+  animation: nebula-breathe 3s ease-in-out infinite;
+}
+.seat-chair.state-deliberating .wiz-chair-glow { animation-duration: 1.6s; }
+.seat-chair.state-bullish .wiz-chair-glow { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.4; }
+.seat-chair.state-bearish .wiz-chair-glow { background: radial-gradient(circle, var(--crimson), transparent 70%); opacity: 0.4; }
+.seat-chair.state-noread .wiz-chair-glow { background: radial-gradient(circle, var(--yellow), transparent 70%); opacity: 0.3; }
+.wiz-chair-canvas {
+  position: relative;
+  image-rendering: pixelated;
+  width: 32px;
+  height: 44px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wiz-chair-glow { animation: none; }
+}
+
 /* ---- holo panel modal ------------------------------------------------------ */
 .holo-modal-backdrop {
   display: none;

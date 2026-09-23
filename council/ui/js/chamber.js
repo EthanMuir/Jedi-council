@@ -119,14 +119,35 @@ function layoutRing() {
     chair.id = `chair-${seat.id}`;
     chair.style.left = `calc(50% + ${x}px)`;
     chair.style.top = `calc(50% + ${y}px)`;
-    chair.innerHTML = `
-      <div class="seat-bust"><div class="seat-bust-fill" id="fill-${seat.id}"></div></div>
-      <div class="seat-title">${seat.title}</div>
-      <div class="seat-vote dim">idle</div>
-    `;
+    chair.innerHTML = getSeatChairStyle() === 'wizard'
+      ? `
+        <div class="wiz-chair-stage">
+          <div class="wiz-chair-glow"></div>
+          <canvas class="wiz-chair-canvas" id="wizcanvas-${seat.id}" width="30" height="40"></canvas>
+        </div>
+        <div class="seat-title">${seat.title}</div>
+        <div class="seat-vote dim">idle</div>
+      `
+      : `
+        <div class="seat-bust"><div class="seat-bust-fill" id="fill-${seat.id}"></div></div>
+        <div class="seat-title">${seat.title}</div>
+        <div class="seat-vote dim">idle</div>
+      `;
     chair.onclick = () => openHoloPanel(seat.id, seat.title);
     ring.appendChild(chair);
+    redrawWizardChair(seat.id, 'idle');
   });
+}
+
+// No-op unless the wizard chair style is selected (and its canvas exists
+// yet) -- every state-change call site below calls this unconditionally
+// rather than checking the style itself, the same way the bust-fill
+// updates already tolerate a missing #fill-<id> element for non-classic
+// styles.
+function redrawWizardChair(seatId, chairState) {
+  const canvas = document.getElementById(`wizcanvas-${seatId}`);
+  if (!canvas) return;
+  drawWizardBust(canvas, wizardStateFor(chairState));
 }
 
 function resetRing() {
@@ -138,9 +159,11 @@ function resetRing() {
   lastGrandMaster = null;
   for (const seat of TIER_I_SEATS) {
     const chair = document.getElementById(`chair-${seat.id}`);
-    const fill = document.getElementById(`fill-${seat.id}`);
-    fill.className = 'seat-bust-fill';
-    fill.style.width = '0%';
+    const fill = document.getElementById(`fill-${seat.id}`); // absent for chair-style-wizard, by design
+    if (fill) {
+      fill.className = 'seat-bust-fill';
+      fill.style.width = '0%';
+    }
     if (!isCompetent(seat.id, selectedHorizon)) {
       // This seat has 0 competence at the selected horizon -- the backend
       // never calls it at all (see council/engine/horizons.py), so it will
@@ -149,12 +172,14 @@ function resetRing() {
       chair.className = `${chairClassBase()} state-idle`;
       chair.querySelector('.seat-vote').textContent = `not called @ ${selectedHorizon}`;
       chair.querySelector('.seat-vote').className = 'seat-vote dim';
+      redrawWizardChair(seat.id, 'idle');
       continue;
     }
     chair.className = `${chairClassBase()} state-deliberating`;
     chair.querySelector('.seat-vote').textContent = 'deliberating...';
     chair.querySelector('.seat-vote').className = 'seat-vote cyan';
-    fill.className = 'seat-bust-fill stage-active';
+    if (fill) fill.className = 'seat-bust-fill stage-active';
+    redrawWizardChair(seat.id, 'deliberating');
   }
   setHolocronVerdict(null);
   document.getElementById('holocron-label').innerHTML = 'DELIBERATING';
@@ -201,18 +226,21 @@ function updateSeatChair(payload, silent = false) {
     voteEl.textContent = `BULLISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bullish';
     if (fill) fill.className = 'seat-bust-fill vote-bullish';
+    redrawWizardChair(payload.seat_id, 'bullish');
     if (!silent) AudioBlips.blip(1046, 0.05);
   } else if (payload.vote === 'BEARISH') {
     chair.className = `${chairClassBase()} state-bearish`;
     voteEl.textContent = `BEARISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bearish';
     if (fill) fill.className = 'seat-bust-fill vote-bearish';
+    redrawWizardChair(payload.seat_id, 'bearish');
     if (!silent) AudioBlips.blip(392, 0.05);
   } else {
     chair.className = `${chairClassBase()} state-noread`;
     voteEl.textContent = 'NO_READ';
     voteEl.className = 'seat-vote status-noread';
     if (fill) fill.className = 'seat-bust-fill vote-noread';
+    redrawWizardChair(payload.seat_id, 'noread');
     if (!silent) AudioBlips.blip(220, 0.04);
   }
   if (fill) fill.style.width = '100%';

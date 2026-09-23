@@ -194,15 +194,31 @@ function renderChairGrid() {
 
     const visual = document.createElement('div');
     visual.className = 'appearance-swatch-visual';
-    visual.innerHTML = `
-      <div class="chair-preview-wrap">
-        <div class="seat-chair chair-style-${style.id} state-bullish">
-          <div class="seat-bust"><div class="seat-bust-fill vote-bullish" style="width:100%;"></div></div>
-          <div class="seat-title">Keeper of the Charts</div>
-          <div class="seat-vote status-bullish">BULLISH 0.612</div>
+    if (style.id === 'wizard') {
+      visual.innerHTML = `
+        <div class="chair-preview-wrap">
+          <div class="seat-chair chair-style-wizard state-bullish">
+            <div class="wiz-chair-stage">
+              <div class="wiz-chair-glow"></div>
+              <canvas class="wiz-chair-canvas" width="30" height="40"></canvas>
+            </div>
+            <div class="seat-title">Keeper of the Charts</div>
+            <div class="seat-vote status-bullish">BULLISH 0.612</div>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+      drawWizardBust(visual.querySelector('canvas'), 'bullish');
+    } else {
+      visual.innerHTML = `
+        <div class="chair-preview-wrap">
+          <div class="seat-chair chair-style-${style.id} state-bullish">
+            <div class="seat-bust"><div class="seat-bust-fill vote-bullish" style="width:100%;"></div></div>
+            <div class="seat-title">Keeper of the Charts</div>
+            <div class="seat-vote status-bullish">BULLISH 0.612</div>
+          </div>
+        </div>
+      `;
+    }
 
     const name = document.createElement('div');
     name.className = 'appearance-swatch-name';
