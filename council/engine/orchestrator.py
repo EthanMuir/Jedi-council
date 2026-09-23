@@ -29,7 +29,6 @@ from council.config import Settings
 from council.crypt.db import connect, get_open_tickers
 from council.crypt.ledger import write_prediction, write_seat_vote
 from council.data.cache import DiskCache
-from council.data.providers.alpha_vantage import AlphaVantageProvider
 from council.data.providers.fixtures import FixtureProvider
 from council.data.providers.fmp import FMPProvider
 from council.data.providers.fred import FREDProvider
@@ -182,26 +181,26 @@ def build_data_service(settings: Settings) -> DataService:
         providers.append(FixtureProvider())
     else:
         # YFinance first, not last: it's free with no hard daily cap, and it
-        # now genuinely covers OHLCV, news (empty, but that's a real answer,
-        # not a stub), and options -- the same domains Alpha Vantage's free
-        # tier caps at 25 requests/day. Trying it first means AV's scarce
-        # quota is spent only on what nothing else can serve (macro) or when
-        # Yahoo itself is down, not burned on things Yahoo already covers.
+        # genuinely covers OHLCV, news, and options.
         providers.append(YFinanceProvider())
         # SEC EDGAR next, also free and keyless, also ahead of FMP: it's the
         # authoritative source for insider transactions / SEC filings, and
         # unlike FMP's free tier it isn't plan-gated away from those two
         # domains -- no point spending an HTTP round trip on FMP's 403 first.
         providers.append(SECEdgarProvider(settings.resolved_sec_edgar_user_agent))
-        # FRED next, also ahead of Alpha Vantage: macro is AV's only
-        # remaining domain in this chain (everything else is covered by
-        # yfinance/SEC EDGAR/FMP), and a single macro_sage gather() burns 7
-        # of AV's 25-requests/day free-tier cap by itself. With a FRED key
-        # configured, AV's quota is never touched at all.
+        # FRED next -- the only remaining source for macro data now that
+        # Alpha Vantage has been pulled from this chain entirely (Task #77:
+        # its free tier's 25-requests/day cap made it structurally unusable
+        # -- a single macro_sage gather() alone burned 7 of those 25 -- and
+        # its options endpoints (REALTIME_OPTIONS / REALTIME_PUT_CALL_RATIO)
+        # require a $199.99+/month plan, so fetch_option_chain never worked
+        # on a free key regardless of quota). Without a FRED key, macro_sage
+        # has no live source at all and abstains every run (the same
+        # graceful per-seat failure path senate_watcher/transcript_linguist
+        # already use for their own data gaps) -- get a free one at
+        # fred.stlouisfed.org, no daily cap, 120 req/min.
         if settings.fred_api_key:
             providers.append(FREDProvider(settings.fred_api_key))
-        if settings.alpha_vantage_api_key:
-            providers.append(AlphaVantageProvider(settings.alpha_vantage_api_key))
         if settings.fmp_api_key:
             providers.append(FMPProvider(settings.fmp_api_key))
     return DataService(providers=providers, cache=cache)

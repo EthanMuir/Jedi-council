@@ -11,21 +11,28 @@ Five LLM personas reading the same feed are one source wearing five robes.
 
 - **DataService** (`council/data/`) -- normalised schemas, SQLite disk
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
-  any record dated after `as_of`, and provider fallback (yfinance, SEC
-  EDGAR, and FRED first -- all free with no hard daily cap -- then Alpha
-  Vantage, then FMP, or a recorded-fixture provider for offline use). Covers
-  OHLCV, news/sentiment, options, fundamentals, insider transactions,
-  congressional disclosures, 13F/institutional holdings, macro data,
-  cross-market instruments, analyst estimates, earnings transcripts, and SEC
-  filings. SEC EDGAR (`council/data/providers/sec_edgar.py`) is the
-  alternative for insider transactions / SEC filings when FMP's plan
-  doesn't cover them -- set `SEC_EDGAR_USER_AGENT` in `.env` to a real
-  contact string (SEC requires one on every request). FRED
-  (`council/data/providers/fred.py`) is the alternative for macro data,
-  the one domain Alpha Vantage's free tier is otherwise required for --
-  get a free key at fred.stlouisfed.org and set `FRED_API_KEY` in `.env`;
-  without it, macro still falls back to Alpha Vantage's 25-requests/day
-  cap, which a single macro fetch burns 7 of by itself.
+  any record dated after `as_of`, and provider fallback (yfinance and SEC
+  EDGAR first -- both free with no key and no hard daily cap -- then FRED,
+  then FMP, or a recorded-fixture provider for offline use). News is the
+  one domain that doesn't stop at the first success: every provider that
+  covers it (yfinance, FMP) is queried and the results unioned, since
+  yfinance's feed is whatever Yahoo currently has cached, not a real
+  windowed query. Covers OHLCV, news/sentiment, options, fundamentals,
+  insider transactions, congressional disclosures, 13F/institutional
+  holdings, macro data, cross-market instruments, analyst estimates,
+  earnings transcripts, and SEC filings. SEC EDGAR
+  (`council/data/providers/sec_edgar.py`) is the alternative for insider
+  transactions / SEC filings when FMP's plan doesn't cover them -- set
+  `SEC_EDGAR_USER_AGENT` in `.env` to a real contact string (SEC requires
+  one on every request). FRED (`council/data/providers/fred.py`) is the
+  only source for macro data -- get a free key at fred.stlouisfed.org and
+  set `FRED_API_KEY` in `.env`; without it, macro_sage has no live source
+  at all and abstains every run. Alpha Vantage is not wired into the live
+  chain (its free tier's 25-requests/day cap made it structurally
+  unusable, and its options endpoints require a paid plan regardless of
+  quota) -- the provider class is kept in
+  `council/data/providers/alpha_vantage.py` in case a premium key gets
+  wired back in later, but nothing calls it today.
 - **The Crypt** (`council/crypt/`) -- append-only, hash-chained SQLite
   ledger. `predictions` and `seat_votes` reject UPDATE/DELETE by trigger.
   `write_blind_prediction` refuses to write a prediction whose `resolve_at`
@@ -174,10 +181,13 @@ python3 -m venv .venv
 cp .env.example .env   # optional -- empty is fine, runs in fixture mode
 ```
 
-With no `ANTHROPIC_API_KEY` / `ALPHA_VANTAGE_API_KEY` set, the system
-automatically runs in fixture mode: seat verdicts come from
-`council/tests/fixtures/seat_verdicts/`, market data from
-`council/tests/fixtures/market_data/` (NVDA only, for now). Set the keys in
+With no `ANTHROPIC_API_KEY` set, seat verdicts automatically come from
+`council/tests/fixtures/seat_verdicts/` instead of a real LLM call. Market
+data fixture mode (`council/tests/fixtures/market_data/`, NVDA only, for
+now) is separate and only auto-forces when `FMP_API_KEY` is unset -- with
+no keys at all, market data is still live by default via yfinance and SEC
+EDGAR (both free, no key required); set `USE_DATA_FIXTURES=true`
+explicitly if you want fully offline market data too. Set the keys in
 `.env` to go live -- no code changes needed. Adding `OPENAI_API_KEY` /
 `GOOGLE_API_KEY` similarly activates the seats routed to those providers in
 `config/models.yaml`, with no code changes either.

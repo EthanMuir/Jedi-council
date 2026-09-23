@@ -31,3 +31,24 @@ def test_explicit_bool_env_value_still_respected(monkeypatch):
     settings = Settings(_env_file=None)
     assert settings.no_llm is False
     assert settings.resolved_no_llm is False
+
+
+# --- Task #77: alpha_vantage_api_key no longer affects fixture auto-detect ---
+
+
+def test_alpha_vantage_key_alone_does_not_escape_fixture_auto_detect():
+    # AV was pulled from the live provider chain entirely -- its key's
+    # presence no longer means a live run is possible, so it must not
+    # affect this auto-detect the way it used to.
+    settings = Settings(alpha_vantage_api_key="test-av-key", fmp_api_key="")
+    assert settings.resolved_use_data_fixtures is True
+
+
+def test_fmp_key_alone_escapes_fixture_auto_detect():
+    settings = Settings(alpha_vantage_api_key="", fmp_api_key="test-fmp-key")
+    assert settings.resolved_use_data_fixtures is False
+
+
+def test_no_keys_at_all_defaults_to_fixture_mode():
+    settings = Settings(alpha_vantage_api_key="", fmp_api_key="")
+    assert settings.resolved_use_data_fixtures is True

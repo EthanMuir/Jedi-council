@@ -12,11 +12,18 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     anthropic_api_key: str = ""
+    # Task #77 -- no longer wired into the live provider chain
+    # (build_data_service): its free tier's 25-requests/day cap made it
+    # structurally unusable, and its options endpoints require a paid
+    # ($199.99+/month) plan regardless of quota. Kept here (and the
+    # provider class itself kept in council/data/providers/alpha_vantage.py)
+    # only so a premium key could be wired back in later; setting this now
+    # does nothing.
     alpha_vantage_api_key: str = ""
     fmp_api_key: str = ""
     # Free (https://fred.stlouisfed.org/docs/api/api_key.html), 120
-    # req/min with no hard daily cap -- the alternative to Alpha Vantage
-    # for macro data, the one domain nothing else in the chain covers.
+    # req/min with no hard daily cap -- now the only source for macro data
+    # in this chain; without it macro_sage has no live source at all.
     fred_api_key: str = ""
     openai_api_key: str = ""
     google_api_key: str = ""
@@ -91,9 +98,14 @@ class Settings(BaseSettings):
 
     @property
     def resolved_use_data_fixtures(self) -> bool:
+        """alpha_vantage_api_key dropped from this check (Task #77): it's no
+        longer wired into the live chain at all (see its own comment above),
+        so its presence/absence no longer says anything about whether a live
+        run is possible -- yfinance and SEC EDGAR are free, keyless, and
+        already wired in regardless of any key here."""
         if self.use_data_fixtures is not None:
             return self.use_data_fixtures
-        return not bool(self.alpha_vantage_api_key or self.fmp_api_key)
+        return not bool(self.fmp_api_key)
 
     @property
     def resolved_sec_edgar_user_agent(self) -> str:
