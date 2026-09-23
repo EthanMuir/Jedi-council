@@ -105,3 +105,73 @@ select.model-select:focus {
   text-align: right;
   color: var(--amber);
 }
+
+/* ---- Chamber Appearance: centerpiece + seat-chair style pickers ---- */
+.appearance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 14px;
+}
+
+.appearance-swatch {
+  background: var(--navy-deep);
+  border: 2px solid #2a3348;
+  padding: 10px 8px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.appearance-swatch:hover {
+  border-color: var(--cyan-dim);
+}
+
+.appearance-swatch.active {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(79, 214, 232, 0.35);
+}
+
+.appearance-swatch-visual {
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 8px;
+}
+
+.appearance-swatch-name {
+  font-family: var(--font-header);
+  font-size: 8px;
+  line-height: 1.5;
+  color: var(--bone);
+}
+
+.appearance-swatch.active .appearance-swatch-name {
+  color: var(--cyan);
+}
+
+.holocron.preview {
+  position: relative;
+  left: auto;
+  top: auto;
+  margin: 0 auto;
+  transform: scale(0.55);
+}
+
+.chair-preview-wrap {
+  width: 128px;
+  height: 92px;
+  position: relative;
+  margin: 0 auto;
+  transform: scale(0.62);
+}
+
+.chair-preview-wrap .seat-chair {
+  position: relative;
+  left: 0;
+  top: 0;
+  transform: none;
+  cursor: default;
+}
+.chair-preview-wrap .seat-chair:hover { transform: none; }

@@ -146,9 +146,7 @@
   --holo-core: #f3ecff;
 }
 
-.holocron-face,
-.holocron::before,
-.holocron::after {
+.holocron-face {
   position: absolute;
   inset: 0;
   border-radius: 50%;
@@ -156,9 +154,20 @@
   mix-blend-mode: screen;
 }
 
-.holocron::before,
-.holocron::after {
+/* ::before/::after are nebula's own outer-haze and core layers -- scoped
+   to .style-nebula specifically, since every other style supplies its own
+   real DOM elements for those roles instead (a pseudo-element belongs to
+   .holocron itself regardless of which style's children are inside it, so
+   leaving these unscoped would float nebula's haze+core on top of every
+   other style too). */
+.holocron.style-nebula::before,
+.holocron.style-nebula::after {
   content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
 }
 
 /* outer haze -- a slow ambient breathing glow, not a swirl, so it reads as
@@ -166,7 +175,7 @@
    Kept modest on purpose: too big/bright here is what previously flattened
    the whole thing into one soft ball instead of a spiral with dark gaps
    between its arms. */
-.holocron::before {
+.holocron.style-nebula::before {
   inset: -14%;
   background: radial-gradient(circle at 50% 50%, var(--holo-mid) 0%, transparent 68%);
   filter: blur(16px);
@@ -178,7 +187,7 @@
    perspective, like a galaxy seen at an angle) with real gaps between its
    3 arms, not a full-coverage gradient -- a spiral needs dark space
    between the light for the arms to actually read as arms. */
-.holocron-face.f1 {
+.style-nebula .holocron-face.f1 {
   background: conic-gradient(from 0deg at 50% 50%,
     var(--holo-mid) 0deg, var(--holo-bright) 28deg, transparent 62deg,
     var(--holo-accent) 130deg, var(--holo-bright) 165deg, transparent 200deg,
@@ -192,7 +201,7 @@
 /* second spiral, flat and counter-rotating at a different speed --
    layering two out-of-phase spirals is what gives the center real
    moire/interference detail instead of one clean pinwheel. */
-.holocron-face.f2 {
+.style-nebula .holocron-face.f2 {
   inset: 8%;
   background: conic-gradient(from 140deg at 50% 50%,
     var(--holo-accent) 0deg, transparent 45deg, var(--holo-bright) 130deg,
@@ -205,7 +214,7 @@
 /* starfield -- a handful of fixed pinpoints, not another moving cloud.
    Twinkles in place; deliberately doesn't rotate with the spiral so it
    reads as distant background, not part of the gas. */
-.holocron-face.f3 {
+.style-nebula .holocron-face.f3 {
   background:
     radial-gradient(circle 1.4px at 22% 28%, #ffffff 100%, transparent 100%),
     radial-gradient(circle 1px at 74% 18%, #ffffff 100%, transparent 100%),
@@ -219,7 +228,7 @@
 /* bright core -- the "star" the gas is lit by. Pulses in place, doesn't
    swirl with the spiral around it. Tight and sharp on purpose: a large,
    pale core is what flattened the whole thing into a washed-out blob. */
-.holocron::after {
+.holocron.style-nebula::after {
   inset: 42%;
   background: radial-gradient(circle at 50% 50%, #ffffff 0%, var(--holo-core) 35%, transparent 62%);
   filter: blur(1px);
@@ -250,6 +259,256 @@
 @keyframes holocron-core-pulse {
   0%, 100% { transform: scale(0.88); opacity: 0.75; }
   50%      { transform: scale(1.18); opacity: 1; }
+}
+
+/* ================= alternate centerpiece styles =========================
+   Task #82-86 -- six more selectable designs (Settings -> Chamber
+   Appearance), alongside Nebula above. Every one of them colors itself
+   purely through --holo-mid/--holo-bright/--holo-accent/--holo-core --
+   the same 4 custom properties the .verdict-* overrides already set on
+   .holocron -- so a style never hardcodes a color and verdict recoloring
+   works identically across all of them for free. .holocron-core-pulse is
+   shared by every style's "core" dot rather than redefined per style. */
+
+/* ---- gyroscope: three 3D rings tumbling around a fixed core ---- */
+.gyro-ring {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  border: 2px solid var(--holo-accent);
+}
+.style-gyroscope { perspective: 480px; }
+.gyro-ring-a { border-color: var(--holo-bright); animation: gyro-a 9s linear infinite; }
+.gyro-ring-b { border-color: var(--holo-mid); opacity: 0.85; animation: gyro-b 13s linear infinite; }
+.gyro-ring-c { border-color: var(--holo-accent); opacity: 0.7; animation: gyro-c 7s linear infinite reverse; }
+.gyro-core {
+  position: absolute;
+  inset: 42%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--holo-core) 45%, transparent 75%);
+  filter: blur(1px);
+  animation: holocron-core-pulse 3s ease-in-out infinite;
+}
+@keyframes gyro-a { 0% { transform: rotateX(75deg) rotateY(0deg); } 100% { transform: rotateX(75deg) rotateY(360deg); } }
+@keyframes gyro-b { 0% { transform: rotateX(75deg) rotateZ(60deg) rotateY(0deg); } 100% { transform: rotateX(75deg) rotateZ(60deg) rotateY(360deg); } }
+@keyframes gyro-c { 0% { transform: rotateX(75deg) rotateZ(-55deg) rotateY(0deg); } 100% { transform: rotateX(75deg) rotateZ(-55deg) rotateY(360deg); } }
+
+/* ---- scrying orb: a glassy sphere with drifting inner smoke ---- */
+.orb-clip {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.65), inset 0 0 6px rgba(255, 255, 255, 0.22);
+}
+.orb-base {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, var(--holo-mid) 0%, var(--navy) 78%);
+  opacity: 0.9;
+}
+.orb-smoke {
+  position: absolute;
+  width: 130%;
+  height: 130%;
+  left: -15%;
+  top: -15%;
+  border-radius: 44%;
+  filter: blur(10px);
+  mix-blend-mode: screen;
+}
+.orb-smoke-a {
+  background: radial-gradient(circle at 40% 40%, var(--holo-bright) 0%, transparent 60%);
+  opacity: 0.5;
+  animation: orb-smoke-drift 12s ease-in-out infinite;
+}
+.orb-smoke-b {
+  background: radial-gradient(circle at 60% 65%, var(--holo-accent) 0%, transparent 55%);
+  opacity: 0.4;
+  animation: orb-smoke-drift 16s ease-in-out infinite reverse;
+}
+@keyframes orb-smoke-drift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50%      { transform: translate(6%, -4%) rotate(20deg); }
+}
+.orb-highlight {
+  position: absolute;
+  width: 34%;
+  height: 20%;
+  left: 18%;
+  top: 14%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  filter: blur(4px);
+  transform: rotate(-25deg);
+}
+
+/* ---- equalizer: a ring of bars pulsing like a voiceprint ---- */
+.eq-bar { position: absolute; left: 50%; top: 50%; width: 3px; height: 14px; }
+.eq-bar-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--holo-bright);
+  transform-origin: center;
+  animation: eq-pulse 1.1s ease-in-out infinite;
+}
+.eq-bar-fill.accent { background: var(--holo-accent); }
+@keyframes eq-pulse {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.5; }
+  50%      { transform: scaleY(1); opacity: 1; }
+}
+.eq-center {
+  position: absolute;
+  inset: 38%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--holo-core) 45%, transparent 75%);
+  filter: blur(1px);
+  animation: holocron-core-pulse 3s ease-in-out infinite;
+}
+
+/* ---- constellation sigil: a rotating rune of nodes and spokes ---- */
+.sigil-svg { width: 100%; height: 100%; overflow: visible; }
+.sigil-spin { transform-origin: 80px 80px; animation: sigil-rotate 24s linear infinite; }
+.sigil-line { fill: none; stroke: var(--holo-mid); stroke-width: 1.2; opacity: 0.8; }
+.sigil-line.thin {
+  stroke: var(--holo-accent);
+  stroke-width: 1;
+  opacity: 0.6;
+  stroke-dasharray: 6 4;
+  animation: sigil-flow 6s linear infinite;
+}
+.sigil-node {
+  fill: var(--holo-bright);
+  filter: drop-shadow(0 0 3px var(--holo-bright));
+  animation: node-pulse 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.sigil-core {
+  fill: #fff;
+  filter: drop-shadow(0 0 5px var(--holo-core));
+  animation: holocron-core-pulse 3s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes sigil-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes sigil-flow { to { stroke-dashoffset: -100; } }
+@keyframes node-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(0.8); }
+  50%      { opacity: 1; transform: scale(1.3); }
+}
+
+/* ---- vortex: motes of light spiraling into the core ---- */
+.vortex-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  border-radius: 50%;
+  background: var(--holo-bright);
+  z-index: 1;
+  animation: vortex-fall 3.2s linear infinite;
+}
+.vortex-particle.accent { background: var(--holo-accent); }
+.vortex-core {
+  position: absolute;
+  inset: 40%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--holo-core) 45%, transparent 75%);
+  filter: blur(1px);
+  animation: holocron-core-pulse 3s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes vortex-fall {
+  0%   { transform: rotate(0deg) translateX(66px) scale(1); opacity: 0; }
+  12%  { opacity: 1; }
+  100% { transform: rotate(720deg) translateX(6px) scale(0.25); opacity: 0; }
+}
+
+/* ---- probability die: a wireframe cube tumbling in place ---- */
+.style-die { perspective: 480px; }
+.die-cube {
+  position: absolute;
+  inset: 22%;
+  transform-style: preserve-3d;
+  animation: die-tumble 10s linear infinite;
+}
+.die-face {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--holo-bright);
+  background: radial-gradient(circle, var(--holo-mid) 0%, transparent 70%);
+  opacity: 0.85;
+}
+.die-face::after {
+  content: '';
+  position: absolute;
+  inset: 38%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--holo-core) 50%, transparent 75%);
+}
+.die-front  { transform: translateZ(39px); }
+.die-back   { transform: rotateY(180deg) translateZ(39px); }
+.die-right  { transform: rotateY(90deg) translateZ(39px); }
+.die-left   { transform: rotateY(-90deg) translateZ(39px); }
+.die-top    { transform: rotateX(90deg) translateZ(39px); }
+.die-bottom { transform: rotateX(-90deg) translateZ(39px); }
+@keyframes die-tumble {
+  0%   { transform: rotateX(0deg) rotateY(0deg); }
+  100% { transform: rotateX(360deg) rotateY(720deg); }
+}
+
+/* ---- radar sweep: a scanning beam lighting up blips on a grid ---- */
+.radar-grid {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  border: 1px solid var(--holo-accent);
+  opacity: 0.3;
+}
+.radar-grid::before,
+.radar-grid::after {
+  content: '';
+  position: absolute;
+  background: var(--holo-accent);
+}
+.radar-grid::before { left: 0; right: 0; top: 50%; height: 1px; }
+.radar-grid::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+.radar-sweep {
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--holo-bright) 0deg, transparent 55deg, transparent 360deg);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  animation: radar-spin 3.5s linear infinite;
+}
+.radar-blip {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px;
+  border-radius: 50%;
+  background: var(--holo-bright);
+  box-shadow: 0 0 6px var(--holo-bright);
+  animation: radar-blip 3.5s ease-in-out infinite;
+}
+.radar-core {
+  position: absolute;
+  inset: 44%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, var(--holo-core) 45%, transparent 75%);
+  filter: blur(1px);
+  animation: holocron-core-pulse 3s ease-in-out infinite;
+}
+@keyframes radar-spin { to { transform: rotate(360deg); } }
+@keyframes radar-blip {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  8%, 20%  { opacity: 1; transform: scale(1); }
+  30%      { opacity: 0; }
 }
 
 .holocron-label {
@@ -295,14 +554,77 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .holocron-face,
+  .holocron *,
   .holocron::before,
   .holocron::after {
-    animation: none;
+    animation: none !important;
   }
-  .holocron-face.f1 { transform: scaleY(0.82) rotate(15deg); }
-  .holocron-face.f2 { transform: rotate(-25deg); }
+  .style-nebula .holocron-face.f1 { transform: scaleY(0.82) rotate(15deg); }
+  .style-nebula .holocron-face.f2 { transform: rotate(-25deg); }
+  .gyro-ring-a { transform: rotateX(75deg) rotateY(20deg); }
+  .gyro-ring-b { transform: rotateX(75deg) rotateZ(60deg) rotateY(-30deg); }
+  .gyro-ring-c { transform: rotateX(75deg) rotateZ(-55deg) rotateY(50deg); }
+  .die-cube { transform: rotateX(20deg) rotateY(35deg); }
+  .radar-sweep { opacity: 0.3; }
+  .radar-blip { opacity: 0.85; transform: scale(1); }
   .seat-chair.state-deliberating { animation: none; }
+}
+
+/* ================= alternate seat-chair styles ===========================
+   Task #83, #85 -- the classic bevelled plate (unscoped, default) stays as
+   every rule above already defines it; each alternate style only needs to
+   override what actually changes about it, reusing seat-bust-fill's
+   existing state classes (stage-active/vote-*) untouched -- a chair style
+   is a reskin of the same functional progress bar, never a different one. */
+.seat-chair.chair-style-hex {
+  clip-path: polygon(24% 0%, 76% 0%, 100% 50%, 76% 100%, 24% 100%, 0% 50%);
+  padding: 10px 18px;
+}
+
+.seat-chair.chair-style-holocard {
+  border-radius: 10px;
+  border-top: 2px solid var(--cyan-dim);
+  background: linear-gradient(180deg, rgba(79, 214, 232, 0.07), var(--slate) 45%);
+}
+.seat-chair.chair-style-holocard .seat-bust {
+  height: 4px;
+  background: rgba(79, 214, 232, 0.15);
+  border: none;
+  border-radius: 2px;
+}
+.seat-chair.chair-style-holocard .seat-bust-fill { border-radius: 2px; }
+
+.seat-chair.chair-style-terminal {
+  background: #050805;
+  border-color: var(--green-dim);
+}
+.seat-chair.chair-style-terminal .seat-title { color: var(--green); opacity: 0.8; }
+.seat-chair.chair-style-terminal .seat-bust {
+  background: repeating-linear-gradient(90deg, rgba(95, 214, 111, 0.15) 0px, rgba(95, 214, 111, 0.15) 3px, transparent 3px, transparent 6px);
+  border-color: #16341c;
+}
+.seat-chair.chair-style-terminal .seat-bust-fill {
+  background: repeating-linear-gradient(90deg, var(--cyan-dim) 0px, var(--cyan-dim) 4px, transparent 4px, transparent 6px);
+}
+.seat-chair.chair-style-terminal .seat-bust-fill.stage-active {
+  background: repeating-linear-gradient(90deg, var(--cyan) 0px, var(--cyan) 4px, transparent 4px, transparent 6px);
+  animation: bust-fill-scan-terminal 0.9s steps(4) infinite;
+}
+.seat-chair.chair-style-terminal .seat-bust-fill.vote-bullish {
+  background: repeating-linear-gradient(90deg, var(--green) 0px, var(--green) 4px, transparent 4px, transparent 6px);
+}
+.seat-chair.chair-style-terminal .seat-bust-fill.vote-bearish {
+  background: repeating-linear-gradient(90deg, var(--crimson) 0px, var(--crimson) 4px, transparent 4px, transparent 6px);
+}
+.seat-chair.chair-style-terminal .seat-bust-fill.vote-noread {
+  background: repeating-linear-gradient(90deg, var(--yellow) 0px, var(--yellow) 4px, transparent 4px, transparent 6px);
+}
+@keyframes bust-fill-scan-terminal {
+  0%   { background-position: 0 0; }
+  100% { background-position: -12px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .seat-chair.chair-style-terminal .seat-bust-fill.stage-active { animation: none; }
 }
 
 /* ---- holo panel modal ------------------------------------------------------ */

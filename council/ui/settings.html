@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The High Council -- Settings</title>
 <link rel="stylesheet" href="/css/theme.css" />
+<link rel="stylesheet" href="/css/chamber.css" />
 <link rel="stylesheet" href="/css/settings.css" />
 </head>
 <body>
@@ -27,6 +28,17 @@
     <table class="cost-lineitems mono" id="cost-lineitems"></table>
   </div>
 
+  <div class="panel" style="margin-bottom: 20px;">
+    <h2 style="margin-top:0;">Chamber Appearance</h2>
+    <p class="dim" style="margin-top:-6px; margin-bottom:16px;">Purely visual -- saved to this browser, doesn't affect any deliberation.</p>
+
+    <h3>Centerpiece</h3>
+    <div class="appearance-grid" id="centerpiece-grid" style="margin-bottom:20px;"></div>
+
+    <h3>Seat Chair</h3>
+    <div class="appearance-grid" id="chair-grid"></div>
+  </div>
+
   <div class="panel">
     <table class="settings-table mono" id="settings-table">
       <thead>
@@ -42,6 +54,7 @@
 </div>
 
 <script src="/js/common.js"></script>
+<script src="/js/centerpiece.js"></script>
 <script src="/js/settings.js"></script>
 </body>
 </html>

@@ -115,7 +115,7 @@ function layoutRing() {
     const y = Math.sin(angle) * radius;
 
     const chair = document.createElement('div');
-    chair.className = 'seat-chair state-idle';
+    chair.className = `${chairClassBase()} state-idle`;
     chair.id = `chair-${seat.id}`;
     chair.style.left = `calc(50% + ${x}px)`;
     chair.style.top = `calc(50% + ${y}px)`;
@@ -146,18 +146,17 @@ function resetRing() {
       // never calls it at all (see council/engine/horizons.py), so it will
       // never emit a seat_result event. Mark it up front instead of leaving
       // it stuck on "deliberating..." forever.
-      chair.className = 'seat-chair state-idle';
+      chair.className = `${chairClassBase()} state-idle`;
       chair.querySelector('.seat-vote').textContent = `not called @ ${selectedHorizon}`;
       chair.querySelector('.seat-vote').className = 'seat-vote dim';
       continue;
     }
-    chair.className = 'seat-chair state-deliberating';
+    chair.className = `${chairClassBase()} state-deliberating`;
     chair.querySelector('.seat-vote').textContent = 'deliberating...';
     chair.querySelector('.seat-vote').className = 'seat-vote cyan';
     fill.className = 'seat-bust-fill stage-active';
   }
-  const holocron = document.getElementById('holocron');
-  holocron.className = 'holocron';
+  setHolocronVerdict(null);
   document.getElementById('holocron-label').innerHTML = 'DELIBERATING';
   document.getElementById('reality-anchor').innerHTML = '<span class="dim">Awaiting Phase B...</span>';
   document.getElementById('dissent-map').innerHTML = '<span class="dim">Awaiting verdicts...</span>';
@@ -198,19 +197,19 @@ function updateSeatChair(payload, silent = false) {
   const fill = document.getElementById(`fill-${payload.seat_id}`);
 
   if (payload.vote === 'BULLISH') {
-    chair.className = 'seat-chair state-bullish';
+    chair.className = `${chairClassBase()} state-bullish`;
     voteEl.textContent = `BULLISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bullish';
     if (fill) fill.className = 'seat-bust-fill vote-bullish';
     if (!silent) AudioBlips.blip(1046, 0.05);
   } else if (payload.vote === 'BEARISH') {
-    chair.className = 'seat-chair state-bearish';
+    chair.className = `${chairClassBase()} state-bearish`;
     voteEl.textContent = `BEARISH ${payload.probability}`;
     voteEl.className = 'seat-vote status-bearish';
     if (fill) fill.className = 'seat-bust-fill vote-bearish';
     if (!silent) AudioBlips.blip(392, 0.05);
   } else {
-    chair.className = 'seat-chair state-noread';
+    chair.className = `${chairClassBase()} state-noread`;
     voteEl.textContent = 'NO_READ';
     voteEl.className = 'seat-vote status-noread';
     if (fill) fill.className = 'seat-bust-fill vote-noread';
@@ -262,18 +261,29 @@ function renderAuditPanel(gatesPayload, riskPayload) {
   `;
 }
 
+// Swaps the holocron's verdict-* class in and out while leaving its
+// 'holocron' base class and 'style-*' centerpiece class alone -- the
+// naive holocron.className = 'holocron verdict-bullish' this replaced
+// would silently wipe out whichever centerpiece style was built in, since
+// that's tracked as a class too, not a separate attribute.
+function setHolocronVerdict(verdictClass) {
+  const holocron = document.getElementById('holocron');
+  const kept = holocron.className.split(' ').filter(c => c && !c.startsWith('verdict-'));
+  if (verdictClass) kept.push(verdictClass);
+  holocron.className = kept.join(' ');
+}
+
 function renderGrandMaster(payload) {
   lastGrandMaster = payload;
-  const holocron = document.getElementById('holocron');
   const label = document.getElementById('holocron-label');
   if (payload.vote === 'BULLISH') {
-    holocron.className = 'holocron verdict-bullish';
+    setHolocronVerdict('verdict-bullish');
     label.innerHTML = `BULLISH<br/>${fmtNum(payload.confidence)}`;
   } else if (payload.vote === 'BEARISH') {
-    holocron.className = 'holocron verdict-bearish';
+    setHolocronVerdict('verdict-bearish');
     label.innerHTML = `BEARISH<br/>${fmtNum(payload.confidence)}`;
   } else {
-    holocron.className = 'holocron verdict-noconviction';
+    setHolocronVerdict('verdict-noconviction');
     label.innerHTML = `NO<br/>CONVICTION`;
   }
 
@@ -362,6 +372,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const path = window.location.pathname === '/' ? '/index.html' : window.location.pathname;
   renderNav(path);
   layoutRing();
+  buildHolocronInto(document.getElementById('holocron'), getCenterpieceStyle(), {
+    labelHtml: 'AWAITING<br/>DELIBERATION',
+  });
 
   document.querySelectorAll('#horizon-toggle .toggle-option').forEach(btn => {
     btn.onclick = () => {

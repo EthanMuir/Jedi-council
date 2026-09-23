@@ -16,7 +16,7 @@
     <div class="row" style="align-items:flex-end; justify-content: center; gap: 24px; flex-wrap: wrap;">
       <div>
         <h3>Ticker</h3>
-        <input type="text" id="ticker-input" value="NVDA" maxlength="8" />
+        <input type="text" id="ticker-input" placeholder="NVDA" maxlength="8" />
       </div>
       <div>
         <h3>Horizon</h3>
@@ -40,12 +40,7 @@
 
   <div class="chamber-ring-wrap panel">
     <div class="chamber-ring" id="chamber-ring">
-      <div class="holocron" id="holocron">
-        <div class="holocron-face f1"></div>
-        <div class="holocron-face f2"></div>
-        <div class="holocron-face f3"></div>
-        <div class="holocron-label" id="holocron-label">AWAITING<br/>DELIBERATION</div>
-      </div>
+      <div class="holocron" id="holocron"></div>
       <!-- seat chairs injected by chamber.js -->
     </div>
   </div>
@@ -83,6 +78,7 @@
 </div>
 
 <script src="/js/common.js"></script>
+<script src="/js/centerpiece.js"></script>
 <script src="/js/chamber.js"></script>
 </body>
 </html>

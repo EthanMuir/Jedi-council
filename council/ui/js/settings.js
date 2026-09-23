@@ -148,6 +148,77 @@ function setHorizon(horizon) {
   loadCostEstimate();
 }
 
+function renderCenterpieceGrid() {
+  const grid = document.getElementById('centerpiece-grid');
+  const current = getCenterpieceStyle();
+  grid.innerHTML = '';
+  for (const style of CENTERPIECE_STYLES) {
+    const swatch = document.createElement('div');
+    swatch.className = 'appearance-swatch' + (style.id === current ? ' active' : '');
+    swatch.title = style.blurb;
+
+    const visual = document.createElement('div');
+    visual.className = 'appearance-swatch-visual';
+    const holo = document.createElement('div');
+    holo.className = 'holocron preview';
+    visual.appendChild(holo);
+    buildHolocronInto(holo, style.id);
+    // buildHolocronInto only manages the "style-*" token -- "preview" has
+    // to survive that swap, since it's what turns off the real Chamber's
+    // absolute positioning for use in this small inline swatch instead.
+    holo.classList.add('preview');
+
+    const name = document.createElement('div');
+    name.className = 'appearance-swatch-name';
+    name.textContent = style.name;
+
+    swatch.appendChild(visual);
+    swatch.appendChild(name);
+    swatch.onclick = () => {
+      setCenterpieceStyle(style.id);
+      AudioBlips.blip();
+      renderCenterpieceGrid();
+    };
+    grid.appendChild(swatch);
+  }
+}
+
+function renderChairGrid() {
+  const grid = document.getElementById('chair-grid');
+  const current = getSeatChairStyle();
+  grid.innerHTML = '';
+  for (const style of SEAT_CHAIR_STYLES) {
+    const swatch = document.createElement('div');
+    swatch.className = 'appearance-swatch' + (style.id === current ? ' active' : '');
+    swatch.title = style.blurb;
+
+    const visual = document.createElement('div');
+    visual.className = 'appearance-swatch-visual';
+    visual.innerHTML = `
+      <div class="chair-preview-wrap">
+        <div class="seat-chair chair-style-${style.id} state-bullish">
+          <div class="seat-bust"><div class="seat-bust-fill vote-bullish" style="width:100%;"></div></div>
+          <div class="seat-title">Keeper of the Charts</div>
+          <div class="seat-vote status-bullish">BULLISH 0.612</div>
+        </div>
+      </div>
+    `;
+
+    const name = document.createElement('div');
+    name.className = 'appearance-swatch-name';
+    name.textContent = style.name;
+
+    swatch.appendChild(visual);
+    swatch.appendChild(name);
+    swatch.onclick = () => {
+      setSeatChairStyle(style.id);
+      AudioBlips.blip();
+      renderChairGrid();
+    };
+    grid.appendChild(swatch);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderNav('/settings.html');
 
@@ -156,5 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   setHorizon('1w');
 
+  renderCenterpieceGrid();
+  renderChairGrid();
   loadRoles();
 });
