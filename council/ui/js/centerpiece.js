@@ -11,9 +11,9 @@ const SEAT_CHAIR_STYLE_KEY = 'councilSeatChairStyle';
 
 function getCenterpieceStyle() {
   try {
-    return localStorage.getItem(CENTERPIECE_STYLE_KEY) || 'nebula';
+    return localStorage.getItem(CENTERPIECE_STYLE_KEY) || 'gyroscope';
   } catch (e) {
-    return 'nebula';
+    return 'gyroscope';
   }
 }
 
@@ -23,9 +23,9 @@ function setCenterpieceStyle(id) {
 
 function getSeatChairStyle() {
   try {
-    return localStorage.getItem(SEAT_CHAIR_STYLE_KEY) || 'classic';
+    return localStorage.getItem(SEAT_CHAIR_STYLE_KEY) || 'holocard';
   } catch (e) {
-    return 'classic';
+    return 'holocard';
   }
 }
 

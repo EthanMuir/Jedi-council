@@ -157,6 +157,12 @@ select.model-select:focus {
   top: auto;
   margin: 0 auto;
   transform: scale(0.55);
+  /* .appearance-swatch-visual is a flex row -- without this, flexbox's
+     default flex-shrink:1 squeezes only this element's WIDTH down to fit
+     the 84px box while its height stays at the un-shrunk 140px, since
+     shrinking only ever touches the main-axis size. That squashed every
+     shape into an oval; scale() alone was never the problem. */
+  flex-shrink: 0;
 }
 
 .chair-preview-wrap {
@@ -165,6 +171,7 @@ select.model-select:focus {
   position: relative;
   margin: 0 auto;
   transform: scale(0.62);
+  flex-shrink: 0;
 }
 
 .chair-preview-wrap .seat-chair {
