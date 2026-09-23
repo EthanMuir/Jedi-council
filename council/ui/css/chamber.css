@@ -120,16 +120,18 @@
 }
 
 /* ---- holocron ---------------------------------------------------------
-   A drifting nebula, not a spinning solid -- 5 layered radial-gradient
-   clouds blended with mix-blend-mode:screen so overlapping color reads as
-   light instead of muddy paint, each layer's gradient centered off-axis so
-   rotating the layer actually swirls it rather than spinning a
-   radially-symmetric shape in place. Paint order (CSS puts ::before first,
-   ::after last, among children of equal stacking order) is deliberate:
-   ::before is the soft outer haze (backmost), f1/f2/f3 are the swirling
-   color clouds, ::after is the bright pulsing core (frontmost, sits under
-   the text label only). Colors are custom properties so a verdict class
-   only has to override 5 variables, not restate 5 gradients. */
+   A drifting spiral nebula, not a spinning solid. Two conic-gradient
+   spirals (f1 tilted like a disc viewed at an angle, f2 flat and
+   counter-rotating underneath it) give real banded structure instead of
+   a formless blurred blob; a sparse starfield (f3) and a soft outer haze
+   (::before) fill in around them; a tight pulsing core (::after) is the
+   "star" the gas is lit by. Everything blends with mix-blend-mode:screen
+   so overlapping color reads as light, not muddy paint. Paint order (CSS
+   puts ::before first, ::after last, among children of equal stacking
+   order) is deliberate: ::before is backmost, f1/f2/f3 are the moving
+   layers, ::after is frontmost (sits under the text label only). Colors
+   are custom properties so a verdict class only has to override 4
+   variables, not restate every gradient. */
 .holocron {
   position: absolute;
   left: 50%;
@@ -141,7 +143,6 @@
   --holo-bright: var(--violet-glow);
   --holo-mid: var(--violet);
   --holo-accent: var(--cyan);
-  --holo-wisp: var(--violet-glow);
   --holo-core: #f3ecff;
 }
 
@@ -161,45 +162,68 @@
 }
 
 /* outer haze -- a slow ambient breathing glow, not a swirl, so it reads as
-   atmosphere behind the moving clouds rather than another moving part. */
+   atmosphere behind the moving spiral rather than another moving part.
+   Kept modest on purpose: too big/bright here is what previously flattened
+   the whole thing into one soft ball instead of a spiral with dark gaps
+   between its arms. */
 .holocron::before {
-  inset: -32%;
-  background: radial-gradient(circle at 50% 50%, var(--holo-mid) 0%, transparent 70%);
-  filter: blur(20px);
-  opacity: 0.3;
+  inset: -14%;
+  background: radial-gradient(circle at 50% 50%, var(--holo-mid) 0%, transparent 68%);
+  filter: blur(16px);
+  opacity: 0.16;
   animation: nebula-breathe 7s ease-in-out infinite;
 }
 
+/* primary spiral -- a tilted disc (the constant scaleY reads as
+   perspective, like a galaxy seen at an angle) with real gaps between its
+   3 arms, not a full-coverage gradient -- a spiral needs dark space
+   between the light for the arms to actually read as arms. */
 .holocron-face.f1 {
-  background: radial-gradient(ellipse 70% 55% at 32% 38%, var(--holo-bright) 0%, var(--holo-mid) 42%, transparent 72%);
-  filter: blur(6px) saturate(1.15);
-  opacity: 0.85;
-  animation: holocron-swirl 16s linear infinite;
+  background: conic-gradient(from 0deg at 50% 50%,
+    var(--holo-mid) 0deg, var(--holo-bright) 28deg, transparent 62deg,
+    var(--holo-accent) 130deg, var(--holo-bright) 165deg, transparent 200deg,
+    var(--holo-mid) 255deg, var(--holo-bright) 290deg, transparent 330deg,
+    var(--holo-mid) 360deg);
+  filter: blur(3px) saturate(1.4);
+  opacity: 0.95;
+  animation: holocron-spiral-tilt 15s linear infinite;
 }
 
+/* second spiral, flat and counter-rotating at a different speed --
+   layering two out-of-phase spirals is what gives the center real
+   moire/interference detail instead of one clean pinwheel. */
 .holocron-face.f2 {
-  background: radial-gradient(ellipse 62% 60% at 68% 64%, var(--holo-accent) 0%, transparent 65%);
-  filter: blur(7px);
-  opacity: 0.55;
-  animation: holocron-swirl 22s linear infinite reverse;
-  animation-delay: -6s;
+  inset: 8%;
+  background: conic-gradient(from 140deg at 50% 50%,
+    var(--holo-accent) 0deg, transparent 45deg, var(--holo-bright) 130deg,
+    transparent 175deg, var(--holo-mid) 260deg, transparent 310deg, var(--holo-accent) 360deg);
+  filter: blur(4px);
+  opacity: 0.6;
+  animation: holocron-swirl 21s linear infinite reverse;
 }
 
+/* starfield -- a handful of fixed pinpoints, not another moving cloud.
+   Twinkles in place; deliberately doesn't rotate with the spiral so it
+   reads as distant background, not part of the gas. */
 .holocron-face.f3 {
-  background: radial-gradient(ellipse 42% 22% at 58% 22%, var(--holo-wisp) 0%, transparent 70%);
-  filter: blur(3px);
-  opacity: 0.5;
-  animation: holocron-swirl 10s linear infinite;
-  animation-delay: -2.5s;
+  background:
+    radial-gradient(circle 1.4px at 22% 28%, #ffffff 100%, transparent 100%),
+    radial-gradient(circle 1px at 74% 18%, #ffffff 100%, transparent 100%),
+    radial-gradient(circle 1.6px at 82% 66%, var(--holo-bright) 100%, transparent 100%),
+    radial-gradient(circle 1px at 32% 82%, #ffffff 100%, transparent 100%),
+    radial-gradient(circle 1.2px at 58% 46%, var(--holo-accent) 100%, transparent 100%),
+    radial-gradient(circle 1px at 14% 58%, #ffffff 100%, transparent 100%);
+  animation: nebula-twinkle 4.5s ease-in-out infinite;
 }
 
 /* bright core -- the "star" the gas is lit by. Pulses in place, doesn't
-   swirl with the clouds around it. */
+   swirl with the spiral around it. Tight and sharp on purpose: a large,
+   pale core is what flattened the whole thing into a washed-out blob. */
 .holocron::after {
-  inset: 38%;
-  background: radial-gradient(circle at 50% 50%, #ffffff 0%, var(--holo-core) 45%, transparent 75%);
-  filter: blur(1.5px);
-  opacity: 0.85;
+  inset: 42%;
+  background: radial-gradient(circle at 50% 50%, #ffffff 0%, var(--holo-core) 35%, transparent 62%);
+  filter: blur(1px);
+  opacity: 0.9;
   animation: holocron-core-pulse 3.2s ease-in-out infinite;
 }
 
@@ -208,14 +232,24 @@
   100% { transform: rotate(360deg); }
 }
 
+@keyframes holocron-spiral-tilt {
+  0%   { transform: scaleY(0.82) rotate(0deg); }
+  100% { transform: scaleY(0.82) rotate(360deg); }
+}
+
 @keyframes nebula-breathe {
-  0%, 100% { transform: scale(1); opacity: 0.24; }
-  50%      { transform: scale(1.15); opacity: 0.38; }
+  0%, 100% { transform: scale(1); opacity: 0.2; }
+  50%      { transform: scale(1.15); opacity: 0.32; }
+}
+
+@keyframes nebula-twinkle {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 
 @keyframes holocron-core-pulse {
-  0%, 100% { transform: scale(0.9); opacity: 0.7; }
-  50%      { transform: scale(1.15); opacity: 1; }
+  0%, 100% { transform: scale(0.88); opacity: 0.75; }
+  50%      { transform: scale(1.18); opacity: 1; }
 }
 
 .holocron-label {
@@ -229,15 +263,19 @@
   font-size: 8px;
   line-height: 1.6;
   color: var(--bone);
-  text-shadow: 0 0 6px rgba(5, 7, 13, 0.9), 0 0 2px rgba(5, 7, 13, 0.9);
+  text-shadow: 0 0 4px rgba(5, 7, 13, 1), 0 0 2px rgba(5, 7, 13, 1), 0 1px 2px rgba(5, 7, 13, 1);
   pointer-events: none;
+  /* The bright pulsing core sits directly behind this text at every verdict
+     state (including idle, where the core is pale/white like the label
+     itself) -- a dark scrim right behind the letters, not just a
+     text-shadow, is what keeps it legible regardless of core color. */
+  background: radial-gradient(circle at 50% 50%, rgba(5, 7, 13, 0.62) 0%, rgba(5, 7, 13, 0.62) 26%, transparent 55%);
 }
 
 .holocron.verdict-bullish {
   --holo-bright: #c3f7cc;
   --holo-mid: var(--green);
   --holo-accent: var(--cyan);
-  --holo-wisp: var(--green);
   --holo-core: #eafff1;
   filter: drop-shadow(0 0 16px rgba(95, 214, 111, 0.5));
 }
@@ -245,7 +283,6 @@
   --holo-bright: #f7c4c1;
   --holo-mid: var(--crimson);
   --holo-accent: var(--amber);
-  --holo-wisp: var(--crimson);
   --holo-core: #fff0ee;
   filter: drop-shadow(0 0 16px rgba(214, 69, 63, 0.5));
 }
@@ -253,7 +290,6 @@
   --holo-bright: #f7f0b8;
   --holo-mid: var(--yellow);
   --holo-accent: var(--amber);
-  --holo-wisp: var(--yellow);
   --holo-core: #fffbe8;
   filter: drop-shadow(0 0 16px rgba(232, 216, 79, 0.4));
 }
@@ -264,9 +300,8 @@
   .holocron::after {
     animation: none;
   }
-  .holocron-face.f1 { transform: rotate(15deg); }
+  .holocron-face.f1 { transform: scaleY(0.82) rotate(15deg); }
   .holocron-face.f2 { transform: rotate(-25deg); }
-  .holocron-face.f3 { transform: rotate(40deg); }
   .seat-chair.state-deliberating { animation: none; }
 }
 
