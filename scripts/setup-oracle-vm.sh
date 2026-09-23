@@ -48,9 +48,45 @@ echo "==> Installing Python + venv tooling"
 sudo apt-get update -y
 sudo apt-get install -y python3 python3-venv python3-pip
 
+# This project needs Python 3.11+ (google-genai alone needs 3.10+), but
+# several Ubuntu images Oracle still offers -- 20.04 LTS in particular --
+# default `python3` to 3.8. Building the venv with that silently produces
+# an environment pip then correctly refuses to install into, surfacing as
+# a confusing "no matching distribution for google-genai" error that looks
+# like a broken package, not a Python-version mismatch. Find (or install) a
+# new enough interpreter explicitly, rather than trusting plain `python3`.
+PYTHON_BIN=""
+for candidate in python3.13 python3.12 python3.11; do
+  if command -v "$candidate" >/dev/null 2>&1; then
+    PYTHON_BIN="$candidate"
+    break
+  fi
+done
+if [ -z "$PYTHON_BIN" ] && python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+  PYTHON_BIN="python3"
+fi
+if [ -z "$PYTHON_BIN" ]; then
+  echo "==> System Python is older than 3.11 -- installing Python 3.11 via the deadsnakes PPA"
+  sudo apt-get install -y software-properties-common
+  sudo add-apt-repository -y ppa:deadsnakes/ppa
+  sudo apt-get update -y
+  sudo apt-get install -y python3.11 python3.11-venv
+  PYTHON_BIN="python3.11"
+fi
+echo "==> Using $PYTHON_BIN ($($PYTHON_BIN --version))"
+
 echo "==> Creating virtualenv + installing dependencies"
 cd "$REPO_DIR"
-python3 -m venv .venv
+# A .venv built by an earlier, too-old interpreter (or a previous failed
+# run) must be rebuilt, not reused -- `python3 -m venv` on an existing
+# directory rewrites its interpreter symlink to whatever invoked it, which
+# would silently downgrade a working 3.11 venv right back to 3.8 on a
+# re-run otherwise.
+if [ -d .venv ] && ! .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+  echo "==> Existing .venv is on an old Python -- removing and rebuilding"
+  rm -rf .venv
+fi
+"$PYTHON_BIN" -m venv .venv
 .venv/bin/pip install --upgrade pip
 .venv/bin/pip install -e ".[dev]"
 
