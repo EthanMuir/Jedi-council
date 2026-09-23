@@ -65,6 +65,18 @@ function renderNav(activeHref) {
   };
   nav.appendChild(audioBtn);
 
+  // council_logged_in is a non-HttpOnly flag cookie set alongside the real
+  // (HttpOnly, unreadable from JS on purpose) session cookie -- with auth
+  // disabled (the local/default case) neither cookie is ever set, so this
+  // stays invisible and the nav looks exactly as it always did.
+  if (document.cookie.includes('council_logged_in=')) {
+    const logoutLink = document.createElement('a');
+    logoutLink.href = '/logout';
+    logoutLink.textContent = 'LOGOUT';
+    logoutLink.style.marginLeft = '4px';
+    nav.appendChild(logoutLink);
+  }
+
   document.body.prepend(nav);
 
   const overlay = document.createElement('div');

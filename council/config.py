@@ -2,6 +2,7 @@
 environment / .env via pydantic-settings."""
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from pydantic import field_validator
@@ -37,7 +38,25 @@ class Settings(BaseSettings):
     no_llm: bool | None = None
     use_data_fixtures: bool | None = None
 
-    @field_validator("no_llm", "use_data_fixtures", "sec_edgar_user_agent", mode="before")
+    # Task #78 -- a single shared-password gate for exposing this app
+    # beyond your own machine/LAN, ahead of real per-user accounts (a
+    # separate, larger piece of work). Blank means auth is off entirely,
+    # matching every prior local-only deployment's behaviour exactly (no
+    # existing test or local workflow should have to know this feature
+    # exists). Set a real value before putting this on the public internet
+    # -- see the README's hosting section.
+    app_password: str = ""
+    # Cookies default to non-Secure so the password gate still works over
+    # plain HTTP (e.g. testing locally, or before HTTPS is set up on a
+    # fresh deployment) -- set true once served over HTTPS so the session
+    # cookie can't leak over an unencrypted connection. bool | None (not a
+    # plain bool default) for the same reason as no_llm/use_data_fixtures
+    # below: .env.example ships this blank on purpose.
+    cookie_secure: bool | None = None
+
+    @field_validator(
+        "no_llm", "use_data_fixtures", "sec_edgar_user_agent", "cookie_secure", mode="before"
+    )
     @classmethod
     def _blank_env_means_unset(cls, v):
         """.env.example ships these blank on purpose, to mean "auto-detect"
@@ -112,6 +131,25 @@ class Settings(BaseSettings):
         if self.sec_edgar_user_agent is not None:
             return self.sec_edgar_user_agent
         return "The High Council (unconfigured contact -- set SEC_EDGAR_USER_AGENT)"
+
+    @property
+    def resolved_auth_enabled(self) -> bool:
+        return bool(self.app_password)
+
+    @property
+    def resolved_cookie_secure(self) -> bool:
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return False
+
+    @property
+    def resolved_session_secret(self) -> str:
+        """Derived from app_password itself (one-way, via sha256) rather
+        than requiring a second env var -- signing session cookies needs a
+        stable secret, and the password is already meant to be kept
+        secret, so there's nothing a separate SESSION_SECRET would add
+        except one more thing to configure and lose."""
+        return hashlib.sha256(f"{self.app_password}:council-session-v1".encode()).hexdigest()
 
     def ensure_dirs(self) -> None:
         for path in (self.council_db_path, self.cache_db_path, self.settings_db_path):

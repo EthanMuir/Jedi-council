@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from council.api.auth import install_auth
 from council.api.serialize import to_jsonable
 from council.calibration.benchmark import compute_benchmark
 from council.calibration.officer import compute_seat_calibration, rank_for_seat
@@ -30,6 +31,7 @@ from council.seats.grand_master import GrandMasterSeat
 from council.seats.prosecutor import ProsecutorSeat
 
 app = FastAPI(title="The High Council")
+install_auth(app)
 
 _UI_DIR = Path(__file__).resolve().parents[1] / "ui"
 _SEAT_TITLES = {seat.id: seat.title for seat in TIER_I_SEATS}

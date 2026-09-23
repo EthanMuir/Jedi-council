@@ -11,7 +11,7 @@ import pytest
 from council.config import Settings
 
 
-@pytest.mark.parametrize("field", ["no_llm", "use_data_fixtures"])
+@pytest.mark.parametrize("field", ["no_llm", "use_data_fixtures", "cookie_secure"])
 def test_blank_env_value_resolves_to_none(monkeypatch, field):
     monkeypatch.setenv(field.upper(), "")
     settings = Settings(_env_file=None)
@@ -52,3 +52,35 @@ def test_fmp_key_alone_escapes_fixture_auto_detect():
 def test_no_keys_at_all_defaults_to_fixture_mode():
     settings = Settings(alpha_vantage_api_key="", fmp_api_key="")
     assert settings.resolved_use_data_fixtures is True
+
+
+# --- Task #78: auth settings ------------------------------------------------
+
+
+def test_auth_disabled_by_default():
+    settings = Settings(app_password="")
+    assert settings.resolved_auth_enabled is False
+
+
+def test_auth_enabled_when_password_set():
+    settings = Settings(app_password="hunter2")
+    assert settings.resolved_auth_enabled is True
+
+
+def test_cookie_secure_defaults_false_when_unset(monkeypatch):
+    monkeypatch.setenv("COOKIE_SECURE", "")
+    settings = Settings(_env_file=None)
+    assert settings.resolved_cookie_secure is False
+
+
+def test_cookie_secure_explicit_true_respected():
+    settings = Settings(cookie_secure=True)
+    assert settings.resolved_cookie_secure is True
+
+
+def test_session_secret_is_stable_and_password_dependent():
+    a = Settings(app_password="hunter2")
+    b = Settings(app_password="hunter2")
+    c = Settings(app_password="different")
+    assert a.resolved_session_secret == b.resolved_session_secret
+    assert a.resolved_session_secret != c.resolved_session_secret
