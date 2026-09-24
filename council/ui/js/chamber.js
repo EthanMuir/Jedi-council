@@ -1,5 +1,7 @@
-// THE CHAMBER -- ticker input, horizon toggles, the council ring, and the
-// live SSE-driven deliberation.
+// THE CHAMBER -- ticker input, the council ring, and the live SSE-driven
+// deliberation. Every run reads all three terms (short / medium / long);
+// each chair shows a seat's lean on each, and the council's position on
+// each term is a bearish<->bullish bar.
 
 const TIER_I_SEATS = [
   { id: 'technician', title: 'Keeper of the Charts' },
@@ -12,17 +14,14 @@ const TIER_I_SEATS = [
   { id: 'macro_sage', title: 'Keeper of the Outer Rim' },
   { id: 'cross_market', title: 'Reader of Distant Stars' },
   { id: 'estimate_scribe', title: 'Keeper of Expectations' },
-  { id: 'transcript_linguist', title: 'Listener to the Council of Officers' },
+  { id: 'analyst_ratings', title: "Reader of the Guild's Targets" },
   { id: 'structure_archivist', title: 'Keeper of Charters' },
 ];
 
-let selectedHorizon = '1w';
 let selectedShape = 'full'; // 'full' | 'lite' -- see SHAPE_HINTS
 let seatDetails = {}; // seat_id -> full seat_result payload, for the holo-panel
 let runAlerts = []; // { kind: 'notice' | 'stopped', message, link }
-let runInfo = null; // { ticker, horizon, shape } of the run shown on the ring
-
-const HORIZON_NAMES = { '1d': 'Next Day', '1w': 'Next Week', '1m': 'Next Month', '1y': 'Next Year' };
+let runInfo = null; // { ticker, shape } of the run shown on the ring
 
 const SHAPE_HINTS = {
   full: 'Full: every seat answers 3 times and the debate runs 2 rounds (43 model calls).',
@@ -43,15 +42,15 @@ const SHAPE_HINTS = {
 const CHAMBER_STATE_KEY = 'chamberState';
 let debateRoundsLog = [];
 let lastRealityAnchor = null;
-let lastGatesPayload = null;
+let lastPositions = null; // phase_d_weighted_vote's per-term positions
+let lastWarnings = null; // phase_e_warnings' per-term warnings
 let lastRiskPayload = null;
-let lastGrandMaster = null;
+let lastGrandMaster = null; // phase_f_synthesis: headline, notes and each term's full bar
 let lastStatusText = '';
 
 function saveChamberState() {
   const state = {
     ticker: document.getElementById('ticker-input')?.value ?? '',
-    horizon: selectedHorizon,
     shape: selectedShape,
     runAlerts,
     runInfo,
@@ -59,7 +58,8 @@ function saveChamberState() {
     seatDetails,
     realityAnchor: lastRealityAnchor,
     debateRounds: debateRoundsLog,
-    gatesPayload: lastGatesPayload,
+    positions: lastPositions,
+    warnings: lastWarnings,
     riskPayload: lastRiskPayload,
     grandMaster: lastGrandMaster,
   };
@@ -85,28 +85,23 @@ function restoreChamberState() {
   } catch (e) {
     return false;
   }
+  // A snapshot from before runs covered three terms can't be redrawn.
+  if (Object.values(state.seatDetails || {}).some(d => !d.terms)) return false;
 
   if (state.ticker) document.getElementById('ticker-input').value = state.ticker;
-  if (state.horizon) {
-    selectedHorizon = state.horizon;
-    document.querySelectorAll('#horizon-toggle .toggle-option').forEach(b => {
-      b.classList.toggle('active', b.dataset.horizon === state.horizon);
-    });
-  }
-
   if (state.shape) setShape(state.shape, /* quiet */ true);
   runAlerts = state.runAlerts || [];
   renderRunAlerts();
 
-  resetRing(); // lays out the idle/deliberating baseline for this horizon first
+  resetRing(); // lays out the deliberating baseline first
   for (const payload of Object.values(state.seatDetails || {})) {
     updateSeatChair(payload, /* silent */ true);
   }
   if (state.realityAnchor) renderRealityAnchor(state.realityAnchor);
   for (const payload of state.debateRounds || []) appendDebateRound(payload);
-  if (state.gatesPayload || state.riskPayload) {
-    renderAuditPanel(state.gatesPayload, state.riskPayload);
-  }
+  if (state.positions) renderPositionsEvent(state.positions);
+  if (state.warnings) renderWarningsEvent(state.warnings);
+  if (state.riskPayload) renderRiskWarden(state.riskPayload);
   runInfo = state.runInfo || null;
   renderRunInfo();
   if (state.grandMaster) renderGrandMaster(state.grandMaster);
@@ -182,42 +177,31 @@ function resetRing() {
   seatDetails = {};
   debateRoundsLog = [];
   lastRealityAnchor = null;
-  lastGatesPayload = null;
+  lastPositions = null;
+  lastWarnings = null;
   lastRiskPayload = null;
   lastGrandMaster = null;
+  // Every seat is called on every run -- all twelve start deliberating.
   for (const seat of TIER_I_SEATS) {
     const chair = document.getElementById(`chair-${seat.id}`);
     const fill = document.getElementById(`fill-${seat.id}`); // absent for chair-style-wizard, by design
     if (fill) {
-      fill.className = 'seat-bust-fill';
+      fill.className = 'seat-bust-fill stage-active';
       fill.style.width = '0%';
-    }
-    if (!isCompetent(seat.id, selectedHorizon)) {
-      // This seat has 0 competence at the selected horizon -- the backend
-      // never calls it at all (see council/engine/horizons.py), so it will
-      // never emit a seat_result event. Mark it up front instead of leaving
-      // it stuck on "deliberating..." forever.
-      chair.className = `${chairClassBase()} state-idle`;
-      chair.querySelector('.seat-vote').textContent = `not called @ ${selectedHorizon}`;
-      chair.querySelector('.seat-vote').className = 'seat-vote dim';
-      redrawWizardChair(seat.id, 'idle');
-      continue;
     }
     chair.className = `${chairClassBase()} state-deliberating`;
     chair.querySelector('.seat-vote').textContent = 'deliberating...';
     chair.querySelector('.seat-vote').className = 'seat-vote cyan';
-    if (fill) fill.className = 'seat-bust-fill stage-active';
     redrawWizardChair(seat.id, 'deliberating');
   }
   setHolocronVerdict(null);
   document.getElementById('ring-spoken').hidden = true;
   document.getElementById('holocron-label').innerHTML = 'DELIBERATING';
+  document.getElementById('positions').innerHTML = '<span class="dim">Awaiting the seats\' leans...</span>';
   document.getElementById('reality-anchor').innerHTML = '<span class="dim">Awaiting Phase B...</span>';
-  document.getElementById('dissent-map').innerHTML = '<span class="dim">Awaiting verdicts...</span>';
+  document.getElementById('dissent-map').innerHTML = '<span class="dim">Awaiting the seats\' leans...</span>';
   document.getElementById('debate-transcript').innerHTML = '<span class="dim">Awaiting Phase C...</span>';
-  const auditPanel = document.getElementById('audit-panel');
-  auditPanel.innerHTML = '<span class="dim">Awaiting Phase E...</span>';
-  auditPanel.dataset.gates = ''; // stale merge state from a prior run/restore must not leak in
+  document.getElementById('audit-panel').innerHTML = '<span class="dim">Awaiting the Risk Warden...</span>';
   document.getElementById('grand-master-verdict').innerHTML = '<span class="dim">The council is deliberating...</span>';
 }
 
@@ -298,6 +282,18 @@ function updateSeatProgress(payload) {
   fill.style.width = `${stageToPct(payload)}%`;
 }
 
+// "S M L" pips: one small coloured letter per term -- green for a
+// bullish lean, crimson for bearish, yellow for dead even, grey for no read.
+function termPipsHtml(terms) {
+  return TERMS.map(t => {
+    const vote = terms[t]?.vote;
+    const cls = vote === 'BULLISH' ? 'pip-bullish' : vote === 'BEARISH' ? 'pip-bearish'
+      : vote === 'NO_CONVICTION' ? 'pip-even' : 'pip-noread';
+    const arrow = vote === 'BULLISH' ? '&#9650;' : vote === 'BEARISH' ? '&#9660;' : '&#9679;';
+    return `<span class="term-pip ${cls}" title="${TERM_NAMES[t]}: ${vote || 'no read'}">${TERM_LETTERS[t]}${arrow}</span>`;
+  }).join('');
+}
+
 function updateSeatChair(payload, silent = false) {
   clearWait(payload.seat_id);
   seatDetails[payload.seat_id] = payload;
@@ -306,73 +302,157 @@ function updateSeatChair(payload, silent = false) {
   const voteEl = chair.querySelector('.seat-vote');
   const fill = document.getElementById(`fill-${payload.seat_id}`);
 
-  if (payload.vote === 'BULLISH') {
-    chair.className = `${chairClassBase()} state-bullish`;
-    voteEl.textContent = `BULLISH ${payload.probability}`;
-    voteEl.className = 'seat-vote status-bullish';
-    if (fill) fill.className = 'seat-bust-fill vote-bullish';
-    redrawWizardChair(payload.seat_id, 'bullish');
-    if (!silent) AudioBlips.blip(1046, 0.05);
-  } else if (payload.vote === 'BEARISH') {
-    chair.className = `${chairClassBase()} state-bearish`;
-    voteEl.textContent = `BEARISH ${payload.probability}`;
-    voteEl.className = 'seat-vote status-bearish';
-    if (fill) fill.className = 'seat-bust-fill vote-bearish';
-    redrawWizardChair(payload.seat_id, 'bearish');
-    if (!silent) AudioBlips.blip(392, 0.05);
-  } else {
-    chair.className = `${chairClassBase()} state-noread`;
-    // NO_CONVICTION: read its data, landed in the middle. NO_READ: couldn't
-    // read at all (API error, malformed answer, or no data).
-    voteEl.textContent = payload.vote === 'NO_CONVICTION' ? 'NO_CONVICTION' : 'NO_READ';
+  // The chair's colour is the seat's overall lean: its three terms,
+  // weighted by how much each counts for this seat.
+  // How strongly it glows follows how far that lean is from even, so a
+  // seat at 50.1% doesn't blaze like one at 65%.
+  const state = { BULLISH: 'bullish', BEARISH: 'bearish' }[payload.vote] || 'noread';
+  const strength = payload.lean_p_bullish === null || payload.lean_p_bullish === undefined
+    ? 'even' : leanStrength(payload.lean_p_bullish);
+  chair.className = `${chairClassBase()} state-${state} chair-lean-${strength}`;
+  if (fill) fill.className = `seat-bust-fill vote-${state}`;
+  redrawWizardChair(payload.seat_id, state);
+  if (payload.vote === 'NO_READ') {
+    voteEl.textContent = 'NO READ';
     voteEl.className = 'seat-vote status-noread';
-    if (fill) fill.className = 'seat-bust-fill vote-noread';
-    redrawWizardChair(payload.seat_id, 'noread');
-    if (!silent) AudioBlips.blip(220, 0.04);
+  } else {
+    voteEl.innerHTML = termPipsHtml(payload.terms || {});
+    voteEl.className = 'seat-vote term-pips';
   }
+  if (!silent) AudioBlips.blip({ bullish: 1046, bearish: 392 }[state] || 220, 0.05);
   if (fill) fill.style.width = '100%';
 }
 
 function renderRealityAnchor(payload) {
   lastRealityAnchor = payload;
-  document.getElementById('reality-anchor').innerHTML = `
-    max plausible move: <span class="amber">${fmtPct(payload.max_plausible_move_pct)}</span><br/>
-    hit-rate-up: <span class="cyan">${fmtNum(payload.hit_rate_up)}</span><br/>
-    options-implied move: <span class="cyan">${fmtPct(payload.options_implied_move_pct)}</span><br/>
-    ${Object.entries(payload.plausibility_flags).filter(([, f]) => f === 'IMPLAUSIBLE').map(([sid]) =>
-      `<div class="crimson">&#9650; ${sid} target flagged IMPLAUSIBLE</div>`).join('') || '<span class="dim">no implausible targets</span>'}
-  `;
+  const terms = payload.terms || {};
+  document.getElementById('reality-anchor').innerHTML = TERMS.filter(t => terms[t]).map(t => {
+    const a = terms[t];
+    const implausible = Object.entries(a.plausibility_flags || {}).filter(([, f]) => f === 'IMPLAUSIBLE').map(([sid]) => sid);
+    return `
+      <div class="anchor-term">
+        <div class="anchor-term-name">${TERM_NAMES[t]}</div>
+        usually moves up to <span class="amber">${fmtPct(a.max_plausible_move_pct).replace('+', '&plusmn;')}</span>
+        ${a.hit_rate_up !== null && a.hit_rate_up !== undefined ? ` &middot; rose in <span class="cyan">${Math.round(a.hit_rate_up * 100)}%</span> of past windows` : ''}
+        ${a.options_implied_move_pct ? ` &middot; options imply <span class="cyan">${fmtPct(a.options_implied_move_pct).replace('+', '&plusmn;')}</span>` : ''}
+        ${implausible.length ? `<div class="crimson">&#9650; bigger than usual: ${implausible.join(', ')}</div>` : ''}
+      </div>`;
+  }).join('');
 }
 
 function appendDebateRound(payload) {
   debateRoundsLog.push(payload);
   const el = document.getElementById('debate-transcript');
-  if (el.querySelector('.dim')) el.innerHTML = '';
+  // The first round replaces the "Awaiting Phase C..." placeholder; later
+  // rounds append under it. (Checking for any .dim element here used to
+  // match round 1's own Prosecutor line and wipe it when round 2 arrived.)
+  if (debateRoundsLog.length === 1) el.innerHTML = '';
   const div = document.createElement('div');
   div.className = 'panel-inset';
   div.style.marginBottom = '10px';
+  const vetoTerms = (payload.prosecutor_veto_terms || []).map(t => TERM_NAMES[t] || t).join(', ');
   div.innerHTML = `
     <h3>Round ${payload.round_n}</h3>
-    ${payload.bull_argument ? `<div style="margin-bottom:6px;"><span class="green">BULL:</span> ${payload.bull_argument}</div>` : ''}
-    ${payload.bear_argument ? `<div style="margin-bottom:6px;"><span class="crimson">BEAR:</span> ${payload.bear_argument}</div>` : ''}
-    <div class="dim">PROSECUTOR: veto=${payload.prosecutor_veto} ${payload.prosecutor_findings.map(f => `<div>&#8226; ${f}</div>`).join('')}</div>
+    ${payload.bull_argument ? `<div style="margin-bottom:6px;"><span class="green">BULL:</span> ${escapeHtml(payload.bull_argument)}</div>` : ''}
+    ${payload.bear_argument ? `<div style="margin-bottom:6px;"><span class="crimson">BEAR:</span> ${escapeHtml(payload.bear_argument)}</div>` : ''}
+    <div class="dim">PROSECUTOR: ${payload.prosecutor_veto ? `<span class="amber">objects${vetoTerms ? ` (${vetoTerms})` : ''}</span>` : 'no objection'}
+      ${(payload.prosecutor_findings || []).map(f => `<div>&#8226; ${escapeHtml(f)}</div>`).join('')}</div>
   `;
   el.appendChild(div);
 }
 
-function renderAuditPanel(gatesPayload, riskPayload) {
-  if (gatesPayload) lastGatesPayload = gatesPayload;
-  if (riskPayload) lastRiskPayload = riskPayload;
-  const el = document.getElementById('audit-panel');
-  const existing = el.dataset.gates ? JSON.parse(el.dataset.gates) : {};
-  const merged = { ...existing, ...(gatesPayload || {}), ...(riskPayload ? { risk: riskPayload } : {}) };
-  el.dataset.gates = JSON.stringify(merged);
+function renderRiskWarden(riskPayload) {
+  lastRiskPayload = riskPayload;
+  document.getElementById('audit-panel').innerHTML = `
+    <div>position size: <span class="cyan">${fmtPct(riskPayload.position_size_pct_of_book)}</span> of book</div>
+    <div class="dim" style="margin-top:6px; font-size:12px;">Sized from the stock's volatility alone -- the Risk Warden never sees which way the council leans.</div>
+    ${riskPayload.concentration_warning ? `<div class="crimson" style="margin-top:6px;">&#9650; ${escapeHtml(riskPayload.concentration_warning)}</div>` : ''}
+  `;
+}
 
-  el.innerHTML = `
-    ${merged.gates_passed !== undefined ? `Gates passed: <span class="${merged.gates_passed ? 'status-bullish' : 'status-bearish'}">${merged.gates_passed}</span>` : ''}
-    ${(merged.reasons || []).map(r => `<div class="crimson">&#9650; ${r}</div>`).join('')}
-    ${merged.risk ? `<div style="margin-top:8px;">position size: <span class="cyan">${fmtPct(merged.risk.position_size_pct_of_book)}</span> of book</div>` : ''}
-    ${merged.risk && merged.risk.concentration_warning ? `<div class="crimson">&#9650; ${merged.risk.concentration_warning}</div>` : ''}
+// The three bars, drawn as soon as the positions are computed (Phase D)
+// with ticks from the seats' own leans, then redrawn with the weights and
+// the Grand Master's notes once the synthesis lands.
+function currentBars() {
+  if (lastGrandMaster?.terms) return lastGrandMaster.terms;
+  if (!lastPositions?.terms) return null;
+  const bars = {};
+  for (const t of TERMS) {
+    const pos = lastPositions.terms[t];
+    if (!pos) continue;
+    bars[t] = {
+      ...pos,
+      warnings: lastWarnings?.terms?.[t] || [],
+      ticks: TIER_I_SEATS.map(s => {
+        const lean = seatDetails[s.id]?.terms?.[t];
+        return { seat_id: s.id, title: s.title, p_bullish: lean?.p_bullish ?? null, weight: COMPETENCE_MATRIX[s.id]?.[t] };
+      }),
+    };
+  }
+  return bars;
+}
+
+function renderPositions() {
+  const bars = currentBars();
+  if (!bars) return;
+  document.getElementById('positions').innerHTML = TERMS.filter(t => bars[t]).map(t => termBarHtml(t, bars[t])).join('');
+  renderHolocron(bars);
+}
+
+function renderPositionsEvent(payload) {
+  lastPositions = payload;
+  renderPositions();
+}
+
+function renderWarningsEvent(payload) {
+  lastWarnings = payload;
+  renderPositions();
+}
+
+// The holocron shows all three terms at once, e.g. "S ▲ 54%" -- coloured
+// by the average of the three.
+function renderHolocron(bars) {
+  const label = document.getElementById('holocron-label');
+  const ps = TERMS.filter(t => bars[t]).map(t => bars[t].p_bullish);
+  if (!ps.length) return;
+  const mean = ps.reduce((a, b) => a + b, 0) / ps.length;
+  const vote = voteFromP(mean);
+  setHolocronVerdict(vote === 'BULLISH' ? 'verdict-bullish' : vote === 'BEARISH' ? 'verdict-bearish' : 'verdict-noconviction');
+  label.innerHTML = TERMS.filter(t => bars[t]).map(t => {
+    const p = bars[t].p_bullish;
+    const v = voteFromP(p);
+    const arrow = v === 'BULLISH' ? '&#9650;' : v === 'BEARISH' ? '&#9660;' : '&#9679;';
+    const pct = v === 'NO_CONVICTION' ? '50/50' : `${Math.round(Math.max(p, 1 - p) * 100)}%`;
+    return `${TERM_LETTERS[t]} ${arrow} ${pct}`;
+  }).join('<br/>');
+}
+
+function dissentHtml(bars) {
+  return TERMS.filter(t => bars[t]).map(t => {
+    const groups = { BULLISH: [], BEARISH: [], NO_CONVICTION: [], NO_READ: [] };
+    for (const tick of bars[t].ticks || []) {
+      const vote = tick.p_bullish === null || tick.p_bullish === undefined ? 'NO_READ' : voteFromP(tick.p_bullish);
+      groups[vote].push(tick.title);
+    }
+    const line = (vote, word) => groups[vote].length
+      ? `<div class="${voteClass(vote)}">${word} (${groups[vote].length}): <span class="dim">${groups[vote].map(escapeHtml).join(', ')}</span></div>` : '';
+    return `
+      <div class="anchor-term">
+        <div class="anchor-term-name">${TERM_NAMES[t]}</div>
+        ${line('BULLISH', '&#9650; bullish')}${line('BEARISH', '&#9660; bearish')}
+        ${line('NO_CONVICTION', '&#9679; dead even')}${line('NO_READ', '&#9679; couldn\'t read')}
+      </div>`;
+  }).join('');
+}
+
+function synthesisHtml(payload) {
+  return `
+    <div class="gm-headline">${escapeHtml(payload.headline)}</div>
+    ${TERMS.map(t => `
+      <div class="gm-note"><b>${TERM_NAMES[t]}:</b> ${escapeHtml(payload[t] || payload.terms?.[t]?.note || '')}</div>`).join('')}
+    <div class="gm-note" style="margin-top:10px;"><b>Who disagreed:</b> ${escapeHtml(payload.dissent_summary)}</div>
+    ${payload.correlated_evidence_warning ? `<div class="gm-note crimson"><b>Correlated evidence:</b> ${escapeHtml(payload.correlated_evidence_warning)}</div>` : ''}
+    <div class="gm-note"><b>Reasoning:</b> ${escapeHtml(payload.reasoning)}</div>
   `;
 }
 
@@ -390,72 +470,79 @@ function setHolocronVerdict(verdictClass) {
 
 function renderGrandMaster(payload) {
   lastGrandMaster = payload;
-  const label = document.getElementById('holocron-label');
-  if (payload.vote === 'BULLISH') {
-    setHolocronVerdict('verdict-bullish');
-    label.innerHTML = `BULLISH<br/>${fmtNum(payload.confidence)}`;
-  } else if (payload.vote === 'BEARISH') {
-    setHolocronVerdict('verdict-bearish');
-    label.innerHTML = `BEARISH<br/>${fmtNum(payload.confidence)}`;
-  } else {
-    setHolocronVerdict('verdict-noconviction');
-    label.innerHTML = `NO<br/>CONVICTION`;
-  }
-
-  document.getElementById('grand-master-verdict').innerHTML = `
-    <div><b class="${voteClass(payload.vote)}">${payload.vote}</b> confidence=${fmtNum(payload.confidence)}</div>
-    <div style="margin-top:8px;"><b>Dissent summary:</b> ${payload.dissent_summary}</div>
-    ${payload.correlated_evidence_warning ? `<div class="crimson" style="margin-top:8px;"><b>Correlated evidence:</b> ${payload.correlated_evidence_warning}</div>` : ''}
-    <div style="margin-top:8px;"><b>Reasoning:</b> ${payload.reasoning}</div>
-  `;
-
+  renderPositions();
+  document.getElementById('grand-master-verdict').innerHTML = synthesisHtml(payload);
+  document.getElementById('dissent-map').innerHTML = dissentHtml(payload.terms || {});
   document.getElementById('ring-spoken').hidden = false;
-
-  document.getElementById('dissent-map').innerHTML = Object.entries(seatDetails).map(([sid, d]) => {
-    const seat = TIER_I_SEATS.find(s => s.id === sid);
-    return `<div>${d.vote === 'BULLISH' ? '&#9650;' : d.vote === 'BEARISH' ? '&#9660;' : '&#9679;'}
-      <span class="${voteClass(d.vote)}">${seat ? seat.title : sid}</span> -- ${d.vote}</div>`;
-  }).join('');
 }
 
 function openHoloPanel(seatId, title) {
   const d = seatDetails[seatId];
   const modal = document.getElementById('holo-modal');
+  modal.classList.remove('synthesis-modal');
   if (!d) {
-    modal.innerHTML = `<button class="btn close-btn" onclick="closeHoloPanel()">CLOSE</button><h2>${title}</h2><p class="dim">Not deliberated yet.</p>`;
-  } else {
+    modal.innerHTML = `<button class="btn close-btn" onclick="closeHoloPanel()">CLOSE</button><h2>${escapeHtml(title)}</h2><p class="dim">Not deliberated yet.</p>`;
+  } else if (d.vote === 'NO_READ') {
     modal.innerHTML = `
       <button class="btn close-btn" onclick="closeHoloPanel()">CLOSE</button>
-      <h2>${title}</h2>
-      <div class="${voteClass(d.vote)}" style="font-family:var(--font-header); font-size:12px; margin-bottom:10px;">${d.vote} -- p=${d.probability}</div>
-      <div>data_quality: <span class="cyan">${d.data_quality}</span> &nbsp; dispersion: <span class="cyan">${d.dispersion}</span></div>
-      <div style="margin-top:12px;">${d.thesis}</div>
+      <h2>${escapeHtml(title)}</h2>
+      <div class="status-noread" style="font-family:var(--font-header); font-size:12px; margin-bottom:10px;">NO READ</div>
+      <div>${escapeHtml(d.thesis)}</div>
+    `;
+  } else {
+    const rows = TERMS.map(t => {
+      const lean = d.terms?.[t] || {};
+      const counts = COMPETENCE_MATRIX[seatId]?.[t];
+      const p = lean.p_bullish;
+      const leanText = p === null || p === undefined ? 'no read'
+        : `${leanLabel(p)} &middot; ${chanceText(p)}`;
+      return `
+        <div class="seat-term">
+          ${termBarHtml(t, { p_bullish: p ?? 0.5, seats_counted: p === null || p === undefined ? 0 : 1, lean_label: leanLabel(p ?? 0.5) }, { compact: true })}
+          <div class="seat-term-detail">
+            <span class="${voteClass(lean.vote)}">${leanText}</span>
+            ${lean.vote === 'BULLISH' || lean.vote === 'BEARISH' ? ` &middot; expected move &plusmn;${Number(lean.expected_move_pct).toFixed(1)}%` : ''}
+            ${counts !== undefined ? ` <span class="dim">&middot; counts ${counts.toFixed(1)} on this term</span>` : ''}
+            ${lean.rationale ? `<div class="dim" style="margin-top:3px;">${escapeHtml(lean.rationale)}</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+    modal.innerHTML = `
+      <button class="btn close-btn" onclick="closeHoloPanel()">CLOSE</button>
+      <h2>${escapeHtml(title)}</h2>
+      <div style="margin-bottom:10px;">data quality: <span class="cyan">${d.data_quality}</span></div>
+      ${rows}
+      <div style="margin-top:12px;">${escapeHtml(d.thesis)}</div>
     `;
   }
   document.getElementById('holo-backdrop').classList.add('open');
 }
 
-// Which run the ring is showing -- the ticker and horizon it was convened
-// with, not whatever is typed in the box now.
+// Which run the ring is showing -- the ticker it was convened with, not
+// whatever is typed in the box now.
 function renderRunInfo() {
   const meta = document.getElementById('ring-meta');
   meta.hidden = !runInfo;
   if (!runInfo) return;
   document.getElementById('ring-ticker').textContent = runInfo.ticker;
-  const shape = runInfo.shape === 'lite' ? ' · Lite run' : '';
-  document.getElementById('ring-horizon').textContent = `${HORIZON_NAMES[runInfo.horizon] || runInfo.horizon}${shape}`;
+  document.getElementById('ring-shape').textContent = runInfo.shape === 'lite' ? 'Short · Medium · Long · Lite run' : 'Short · Medium · Long';
 }
 
 function openSynthesis() {
   if (!lastGrandMaster) return;
   const modal = document.getElementById('holo-modal');
-  const heading = runInfo ? `${runInfo.ticker} · ${HORIZON_NAMES[runInfo.horizon] || runInfo.horizon}` : '';
+  const bars = lastGrandMaster.terms || {};
   modal.innerHTML = `
     <button class="btn close-btn" onclick="closeHoloPanel()">CLOSE</button>
     <h2>The Grand Master's Synthesis</h2>
-    <div class="dim" style="margin-bottom:12px;">${heading}</div>
-    ${document.getElementById('grand-master-verdict').innerHTML}
+    <div class="dim" style="margin-bottom:12px;">${runInfo ? escapeHtml(runInfo.ticker) : ''}</div>
+    <div class="gm-headline">${escapeHtml(lastGrandMaster.headline)}</div>
+    ${TERMS.filter(t => bars[t]).map(t => termBarHtml(t, bars[t])).join('')}
+    <div class="gm-note" style="margin-top:10px;"><b>Who disagreed:</b> ${escapeHtml(lastGrandMaster.dissent_summary)}</div>
+    ${lastGrandMaster.correlated_evidence_warning ? `<div class="gm-note crimson"><b>Correlated evidence:</b> ${escapeHtml(lastGrandMaster.correlated_evidence_warning)}</div>` : ''}
+    <div class="gm-note"><b>Reasoning:</b> ${escapeHtml(lastGrandMaster.reasoning)}</div>
   `;
+  modal.classList.add('synthesis-modal');
   document.getElementById('holo-backdrop').classList.add('open');
 }
 
@@ -517,19 +604,19 @@ async function convene() {
   resetRing();
   runAlerts = [];
   renderRunAlerts();
-  runInfo = { ticker, horizon: selectedHorizon, shape: selectedShape };
+  runInfo = { ticker, shape: selectedShape };
   renderRunInfo();
 
   const contextEl = document.getElementById('context-input');
   const context = contextEl ? contextEl.value.trim() : '';
   setStatus(
     context
-      ? `Convening the council for ${ticker} @ ${selectedHorizon} with your question...`
-      : `Convening the council for ${ticker} @ ${selectedHorizon}...`
+      ? `Convening the council for ${ticker} with your question...`
+      : `Convening the council for ${ticker}...`
   );
   saveChamberState(); // persisted immediately -- if the tab is left right now, this (not a blank chamber) is what's restored
 
-  let url = `/api/deliberate/stream?ticker=${encodeURIComponent(ticker)}&horizon=${selectedHorizon}`;
+  let url = `/api/deliberate/stream?ticker=${encodeURIComponent(ticker)}`;
   if (context) url += `&context=${encodeURIComponent(context)}`;
   if (selectedShape === 'lite') url += '&lite=true';
 
@@ -548,18 +635,19 @@ async function convene() {
       }
       else if (event === 'stopped') {
         addRunAlert('stopped', payload.message, payload.link);
-        setStatus(`Run stopped -- ${ticker} @ ${selectedHorizon}`);
+        setStatus(`Run stopped -- ${ticker}`);
       }
       else if (event === 'seat_result') updateSeatChair(payload);
       else if (event === 'seat_stage') updateSeatProgress(payload);
       else if (event === 'phase_b_reality_anchor') renderRealityAnchor(payload);
       else if (event === 'debate_round') appendDebateRound(payload);
-      else if (event === 'phase_e_gates') renderAuditPanel(payload, null);
-      else if (event === 'risk_warden') renderAuditPanel(null, payload);
+      else if (event === 'phase_d_weighted_vote') renderPositionsEvent(payload);
+      else if (event === 'phase_e_warnings') renderWarningsEvent(payload);
+      else if (event === 'risk_warden') renderRiskWarden(payload);
       else if (event === 'phase_f_synthesis') renderGrandMaster(payload);
-      else if (event === 'phase_g_crypt_write') setStatus(`Written to the Crypt: ${payload.prediction_id}`);
+      else if (event === 'phase_g_crypt_write') setStatus('Written to the Crypt.');
       else if (event === 'error') setStatus(`ERROR: ${payload.message}`);
-      // The ring itself now shows the finished run (ticker/horizon top right,
+      // The ring itself now shows the finished run (ticker top right,
       // "The Council has spoken" bottom right), so the status line clears.
       else if (event === 'done') setStatus('');
       saveChamberState();
@@ -578,15 +666,6 @@ document.addEventListener('DOMContentLoaded', () => {
   layoutRing();
   buildHolocronInto(document.getElementById('holocron'), getCenterpieceStyle(), {
     labelHtml: 'AWAITING<br/>DELIBERATION',
-  });
-
-  document.querySelectorAll('#horizon-toggle .toggle-option').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('#horizon-toggle .toggle-option').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedHorizon = btn.dataset.horizon;
-      AudioBlips.blip(660, 0.03);
-    };
   });
 
   document.querySelectorAll('#shape-toggle .toggle-option').forEach(btn => {

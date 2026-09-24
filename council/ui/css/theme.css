@@ -470,3 +470,154 @@ input[type="password"]:focus {
   background: var(--slate-light);
   border: 2px solid var(--navy-deep);
 }
+
+/* ---- a term's bearish<->bullish bar --------------------------------------
+   Built by common.js::termBarHtml. The marker is the council's position;
+   the thin ticks are the seats' own leans, taller the more a seat counts
+   on that term. The fill runs from the middle to the marker and is dimmer
+   the weaker the lean, so a barely-there lean looks barely there. */
+.term-bar-row { padding: 14px 0; border-top: 1px solid #222a3c; }
+.term-bar-row:first-child { border-top: none; padding-top: 4px; }
+.term-bar-row.compact { padding: 6px 0; border-top: none; }
+
+.term-bar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+}
+.term-bar-name {
+  font-family: var(--font-header);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--bone);
+}
+.term-bar-window { font-size: 12px; color: var(--bone-dim); }
+.term-bar-lean {
+  margin-left: auto;
+  font-family: var(--font-header);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.compact .term-bar-name, .compact .term-bar-lean { font-size: 8px; }
+.compact .term-bar-head { margin-bottom: 4px; }
+
+.term-bar-body { display: flex; gap: 18px; align-items: flex-start; }
+.term-bar { flex: 1 1 auto; min-width: 0; }
+.term-bar-warnings { flex: 0 0 260px; display: grid; gap: 6px; }
+
+.term-bar-track {
+  position: relative;
+  height: 26px;
+  background: linear-gradient(90deg, rgba(214, 69, 63, 0.14), rgba(26, 32, 48, 0.2) 50%, rgba(95, 214, 111, 0.14));
+  border: 1px solid #2a3348;
+}
+.compact .term-bar-track { height: 12px; }
+
+.term-bar-center {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--bone-dim);
+  opacity: 0.6;
+}
+
+.term-bar-fill { position: absolute; top: 0; bottom: 0; }
+.fill-bullish { background: var(--green); }
+.fill-bearish { background: var(--crimson); }
+.fill-noread { background: var(--yellow); }
+.lean-barely .term-bar-fill { opacity: 0.3; }
+.lean-leaning .term-bar-fill { opacity: 0.5; }
+.lean-plain .term-bar-fill { opacity: 0.75; }
+.lean-strong .term-bar-fill { opacity: 0.95; }
+
+.term-tick {
+  position: absolute;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  opacity: 0.85;
+  cursor: help;
+}
+.tick-bullish { background: var(--green); }
+.tick-bearish { background: var(--crimson); }
+.tick-noread { background: var(--yellow); }
+
+.term-bar-marker {
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  width: 4px;
+  margin-left: -2px;
+  box-shadow: 0 0 8px currentColor;
+}
+.compact .term-bar-marker { top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; }
+.marker-bullish { background: var(--green); color: var(--green); }
+.marker-bearish { background: var(--crimson); color: var(--crimson); }
+.marker-noread { background: var(--yellow); color: var(--yellow); }
+
+.term-bar-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--bone-dim);
+}
+.compact .term-bar-scale { display: none; }
+.term-bar-foot { margin-top: 4px; font-size: 12px; color: var(--bone-dim); }
+.compact .term-bar-foot { font-size: 11px; }
+
+.term-warning {
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--amber);
+  border-left: 2px solid var(--amber-dim);
+  background: rgba(232, 176, 79, 0.06);
+}
+
+.term-bar-note { margin-top: 10px; font-size: 13px; line-height: 1.55; color: var(--bone); }
+
+@media (max-width: 760px) {
+  .term-bar-body { flex-direction: column; align-items: stretch; gap: 8px; }
+  .term-bar-warnings { flex: 1 1 auto; width: 100%; }
+}
+
+/* ---- pop-up panel: the Chamber's seats and synthesis, the Crypt's runs ---- */
+.holo-modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 13, 0.85);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.holo-modal-backdrop.open {
+  display: flex;
+}
+
+.holo-modal {
+  max-width: 560px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.holo-modal h2 {
+  margin-top: 0;
+}
+
+.holo-modal .close-btn {
+  float: right;
+}
+
+@media (max-width: 760px) {
+  .holo-modal-backdrop { padding: 10px; }
+  .holo-modal { max-height: 88vh; }
+}

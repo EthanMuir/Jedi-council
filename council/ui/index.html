@@ -19,15 +19,6 @@
         <input type="text" id="ticker-input" placeholder="NVDA" maxlength="8" />
       </div>
       <div>
-        <h3>Horizon</h3>
-        <div class="toggle-row" id="horizon-toggle">
-          <button class="toggle-option" data-horizon="1d">Next Day</button>
-          <button class="toggle-option active" data-horizon="1w">Next Week</button>
-          <button class="toggle-option" data-horizon="1m">Next Month</button>
-          <button class="toggle-option" data-horizon="1y">Next Year</button>
-        </div>
-      </div>
-      <div>
         <h3>Run</h3>
         <div class="toggle-row" id="shape-toggle">
           <button class="toggle-option active" data-shape="full" title="Every seat answers 3 times and the debate runs 2 rounds -- 43 model calls.">Full</button>
@@ -43,7 +34,8 @@
       <input type="text" id="context-input" placeholder="e.g. Is the recent capex guidance already priced in?" />
       <div class="dim" style="font-size:12px; margin-top:6px;">Only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker.</div>
     </div>
-    <div id="shape-hint" class="dim" style="font-size:12px; margin-top:10px; text-align:center;"></div>
+    <div class="dim" style="font-size:12px; margin-top:10px; text-align:center;">Every run reads the short term (next week), medium term (next 3 months) and long term (next year and beyond) at once.</div>
+    <div id="shape-hint" class="dim" style="font-size:12px; margin-top:6px; text-align:center;"></div>
     <div id="status-line" class="dim mono" style="text-align:center; margin-top: 12px; min-height: 18px;"></div>
     <div id="run-alerts" class="run-alerts"></div>
   </div>
@@ -51,7 +43,7 @@
   <div class="chamber-ring-wrap panel">
     <div class="ring-meta" id="ring-meta" hidden>
       <div class="ring-ticker" id="ring-ticker"></div>
-      <div class="ring-horizon" id="ring-horizon"></div>
+      <div class="ring-horizon" id="ring-shape"></div>
     </div>
     <div class="chamber-ring" id="chamber-ring">
       <div class="holocron" id="holocron"></div>
@@ -63,13 +55,18 @@
     </div>
   </div>
 
+  <div class="panel" style="margin-top: 20px;" id="positions-panel">
+    <h2>The Council's Position</h2>
+    <div id="positions" class="dim">No deliberation yet.</div>
+  </div>
+
   <div class="row" style="margin-top: 20px; align-items: stretch;">
     <div class="panel col">
       <h2>Reality Anchor</h2>
       <div id="reality-anchor" class="mono dim">No deliberation yet.</div>
     </div>
     <div class="panel col">
-      <h2>Dissent Map</h2>
+      <h2>Who Leaned Which Way</h2>
       <div id="dissent-map" class="mono dim">No deliberation yet.</div>
     </div>
   </div>
@@ -81,7 +78,7 @@
 
   <div class="row" style="margin-top: 20px; align-items: stretch;">
     <div class="panel col">
-      <h2>Cost Auditor / Risk Warden</h2>
+      <h2>Risk Warden</h2>
       <div id="audit-panel" class="mono dim">--</div>
     </div>
     <div class="panel col-2" id="verdict-panel">

@@ -73,3 +73,26 @@
 }
 
 .run-tag-free { color: #d9a6ff; border-color: #7d5a99; }
+
+.holocron-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+.holocron-card.outcome-mixed {
+  border-color: var(--amber-dim);
+}
+
+/* One line per term on each card: its lean, and whether it came true. */
+.term-lines { margin-top: 8px; display: grid; gap: 5px; }
+.term-line {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.term-line-letter { font-family: var(--font-header); font-size: 8px; color: var(--bone-dim); }
+.term-line-outcome { grid-column: 2 / -1; font-size: 11px; }
+.outcome-mark { font-weight: bold; }
+
+.gm-headline { font-size: 15px; line-height: 1.5; color: var(--amber); margin-bottom: 10px; }
+.seat-votes-table td, .seat-votes-table th { padding: 4px 8px; }
+.holo-modal { max-width: 760px; }

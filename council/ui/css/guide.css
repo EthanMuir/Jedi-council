@@ -50,7 +50,7 @@
 }
 
 .guide-table .active-cell { color: var(--bone); }
-.guide-table .inactive-cell { color: var(--grey); }
+.guide-table .low-cell { color: var(--bone-dim); }
 
 .seat-grid {
   display: grid;

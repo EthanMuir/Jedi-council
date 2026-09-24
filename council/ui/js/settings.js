@@ -3,7 +3,6 @@
 // initSections in common.js).
 
 let CATALOG_BY_ID = {};
-let CURRENT_HORIZON = '1w';
 
 // ---- API keys -------------------------------------------------------------
 // Setup help for each key, written for someone who has never made an API
@@ -472,13 +471,13 @@ async function loadCostEstimate() {
   const lineitems = document.getElementById('cost-lineitems');
   try {
     const [est, lite] = await Promise.all([
-      fetchJSON(`/api/settings/cost-estimate?horizon=${CURRENT_HORIZON}`),
-      fetchJSON(`/api/settings/cost-estimate?horizon=${CURRENT_HORIZON}&lite=true`),
+      fetchJSON('/api/settings/cost-estimate'),
+      fetchJSON('/api/settings/cost-estimate?lite=true'),
     ]);
     const isZero = est.total_cost_usd === 0;
     summary.innerHTML = `
       <span class="big-number ${isZero ? 'fixture' : ''}">${fmtUsd(est.total_cost_usd)}</span>
-      <span class="dim">${est.total_calls} model calls at the ${CURRENT_HORIZON} horizon${RUN_MODE_NOTE[est.run_mode] || ''}.
+      <span class="dim">${est.total_calls} model calls covering all three terms${RUN_MODE_NOTE[est.run_mode] || ''}.
         A Lite run (pick it in the Chamber) is ${lite.total_calls} calls${isZero ? '' : `, about ${fmtUsd(lite.total_cost_usd)}`}.</span>
     `;
     lineitems.innerHTML = est.line_items.map(li => `
@@ -490,14 +489,6 @@ async function loadCostEstimate() {
   } catch (e) {
     summary.innerHTML = `<span class="crimson">ERROR: ${e.message}</span>`;
   }
-}
-
-function setHorizon(horizon) {
-  CURRENT_HORIZON = horizon;
-  for (const btn of document.querySelectorAll('#horizon-toggle .toggle-option')) {
-    btn.classList.toggle('active', btn.dataset.horizon === horizon);
-  }
-  loadCostEstimate();
 }
 
 function renderCenterpieceGrid() {
@@ -591,10 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderNav('/settings.html');
   initSections();
 
-  for (const btn of document.querySelectorAll('#horizon-toggle .toggle-option')) {
-    btn.onclick = () => setHorizon(btn.dataset.horizon);
-  }
-  setHorizon('1w');
+  loadCostEstimate();
 
   document.getElementById('free-mode-toggle').onclick = toggleFreeMode;
   loadKeys();

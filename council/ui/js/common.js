@@ -9,28 +9,141 @@ const NAV_LINKS = [
   { href: '/guide.html', label: 'The Guide' },
 ];
 
-// Mirrored from council/engine/horizons.py::COMPETENCE_MATRIX -- a seat at
-// 0.0 for a horizon is never actually called by the backend (the orchestrator
-// filters it out of eligible_seats entirely), so the UI must know this too:
-// without it, a chair optimistically marked "deliberating" at convene() never
-// gets an update and sits stuck forever.
+// Every run covers all three terms. Mirrored from council/engine/horizons.py.
+const TERMS = ['short', 'medium', 'long'];
+const TERM_NAMES = { short: 'Short term', medium: 'Medium term', long: 'Long term' };
+const TERM_WINDOWS = { short: 'the next week', medium: 'the next 3 months', long: 'the next year and beyond' };
+const TERM_LETTERS = { short: 'S', medium: 'M', long: 'L' };
+
+// How much each seat's lean counts on each term (0-1, never 0 -- every
+// seat weighs in on every term). Mirrored from
+// council/engine/horizons.py::COMPETENCE_MATRIX.
 const COMPETENCE_MATRIX = {
-  technician:          { '1d': 1.0, '1w': 0.9, '1m': 0.6, '1y': 0.3 },
-  fundamentalist:      { '1d': 0.0, '1w': 0.2, '1m': 0.6, '1y': 1.0 },
-  catalyst_seer:       { '1d': 0.9, '1w': 1.0, '1m': 0.7, '1y': 0.4 },
-  insider_reader:      { '1d': 0.1, '1w': 0.4, '1m': 0.8, '1y': 0.9 },
-  senate_watcher:      { '1d': 0.1, '1w': 0.3, '1m': 0.7, '1y': 0.8 },
-  flow_cartographer:   { '1d': 0.2, '1w': 0.4, '1m': 0.8, '1y': 0.9 },
-  oracle_options:      { '1d': 1.0, '1w': 0.9, '1m': 0.6, '1y': 0.3 },
-  macro_sage:          { '1d': 0.0, '1w': 0.3, '1m': 0.8, '1y': 1.0 },
-  cross_market:        { '1d': 1.0, '1w': 0.8, '1m': 0.6, '1y': 0.4 },
-  estimate_scribe:     { '1d': 0.2, '1w': 0.5, '1m': 0.9, '1y': 0.9 },
-  transcript_linguist: { '1d': 0.3, '1w': 0.6, '1m': 0.8, '1y': 0.7 },
-  structure_archivist: { '1d': 0.4, '1w': 0.5, '1m': 0.7, '1y': 0.8 },
+  technician:          { short: 1.0, medium: 0.6, long: 0.3 },
+  fundamentalist:      { short: 0.2, medium: 0.6, long: 1.0 },
+  catalyst_seer:       { short: 1.0, medium: 0.7, long: 0.4 },
+  insider_reader:      { short: 0.4, medium: 0.8, long: 0.9 },
+  senate_watcher:      { short: 0.3, medium: 0.7, long: 0.8 },
+  flow_cartographer:   { short: 0.4, medium: 0.8, long: 0.9 },
+  oracle_options:      { short: 0.9, medium: 0.6, long: 0.3 },
+  macro_sage:          { short: 0.3, medium: 0.8, long: 1.0 },
+  cross_market:        { short: 0.8, medium: 0.6, long: 0.4 },
+  estimate_scribe:     { short: 0.5, medium: 0.9, long: 0.9 },
+  analyst_ratings:     { short: 0.6, medium: 0.8, long: 0.9 },
+  structure_archivist: { short: 0.5, medium: 0.7, long: 0.8 },
 };
 
-function isCompetent(seatId, horizon) {
-  return (COMPETENCE_MATRIX[seatId]?.[horizon] ?? 0) > 0;
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+// How far a position leans, in the same bands as
+// council/engine/aggregation.py::lean_label -- a weak lean must read as weak.
+function leanStrength(pBullish) {
+  const d = Math.abs(Math.round((pBullish - 0.5) * 1000) / 1000);
+  if (d === 0) return 'even';
+  if (d < 0.02) return 'barely';
+  if (d < 0.05) return 'leaning';
+  if (d < 0.10) return 'plain';
+  return 'strong';
+}
+
+function leanLabel(pBullish) {
+  const strength = leanStrength(pBullish);
+  if (strength === 'even') return 'Dead even';
+  const side = pBullish > 0.5 ? 'bullish' : 'bearish';
+  return {
+    barely: `Barely ${side}`,
+    leaning: `Leaning ${side}`,
+    plain: side[0].toUpperCase() + side.slice(1),
+    strong: `Strongly ${side}`,
+  }[strength];
+}
+
+function voteFromP(pBullish) {
+  const d = Math.round((pBullish - 0.5) * 1000);
+  if (d === 0) return 'NO_CONVICTION';
+  return d > 0 ? 'BULLISH' : 'BEARISH';
+}
+
+// "54% chance of rising" / "58% chance of falling" / "50/50".
+function chanceText(pBullish) {
+  const vote = voteFromP(pBullish);
+  if (vote === 'NO_CONVICTION') return '50/50';
+  return vote === 'BULLISH'
+    ? `${Math.round(pBullish * 100)}% chance of rising`
+    : `${Math.round((1 - pBullish) * 100)}% chance of falling`;
+}
+
+// The bearish<->bullish bar spans 25%-75% chance of rising: seats rarely
+// go past that, and a narrower scale keeps their ticks apart. Anything
+// beyond sits pinned at the end.
+const BAR_MIN = 0.25;
+const BAR_MAX = 0.75;
+
+function barPos(pBullish) {
+  const x = (pBullish - BAR_MIN) / (BAR_MAX - BAR_MIN);
+  return Math.max(0, Math.min(1, x)) * 100;
+}
+
+// One term's bar: the council's position as a marker, a tick for every
+// seat's lean (taller = counts for more on this term), and the term's
+// warnings beside it. `term` is a key of TERMS; `data` is one entry of the
+// phase_f_synthesis event's `terms` (or the same shape rebuilt from the
+// Crypt). opts.compact drops the ticks, warnings and note.
+function termBarHtml(term, data, opts = {}) {
+  const p = data.p_bullish;
+  const strength = data.seats_counted === 0 ? 'even' : leanStrength(p);
+  const vote = data.seats_counted === 0 ? 'NO_CONVICTION' : voteFromP(p);
+  const pos = barPos(p);
+  const fillLeft = Math.min(pos, 50);
+  const fillWidth = Math.abs(pos - 50);
+  const label = data.lean_label || leanLabel(p);
+
+  const ticks = opts.compact ? '' : (data.ticks || [])
+    .filter(t => t.p_bullish !== null && t.p_bullish !== undefined)
+    .map(t => {
+      const height = 8 + Math.round(16 * Math.min(1, t.weight ?? 0.5));
+      const title = `${t.title}: ${chanceText(t.p_bullish)}` +
+        (t.weight !== undefined ? ` (counts ${Number(t.weight).toFixed(2)} on this term)` : '');
+      return `<span class="term-tick tick-${voteClass(voteFromP(t.p_bullish)).replace('status-', '')}"
+        style="left:${barPos(t.p_bullish).toFixed(1)}%; height:${height}px" title="${escapeHtml(title)}"></span>`;
+    }).join('');
+
+  const warnings = opts.compact ? '' : (data.warnings || [])
+    .map(w => `<div class="term-warning">&#9888; ${escapeHtml(w.message)}</div>`).join('');
+
+  const agree = data.consensus_pct ? ` &middot; ${Math.round(data.consensus_pct)}% of leaning seats agree` : '';
+  const foot = data.seats_counted === 0
+    ? 'No seat could read its data for this term.'
+    : `${chanceText(p)}${agree}`;
+
+  return `
+    <div class="term-bar-row lean-${strength}${opts.compact ? ' compact' : ''}">
+      <div class="term-bar-head">
+        <span class="term-bar-name">${TERM_NAMES[term]}</span>
+        <span class="term-bar-window">${TERM_WINDOWS[term]}</span>
+        <span class="term-bar-lean ${voteClass(vote)}">${escapeHtml(label)}</span>
+      </div>
+      <div class="term-bar-body">
+        <div class="term-bar">
+          <div class="term-bar-track">
+            <div class="term-bar-fill fill-${voteClass(vote).replace('status-', '')}"
+              style="left:${fillLeft.toFixed(1)}%; width:${fillWidth.toFixed(1)}%"></div>
+            <div class="term-bar-center"></div>
+            ${ticks}
+            <div class="term-bar-marker marker-${voteClass(vote).replace('status-', '')}" style="left:${pos.toFixed(1)}%"></div>
+          </div>
+          <div class="term-bar-scale"><span>&#9664; Bearish</span><span>50/50</span><span>Bullish &#9654;</span></div>
+          <div class="term-bar-foot">${foot}</div>
+        </div>
+        ${warnings ? `<div class="term-bar-warnings">${warnings}</div>` : ''}
+      </div>
+      ${!opts.compact && data.note ? `<div class="term-bar-note">${escapeHtml(data.note)}</div>` : ''}
+    </div>
+  `;
 }
 
 function renderNav(activeHref) {

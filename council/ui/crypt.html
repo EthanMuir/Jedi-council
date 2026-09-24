@@ -13,8 +13,9 @@
   <h1 style="text-align:center; margin-bottom: 24px;">The Crypt</h1>
 
   <div class="panel" style="margin-bottom: 20px; text-align:center;">
-    <p class="dim">Every prediction ever made, hash-chained and immutable. Pull the lever to sweep
-    every unresolved prediction whose resolution window has passed.</p>
+    <p class="dim">Every run ever made, hash-chained and immutable. Each run's three terms are
+    scored on their own: the short term after a week, the medium term after 3 months, the long
+    term after a year. Pull the lever to score every term whose window has passed.</p>
     <button class="btn btn-lever" id="update-crypt-btn">&#9889; Update The Crypt &#9889;</button>
     <div id="sweep-status" class="mono dim" style="margin-top: 10px; min-height: 18px;"></div>
   </div>
@@ -31,13 +32,12 @@
         <input type="text" id="filter-ticker" placeholder="e.g. NVDA" />
       </div>
       <div>
-        <h3>Filter by horizon</h3>
-        <div class="toggle-row" id="filter-horizon">
-          <button class="toggle-option active" data-horizon="">All</button>
-          <button class="toggle-option" data-horizon="1d">1D</button>
-          <button class="toggle-option" data-horizon="1w">1W</button>
-          <button class="toggle-option" data-horizon="1m">1M</button>
-          <button class="toggle-option" data-horizon="1y">1Y</button>
+        <h3>Filter by term</h3>
+        <div class="toggle-row" id="filter-term">
+          <button class="toggle-option active" data-term="">All</button>
+          <button class="toggle-option" data-term="short">Short</button>
+          <button class="toggle-option" data-term="medium">Medium</button>
+          <button class="toggle-option" data-term="long">Long</button>
         </div>
       </div>
       <div>

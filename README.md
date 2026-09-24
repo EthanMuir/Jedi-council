@@ -20,7 +20,9 @@ Five LLM personas reading the same feed are one source wearing five robes.
   Aug 2025 can't use the endpoints it called. Covers OHLCV, news/sentiment, options, fundamentals,
   insider transactions, congressional disclosures, 13F/institutional
   holdings, macro data, cross-market instruments, analyst estimates,
-  earnings transcripts, and SEC filings. SEC EDGAR
+  analyst price targets & ratings (Yahoo: target upside, buy/hold/sell
+  split and its 3-month drift, recent upgrades/downgrades), and SEC
+  filings. SEC EDGAR
   (`council/data/providers/sec_edgar.py`) is the source for insider
   transactions / SEC filings -- set
   `SEC_EDGAR_USER_AGENT` in `.env` to a real contact string (SEC requires
@@ -33,60 +35,75 @@ Five LLM personas reading the same feed are one source wearing five robes.
   quota) -- the provider class is kept in
   `council/data/providers/alpha_vantage.py` in case a premium key gets
   wired back in later, but nothing calls it today.
+- **Three terms per run** (`council/engine/horizons.py`) -- every run
+  covers the short term (the next week), the medium term (the next 3
+  months) and the long term (the next year and beyond) at once. Each seat
+  gives a lean and confidence for all three in a single call (`SeatAnswer`,
+  converted to one `SeatVerdict` per term), and a competence matrix sets
+  how much each seat counts on each term -- never zero, so no seat is left
+  out of any term.
 - **The Crypt** (`council/crypt/`) -- append-only, hash-chained SQLite
   ledger. `predictions` and `seat_votes` reject UPDATE/DELETE by trigger.
-  `write_blind_prediction` refuses to write a prediction whose `resolve_at`
-  isn't strictly in the future.
+  One run writes one row per term, tied by `run_id` and scored on that
+  term's own window (7 / 91 / 365 days). `write_prediction` refuses to
+  write a prediction whose `resolve_at` isn't strictly in the future.
 - **SeatVerdict v2** (`council/seats/base.py`) -- the Addendum A1 schema:
   three-decimal probabilities, a mandatory `comparison_class` for any
-  directional vote, and code-level data isolation via `SeatContext`.
+  directional vote, and code-level data isolation via `SeatContext`. Seats
+  lean whenever the evidence tilts at all and keep weak leans near 0.5;
+  `NO_CONVICTION` is only for evidence that genuinely cancels out, and
+  `NO_READ` only for missing data or a failed call.
 - **All 12 Tier I seats**: Technician (OHLCV only, ticker anonymised,
-  mechanical family-vote direction), Fundamentalist, Catalyst Seer, Insider
-  Reader, Senate Watcher, Flow Cartographer, Oracle of Options, Macro Sage,
-  Cross-Market Navigator (never sees the ticker's own price series), Estimate
-  Scribe, Transcript Linguist, Structure Archivist -- each isolated to
-  exactly one data domain, gated by the spec's hardcoded horizon-competence
-  matrix (`council/engine/horizons.py`).
+  mechanical family-vote direction for the short term), Fundamentalist,
+  Catalyst Seer, Insider Reader, Senate Watcher, Flow Cartographer, Oracle
+  of Options, Macro Sage, Cross-Market Navigator (never sees the ticker's
+  own price series), Estimate Scribe, Reader of the Guild's Targets
+  (analyst price-target upside and ratings -- sees percentages, never the
+  price), Structure Archivist -- each isolated to exactly one data domain.
 - **N-sampling + dispersion** (`council/engine/sampling.py`) -- every seat is
   sampled N times (`Settings.n_samples_per_seat`, default 3). Majority vote across samples
   becomes the seat's consensus; disagreement fraction becomes `dispersion`
   and automatically discounts the reported confidence toward 0.5. A tie with
-  no majority resolves to `NO_READ`.
+  no majority resolves to `NO_CONVICTION`. Done per term.
 - **Full pipeline orchestrator + CLI** (`council/engine/orchestrator.py`) --
-  runs Phases A-G entirely in memory and writes the Crypt exactly once, at
-  the end (Phase G) -- the immutability trigger makes a later UPDATE
-  impossible, so `blind_*` and the Tier IV synthesis columns are populated
-  together in one row, not two writes.
+  runs Phases A-G entirely in memory and writes the Crypt once, at the end
+  (Phase G) -- the immutability trigger makes a later UPDATE impossible, so
+  `blind_*` and the synthesis columns are populated together in each term's
+  row, not two writes.
 - **Phase B -- Reality Anchor** (`council/engine/base_rate.py`) -- the
   Base-Rate Keeper (pure computation, no LLM): hit-rate-up, realised vol,
   ATR-implied range, and a 95th-percentile max-plausible-move ceiling from
-  the ticker's own rolling-return history, combined with Oracle of Options'
-  implied move. Every directional Tier I target is checked against it and
-  flagged PLAUSIBLE/IMPLAUSIBLE (flagged, never deleted).
+  the ticker's own rolling-return history, one per term; the short term
+  also carries the Oracle of Options' implied move. Every seat's expected
+  move is checked against its term's anchor and flagged
+  PLAUSIBLE/IMPLAUSIBLE (flagged, never deleted).
 - **Phase C -- Debate** (`council/seats/advocates.py`,
   `council/seats/prosecutor.py`) -- Bull and Bear Advocate see only Tier I
   *summaries* (never raw data), argue their fixed side over N rounds
   (default 2), and rebut the opposing side from round 2 on. The Prosecutor
   sees everything, including a deterministically pre-computed
   correlated-evidence check (`detect_correlated_evidence` -- two seats
-  citing the same source, not just the LLM's own read), and can veto to
-  force `NO_CONVICTION`.
-- **Phase D -- weighted vote** (`council/engine/aggregation.py`) -- each
-  directional seat weighted by horizon-competence x data-quality x
-  plausibility x decomposition-coherence x the Calibration Officer's
-  weight (1.0 until a seat has 20+ resolutions).
-- **Phase E -- audit gates** -- Cost Auditor (`council/engine/cost_auditor.py`,
-  pure computation: spread/break-even/edge, using a configurable assumed
-  spread since there's no live bid/ask feed for the underlying yet),
-  Prosecutor veto, base-rate plausibility (gate fails if a majority of
-  directional targets are IMPLAUSIBLE), and a minimum-participating-seats
-  floor. Any gate failing short-circuits Phase F entirely -- Grand Master
-  is never called, a synthetic `NO_CONVICTION` verdict is written instead,
-  and the reasons are recorded.
+  citing the same source, not just the LLM's own read). Its veto names the
+  terms it objects to and shows as a warning beside them.
+- **Phase D -- the council's position** (`council/engine/aggregation.py`) --
+  per term, the weighted average of every seat's lean as a chance of
+  rising (`NO_CONVICTION` counts as 0.5, `NO_READ` is left out), weighted
+  by term competence x data quality x plausibility x
+  decomposition-coherence x the Calibration Officer's weight (1.0 until a
+  seat has 20+ resolutions). It always leans unless dead even; a plain-words
+  label (Barely / Leaning / plain / Strongly) says how far.
+- **Phase E -- warnings** -- per term: thin participation, a majority of
+  expected moves flagged IMPLAUSIBLE, an edge that doesn't clear the Cost
+  Auditor's round-trip cost (`council/engine/cost_auditor.py`, using a
+  configurable assumed spread since there's no live bid/ask feed yet), and
+  a Prosecutor objection. They sit beside the term's bar; they never
+  override the position.
 - **Phase F -- Grand Master synthesis** (`council/seats/grand_master.py`) --
-  final verdict using the stronger model. Hard rule enforced by the schema:
-  `dissent_summary` is a required, non-empty field, and it must report the
-  *structure* of disagreement, not just a consensus number.
+  a headline plus a note per term on what drives the lean and how much to
+  trust it, using the stronger model. It never moves a position. Hard rule
+  enforced by the schema: `dissent_summary` is a required, non-empty field,
+  and it must report the *structure* of disagreement, not just a consensus
+  number.
 - **Risk Warden** (`council/engine/risk_warden.py`) -- ATR/IV-based
   position sizing with a fractional-Kelly cap and a same-ticker
   concentration check against other open Crypt positions. Its function
@@ -164,11 +181,7 @@ currently identical -- a fixture-mode artifact, not a code issue. Cost
 Auditor's spread is an assumed constant, not a live quote. Risk Warden's
 "correlation against other open positions" is a same-ticker concentration
 check only, not a real cross-asset correlation matrix. Debate/Prosecutor/
-reflection fixtures are static text (not horizon- or ticker-aware), so at
-short horizons the Reality Anchor will often flag their fixed expected-move
-numbers IMPLAUSIBLE and fail the base-rate gate -- a real, correct
-audit-gate response to a fixture-mode limitation, not a bug (try
-`--horizon 1d` vs `--horizon 1w` to see both paths). Memory relevance is a
+reflection fixtures are static text (not ticker-aware). Memory relevance is a
 same-ticker-or-not heuristic, not semantic/embedding-based -- a documented
 simplification, not an oversight.
 
@@ -201,15 +214,15 @@ per seat, one debate round.
 ## Run it
 
 ```bash
-# Deliberate -- writes one row to the Crypt (blind + synthesized together)
-.venv/bin/python -m council deliberate NVDA --horizon 1w
+# Deliberate -- writes one row per term to the Crypt (blind + synthesized together)
+.venv/bin/python -m council deliberate NVDA
 
 # Backdate it, so the resolution sweep has something to resolve without
 # waiting real time to pass -- also demonstrates the point-in-time guards
 # correctly narrowing what each seat can see at an earlier as_of
-.venv/bin/python -m council deliberate NVDA --horizon 1w --as-of 2026-08-01T16:00:00
+.venv/bin/python -m council deliberate NVDA --as-of 2026-08-01T16:00:00
 
-# Sweep every unresolved prediction whose resolve_at has passed: writes
+# Sweep every unresolved term whose resolve_at has passed: writes
 # resolutions, runs immediate reflection into memory, prints a per-seat
 # calibration snapshot
 .venv/bin/python -m council resolve
