@@ -275,7 +275,13 @@ async def run_deliberation(
     async def notice(message: str) -> None:
         await emit("notice", {"message": message})
 
-    llm_client = LLMClient(settings, on_notice=notice)
+    async def waiting(seat_id: str, provider: str, seconds: float) -> None:
+        await emit(
+            "seat_stage",
+            {"seat_id": seat_id, "stage": "waiting", "provider": provider, "resume_in": round(seconds)},
+        )
+
+    llm_client = LLMClient(settings, on_notice=notice, on_wait=waiting)
 
     # Checked first, before any seat gathers data or calls a model: a ticker
     # with no recent prices can't be predicted, and finding that out after

@@ -4,6 +4,7 @@ out, Gemini's daily limit overflowing to Groq, and a clean stop -- with
 the reason -- when nothing usable is left."""
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -537,3 +538,71 @@ def test_crypt_list_filters_and_labels_runs_by_mode(api):
     assert tickers() == ["FREE", "OLD", "PAID"]
     labels = {r["ticker"]: (r["run_mode"], r["run_shape"]) for r in client.get("/api/predictions").json()["predictions"]}
     assert labels == {"FREE": ("free", "lite"), "PAID": ("paid", "full"), "OLD": ("paid", "full")}
+
+
+# --- #111: nothing hangs forever, and waits are visible -----------------------
+
+
+async def test_a_call_that_never_answers_is_cut_off_and_retried(tmp_path, monkeypatch):
+    monkeypatch.setattr(llm_client_module, "_CALL_BACKSTOP_SECONDS", 0.05)
+    settings = _free_settings(tmp_path, groq_api_key="gsk-test")
+    client = LLMClient(settings)
+    never = asyncio.Event()  # asyncio.sleep is faked in this module; wait on an event instead
+
+    def responder(n, kwargs):
+        if n == 1:
+            return never.wait()  # the first call hangs
+        return _groq_ok(n, kwargs)
+
+    class _MaybeHanging(_Groq):
+        def __init__(self):
+            super().__init__(responder)
+            outer = self
+
+            class _Completions:
+                async def create(self, **kwargs):
+                    outer.calls += 1
+                    result = responder(outer.calls, kwargs)
+                    if asyncio.iscoroutine(result):
+                        await result
+                    return result
+
+            self.chat = SimpleNamespace(completions=_Completions())
+
+    client._groq_client = _MaybeHanging()
+    verdict = await _verdict(client)
+    assert verdict.vote == "BULLISH"
+    assert client._groq_client.calls == 2
+    assert "no answer from Groq" in client.call_log[0].error
+
+
+async def test_rate_limit_waits_are_reported_to_the_ui(tmp_path):
+    settings = _free_settings(tmp_path, groq_api_key="gsk-test")
+    waits = []
+
+    async def on_wait(seat_id, provider, seconds):
+        waits.append((seat_id, provider, seconds))
+
+    client = LLMClient(settings, on_wait=on_wait)
+
+    def responder(n, kwargs):
+        if n == 1:
+            raise _groq_rate_limit("Rate limit reached for requests per minute (RPM). Please try again in 40s.")
+        return _groq_ok(n, kwargs)
+
+    client._groq_client = _Groq(responder)
+    await _verdict(client, "cross_market")
+    assert waits == [("cross_market", "Groq", 40.0)]
+
+
+def test_every_provider_client_has_a_timeout_and_no_hidden_retries(tmp_path):
+    settings = _free_settings(
+        tmp_path, anthropic_api_key="sk-ant-test", openai_api_key="sk-test",
+        google_api_key="AIza-test", groq_api_key="gsk-test",
+    )
+    client = LLMClient(settings)
+    for sdk_client in (client._client, client._openai_client, client._groq_client):
+        assert sdk_client.timeout == llm_client_module._CALL_TIMEOUT_SECONDS
+        assert sdk_client.max_retries == 0
+    gemini_timeout_ms = client._gemini_client._api_client._http_options.timeout
+    assert gemini_timeout_ms == llm_client_module._CALL_TIMEOUT_SECONDS * 1000

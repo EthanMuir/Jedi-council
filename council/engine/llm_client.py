@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import TypeVar
 
 import anthropic
+import httpx
 from pydantic import BaseModel, ValidationError
 
 from council.config import Settings
@@ -33,6 +35,17 @@ from council.engine.routing import ResolvedRoute, resolve_route
 from council.seats.base import SeatVerdict, format_memory_context
 
 _FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "seat_verdicts"
+
+log = logging.getLogger("council.llm")
+
+# No provider call may hang a seat forever: the SDKs get this timeout
+# (Gemini's defaults to none at all), and every call is also cut off a
+# little after it as a backstop. A timed-out call is retried like any other
+# transient failure. The SDKs' own automatic retries are turned off so the
+# retry loop in get_structured is the only one -- stacked retries multiplied
+# waits and hid what was happening.
+_CALL_TIMEOUT_SECONDS = 120.0
+_CALL_BACKSTOP_SECONDS = _CALL_TIMEOUT_SECONDS + 15.0
 
 # Connection/timeout/rate-limit/5xx -- transient, worth retrying with backoff.
 # Everything else under APIStatusError (auth, bad request, permission, not
@@ -250,6 +263,8 @@ async def _call_gemini(
         )
     except genai_errors.ServerError as exc:
         raise _RetryableProviderError(str(exc)) from exc
+    except httpx.TimeoutException as exc:
+        raise _RetryableProviderError(f"Gemini timed out: {exc}") from exc
     except genai_errors.ClientError as exc:
         if getattr(exc, "code", None) == 429:
             raise _classify_rate_limit(exc) from exc
@@ -367,10 +382,15 @@ class LLMClient:
         settings: Settings,
         call_log: list[LLMCallRecord] | None = None,
         on_notice: Callable[[str], Awaitable[None]] | None = None,
+        on_wait: Callable[[str, str, float], Awaitable[None]] | None = None,
     ):
+        """`on_wait(seat_id, provider_name, seconds)` is awaited just before
+        sitting out a provider's rate limit, so the UI can say a seat is
+        waiting rather than looking stuck."""
         self.settings = settings
         self.call_log: list[LLMCallRecord] = call_log if call_log is not None else []
         self._on_notice = on_notice
+        self._on_wait = on_wait
         self._client = None
         self._openai_client = None
         self._gemini_client = None
@@ -390,20 +410,32 @@ class LLMClient:
             if settings.anthropic_api_key:
                 import anthropic
 
-                self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+                self._client = anthropic.AsyncAnthropic(
+                    api_key=settings.anthropic_api_key, timeout=_CALL_TIMEOUT_SECONDS, max_retries=0
+                )
             if settings.openai_api_key:
                 import openai
 
-                self._openai_client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
+                self._openai_client = openai.AsyncOpenAI(
+                    api_key=settings.openai_api_key, timeout=_CALL_TIMEOUT_SECONDS, max_retries=0
+                )
             if settings.google_api_key:
                 from google import genai
 
-                self._gemini_client = genai.Client(api_key=settings.google_api_key)
+                from google.genai import types as genai_types
+
+                self._gemini_client = genai.Client(
+                    api_key=settings.google_api_key,
+                    http_options=genai_types.HttpOptions(timeout=int(_CALL_TIMEOUT_SECONDS * 1000)),
+                )
             if settings.groq_api_key:
                 import openai
 
                 self._groq_client = openai.AsyncOpenAI(
-                    api_key=settings.groq_api_key, base_url=_GROQ_BASE_URL
+                    api_key=settings.groq_api_key,
+                    base_url=_GROQ_BASE_URL,
+                    timeout=_CALL_TIMEOUT_SECONDS,
+                    max_retries=0,
                 )
 
     def _estimate_cost(self, model: str, input_tokens: int, output_tokens: int) -> float:
@@ -482,6 +514,7 @@ class LLMClient:
         other = self._free_alternative(route.provider) if model_info and model_info.free else None
         if other is None:
             if self.stop_reason is None:
+                log.warning("stopping the run: nothing usable left after %s", route.provider)
                 if model_info and model_info.free:
                     self.stop_reason = " ".join(
                         self._exhausted[p] for p in FREE_MODELS if p in self._exhausted
@@ -493,6 +526,7 @@ class LLMClient:
         switch = (route.provider, other)
         if switch not in self._announced_switches:
             self._announced_switches.add(switch)
+            log.warning("switching free-tier seats from %s to %s", route.provider, other)
             await self._notice(
                 f"{self._exhausted[route.provider]} Switching to "
                 f"{_PROVIDER_NAMES[other]}'s free models for the rest of this run."
@@ -591,11 +625,24 @@ class LLMClient:
             client = getattr(self, client_attr)
             start = time.monotonic()
             try:
-                raw_input, input_tokens, output_tokens = await call_adapter(
-                    client, model, system_prompt, user_prompt, schema, tool_name
-                )
+                try:
+                    raw_input, input_tokens, output_tokens = await asyncio.wait_for(
+                        call_adapter(client, model, system_prompt, user_prompt, schema, tool_name),
+                        timeout=_CALL_BACKSTOP_SECONDS,
+                    )
+                except asyncio.TimeoutError as exc:
+                    raise _RetryableProviderError(
+                        f"no answer from {_PROVIDER_NAMES.get(route.provider, route.provider)} "
+                        f"after {_CALL_BACKSTOP_SECONDS:.0f}s"
+                    ) from exc
             except _QuotaExhaustedError as exc:
                 log_failure(exc, (time.monotonic() - start) * 1000)
+                log.warning(
+                    "%s: %s on %s for %s: %s",
+                    _PROVIDER_NAMES.get(route.provider, route.provider),
+                    "daily limit used up" if exc.kind == "daily" else "out of credit",
+                    model, seat_id, str(exc)[:300],
+                )
                 if self._is_free_key_on_paid_gemini(route, exc):
                     # A free Gemini key asked for a model the free tier
                     # doesn't include (e.g. Pro): not a used-up limit, just
@@ -620,8 +667,21 @@ class LLMClient:
                     # A per-minute limit with a known reset: sit it out
                     # rather than burning a retry on a guaranteed repeat.
                     rate_limit_waits += 1
+                    provider_name = _PROVIDER_NAMES.get(route.provider, route.provider)
+                    log.info(
+                        "%s rate limit on %s for %s: waiting %.0fs (wait %d of %d)",
+                        provider_name, model, seat_id, exc.wait_seconds,
+                        rate_limit_waits, _MAX_RATE_LIMIT_WAITS,
+                    )
+                    if self._on_wait:
+                        await self._on_wait(seat_id, provider_name, exc.wait_seconds)
                     await asyncio.sleep(exc.wait_seconds + 0.5)
                     continue
+                log.warning(
+                    "%s call for %s failed (attempt %d): %s",
+                    _PROVIDER_NAMES.get(route.provider, route.provider), seat_id, attempt,
+                    str(exc)[:300],
+                )
                 failures += 1
                 if failures <= max_retries:
                     await asyncio.sleep(_backoff_seconds(failures))

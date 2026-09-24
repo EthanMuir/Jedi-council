@@ -178,6 +178,7 @@ function redrawWizardChair(seatId, chairState) {
 }
 
 function resetRing() {
+  Object.keys(waitTimers).forEach(clearWait);
   seatDetails = {};
   debateRoundsLog = [];
   lastRealityAnchor = null;
@@ -235,7 +236,58 @@ function stageToPct(payload) {
   return 0;
 }
 
+// seat_id -> interval id for a seat's "waiting on a rate limit" countdown.
+const waitTimers = {};
+
+function clearWait(seatId) {
+  if (waitTimers[seatId]) {
+    clearInterval(waitTimers[seatId]);
+    delete waitTimers[seatId];
+  }
+}
+
+// A free tier's per-minute limit makes a seat sit out a pause the provider
+// names ("try again in 40s"). Say so on the seat, counting down, instead
+// of leaving it on a "deliberating..." that looks stuck.
+function showSeatWaiting(payload) {
+  const chair = document.getElementById(`chair-${payload.seat_id}`);
+  const resumeAt = Date.now() + (payload.resume_in || 0) * 1000;
+  const label = () => {
+    const left = Math.max(0, Math.round((resumeAt - Date.now()) / 1000));
+    return left > 0 ? `waiting on ${payload.provider} limit · ${left}s` : 'deliberating...';
+  };
+  if (!chair) {
+    // Debate / Prosecutor / Grand Master have no chair on the ring.
+    setStatus(`Waiting on ${payload.provider}'s rate limit -- resumes in ${payload.resume_in}s.`);
+    return;
+  }
+  const voteEl = chair.querySelector('.seat-vote');
+  clearWait(payload.seat_id);
+  voteEl.className = 'seat-vote yellow';
+  voteEl.textContent = label();
+  waitTimers[payload.seat_id] = setInterval(() => {
+    voteEl.textContent = label();
+    if (Date.now() >= resumeAt) {
+      voteEl.className = 'seat-vote cyan';
+      clearWait(payload.seat_id);
+    }
+  }, 1000);
+}
+
 function updateSeatProgress(payload) {
+  if (payload.stage === 'waiting') {
+    showSeatWaiting(payload);
+    return;
+  }
+  if (waitTimers[payload.seat_id]) {
+    // Work resumed before the countdown ran out.
+    clearWait(payload.seat_id);
+    const voteEl = document.querySelector(`#chair-${payload.seat_id} .seat-vote`);
+    if (voteEl) {
+      voteEl.textContent = 'deliberating...';
+      voteEl.className = 'seat-vote cyan';
+    }
+  }
   const fill = document.getElementById(`fill-${payload.seat_id}`);
   if (!fill) return;
   fill.className = 'seat-bust-fill stage-active';
@@ -243,6 +295,7 @@ function updateSeatProgress(payload) {
 }
 
 function updateSeatChair(payload, silent = false) {
+  clearWait(payload.seat_id);
   seatDetails[payload.seat_id] = payload;
   const chair = document.getElementById(`chair-${payload.seat_id}`);
   if (!chair) return;

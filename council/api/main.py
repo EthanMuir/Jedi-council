@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -32,6 +33,17 @@ from council.engine.routing import planned_run_mode
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
 from council.seats.grand_master import GrandMasterSeat
 from council.seats.prosecutor import ProsecutorSeat
+
+# Rate limits, used-up daily limits, timeouts and provider switches are
+# logged under "council.*" -- sent to stderr so they land in the server log
+# (journalctl -u jedi-council) with a timestamp.
+_council_log = logging.getLogger("council")
+if not _council_log.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    _council_log.addHandler(_handler)
+    _council_log.setLevel(logging.INFO)
+    _council_log.propagate = False
 
 app = FastAPI(title="The High Council")
 install_auth(app)
