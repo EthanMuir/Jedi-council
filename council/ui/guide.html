@@ -16,8 +16,15 @@
     screen, and what every Council Member does and is allowed to see.
   </p>
 
+  <nav class="guide-toc" aria-label="On this page">
+    <a href="#verdicts">Reading a Verdict</a>
+    <a href="#screens">The Screens</a>
+    <a href="#horizons">Seats by Horizon</a>
+    <a href="#council">The Council</a>
+  </nav>
+
   <!-- ================= COLOR LEGEND ================= -->
-  <div class="panel" style="margin-bottom: 20px;">
+  <div class="panel" style="margin-bottom: 20px;" id="verdicts">
     <h2>Reading a Verdict</h2>
     <div class="legend-row">
       <div class="legend-item">
@@ -43,17 +50,23 @@
   </div>
 
   <!-- ================= HOW EACH SCREEN WORKS ================= -->
-  <h2 style="margin-top: 32px;">The Screens</h2>
+  <h2 style="margin-top: 32px;" id="screens">The Screens</h2>
 
   <div class="panel screen-panel" style="margin-bottom: 16px;">
     <h3 class="cyan">The Chamber</h3>
     <ol class="step-list mono">
-      <li>Type a ticker (fixture data only covers <b>NVDA</b> until a real market-data provider key is configured in <code>.env</code> -- everything else will run the full pipeline but fail at the data-fetch step).</li>
-      <li>Pick a horizon: Next Day / Next Week / Next Month / Next Year. Not every seat is competent at every horizon -- see the competence table below -- so fewer seats light up at 1d than at 1y.</li>
-      <li>Optionally, type a free-form question (e.g. "Is the recent capex guidance already priced in?"). It's handed to the Grand Master as explicit framing for the final synthesis only -- it does not change what any Tier I seat itself is allowed to see or how it votes; a ticker is still required regardless, since every seat's data domain is fetched per-ticker.</li>
-      <li>Click <b>Convene the Council</b>. Seats light up live as each finishes its isolated read (Phase A, the blind round). Click any seat chair to open its full reasoning in the holo-panel.</li>
-      <li>Once all Tier I seats report: the Reality Anchor appears (Phase B), then the Bull/Bear debate with the Prosecutor's rulings (Phase C), then the audit gates and Risk Warden's position size, and finally the Grand Master's synthesis fills the center holocron (Phase F). The whole run is written to the Crypt automatically (Phase G).</li>
+      <li>Type a stock ticker, e.g. <b>NVDA</b>.</li>
+      <li>Pick a horizon: Next Day / Next Week / Next Month / Next Year. Not every seat is competent at every horizon -- see <a href="#horizons">Seats by Horizon</a> -- so fewer seats take part at 1d than at 1y.</li>
+      <li>Optionally, ask a question (e.g. "Is the recent capex guidance already priced in?"). It only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker and votes independently.</li>
+      <li>Press <b>Convene the Council</b>. Each seat's bar fills as it gathers its data and works through its samples, then settles into its vote color. Click or tap any seat to read its full reasoning.</li>
+      <li>Once every seat has reported: the Reality Anchor appears, then the Bull/Bear debate with the Prosecutor's rulings, then the audit gates and position size, and finally the Grand Master's verdict fills the centerpiece. The whole run is saved to the Crypt automatically.</li>
     </ol>
+    <p class="guide-callout mono">
+      <b>Running your own copy?</b> Without an FMP key in <code>.env</code> the Council
+      uses built-in sample market data (which really only covers NVDA), and without an
+      Anthropic key it replays sample answers instead of calling a model, at no cost.
+      Settings shows which mode you're in.
+    </p>
   </div>
 
   <div class="panel screen-panel" style="margin-bottom: 16px;">
@@ -74,8 +87,16 @@
     </ol>
   </div>
 
+  <div class="panel screen-panel" style="margin-bottom: 16px;">
+    <h3 class="cyan">Settings</h3>
+    <ol class="step-list mono">
+      <li><b>Chamber Appearance</b> -- pick the centerpiece and the seat-chair style (including the pixel-art Seat Wizards). Purely visual, saved to your browser only.</li>
+      <li><b>Models &amp; Cost</b> -- choose the AI model each seat runs on and see the estimated cost of one run at each horizon. These choices are saved on the server, so they apply to every deliberation on this copy of the Council.</li>
+    </ol>
+  </div>
+
   <!-- ================= HORIZON COMPETENCE ================= -->
-  <div class="panel" style="margin-bottom: 8px;">
+  <div class="panel" style="margin-bottom: 8px;" id="horizons">
     <h2>Which Seats Vote at Which Horizon</h2>
     <p class="dim" style="font-size:13px;">
       A hardcoded competence weight per seat per horizon (0.0-1.0). A seat at
@@ -84,6 +105,7 @@
       more influence in the final weighted vote, before calibration and
       data-quality adjustments are applied on top.
     </p>
+    <div class="table-scroll">
     <table class="guide-table mono" style="margin-top: 12px;">
       <thead>
         <tr><th>Seat</th><th>1D</th><th>1W</th><th>1M</th><th>1Y</th></tr>
@@ -92,14 +114,22 @@
         <!-- filled by guide.js from the same matrix the backend uses -->
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- ================= TIER I: THE TWELVE SEATS ================= -->
-  <h2 class="tier-label">Tier I -- The Twelve Seats</h2>
+  <h2 class="tier-label" id="council">The Council</h2>
   <p class="dim" style="font-size:13px; margin-top:-6px; margin-bottom:16px;">
+    Four tiers, in the order a deliberation runs them. Open a tier to see
+    each member, what it's allowed to see, and what it does.
+  </p>
+
+  <details class="tier" open>
+  <summary>Tier I -- The Twelve Seats</summary>
+  <p class="dim tier-note">
     Every seat below deliberates in total isolation -- it is constructed with
     only the data fields listed, enforced in code (not by prompting), and is
-    sampled independently three times to measure its own run-to-run
+    sampled several times (three by default) to measure its own run-to-run
     consistency before its votes are combined with anyone else's.
   </p>
   <div class="seat-grid">
@@ -177,8 +207,11 @@
     </div>
   </div>
 
+  </details>
+
   <!-- ================= TIER II ================= -->
-  <h2 class="tier-label">Tier II -- The Adversarial Chamber</h2>
+  <details class="tier">
+  <summary>Tier II -- The Adversarial Chamber</summary>
   <div class="seat-grid">
     <div class="panel-inset seat-card">
       <div class="seat-card-title">Bull Advocate &amp; Bear Advocate</div>
@@ -194,9 +227,12 @@
     </div>
   </div>
 
+  </details>
+
   <!-- ================= TIER III ================= -->
-  <h2 class="tier-label">Tier III -- Quality Control</h2>
-  <p class="dim" style="font-size:13px; margin-top:-6px; margin-bottom:16px;">
+  <details class="tier">
+  <summary>Tier III -- Quality Control</summary>
+  <p class="dim tier-note">
     None of these four are an LLM call -- pure computation, deterministic, no token cost.
   </p>
   <div class="seat-grid">
@@ -226,8 +262,11 @@
     </div>
   </div>
 
+  </details>
+
   <!-- ================= TIER IV ================= -->
-  <h2 class="tier-label">Tier IV -- Synthesis</h2>
+  <details class="tier">
+  <summary>Tier IV -- Synthesis</summary>
   <div class="seat-grid">
     <div class="panel-inset seat-card">
       <div class="seat-card-title">Master of the Order</div>
@@ -236,6 +275,7 @@
       <div class="seat-card-field"><b>Does:</b> writes the final call. Must report the <i>structure</i> of disagreement, not just a consensus number -- unanimity among seats that all leaned on the same correlated evidence is treated as a warning sign, not a green light. Cannot override a Prosecutor veto.</div>
     </div>
   </div>
+  </details>
 </div>
 
 <script src="/js/common.js"></script>

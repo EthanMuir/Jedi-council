@@ -1,5 +1,5 @@
-// THE SETTINGS -- per-seat model assignment + live cost estimate.
-// Task #74.
+// THE SETTINGS -- Chamber appearance pickers, per-seat model assignment,
+// and a live cost estimate.
 
 let CATALOG_BY_ID = {};
 let CURRENT_HORIZON = '1w';
@@ -32,7 +32,13 @@ function buildModelSelect(role) {
   return select;
 }
 
-async function setModel(role, modelId) {
+function setModelStatus(text, isError = false) {
+  const el = document.getElementById('model-status');
+  el.textContent = text;
+  el.className = `mono model-status ${isError ? 'crimson' : 'green'}`;
+}
+
+async function saveModelChoice(role, modelId, successText) {
   try {
     await fetchJSON('/api/settings/models', {
       method: 'POST',
@@ -40,26 +46,21 @@ async function setModel(role, modelId) {
       body: JSON.stringify({ role, model_id: modelId }),
     });
     AudioBlips.blip();
+    setModelStatus(successText);
     await loadRoles();
     await loadCostEstimate();
   } catch (e) {
-    alert(`Failed to set model: ${e.message}`);
+    setModelStatus(`Couldn't save that change: ${e.message}`, true);
   }
 }
 
-async function resetModel(role) {
-  try {
-    await fetchJSON('/api/settings/models', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role, model_id: null }),
-    });
-    AudioBlips.blip();
-    await loadRoles();
-    await loadCostEstimate();
-  } catch (e) {
-    alert(`Failed to reset model: ${e.message}`);
-  }
+function setModel(role, modelId) {
+  const name = CATALOG_BY_ID[modelId]?.display_name || modelId;
+  return saveModelChoice(role, modelId, `Saved -- ${role} now uses ${name}.`);
+}
+
+function resetModel(role) {
+  return saveModelChoice(role, null, `Saved -- ${role} is back on its recommended model.`);
 }
 
 function renderRolesTable(data) {
@@ -93,6 +94,7 @@ function renderRolesTable(data) {
     tr.appendChild(modelTd);
 
     const costTd = document.createElement('td');
+    costTd.dataset.label = 'Est. per call';
     costTd.textContent = model ? fmtUsd(model.typical_call_cost_usd) : '--';
     tr.appendChild(costTd);
 
@@ -127,7 +129,7 @@ async function loadCostEstimate() {
     const est = await fetchJSON(`/api/settings/cost-estimate?horizon=${CURRENT_HORIZON}`);
     summary.innerHTML = `
       <span class="big-number ${est.is_fixture ? 'fixture' : ''}">${fmtUsd(est.total_cost_usd)}</span>
-      <span class="dim">${est.total_calls} LLM calls -- ${CURRENT_HORIZON} horizon${est.is_fixture ? ' -- FIXTURE MODE, $0 actual' : ''}</span>
+      <span class="dim">${est.total_calls} model calls at the ${CURRENT_HORIZON} horizon${est.is_fixture ? ' -- no API key set, so runs use sample answers and cost $0' : ''}</span>
     `;
     lineitems.innerHTML = est.line_items.map(li => `
       <tr>

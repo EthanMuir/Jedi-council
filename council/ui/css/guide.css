@@ -59,7 +59,7 @@
 
 .seat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 14px;
 }
 
@@ -99,4 +99,72 @@
 
 .screen-panel h3 {
   margin-top: 0;
+}
+
+/* ---- jump menu ---- */
+.guide-toc {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto 24px;
+}
+
+.guide-toc a {
+  font-family: var(--font-header);
+  font-size: 9px;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--cyan);
+  border: 2px solid #2a3348;
+  background: var(--navy-deep);
+  padding: 8px 12px;
+}
+
+.guide-toc a:hover { border-color: var(--cyan-dim); }
+
+.guide-callout {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--amber-dim);
+  background: rgba(232, 176, 79, 0.05);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--bone-dim);
+}
+
+.guide-callout b { color: var(--amber); font-weight: normal; }
+
+/* ---- the roster: one collapsible section per tier ---- */
+details.tier {
+  margin-bottom: 14px;
+  border: 2px solid #2a3348;
+  background: var(--slate);
+  padding: 0 14px;
+}
+
+details.tier > summary {
+  cursor: pointer;
+  font-family: var(--font-header);
+  font-size: 11px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  padding: 14px 0;
+  line-height: 1.6;
+}
+
+details.tier[open] { padding-bottom: 14px; }
+
+.tier-note {
+  font-size: 13px;
+  margin: 0 0 14px;
+  line-height: 1.6;
+}
+
+.step-list a { color: var(--cyan); }
+
+@media (max-width: 760px) {
+  .legend-row { gap: 14px; }
+  .guide-table th, .guide-table td { padding: 6px 8px; }
+  details.tier { padding: 0 10px; }
 }

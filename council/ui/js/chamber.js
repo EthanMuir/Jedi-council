@@ -106,25 +106,24 @@ function restoreChamberState() {
 
 function layoutRing() {
   const ring = document.getElementById('chamber-ring');
-  // Seat Wizards' chairs are taller than every other chair style (a
-  // standing figure needs more room than a flat bust-bar), so vertically
-  // adjacent chairs need more separation too or they overlap -- widen the
-  // ring itself for this style rather than shrinking the character back
-  // down to fit the old spacing.
-  const baseRadius = getSeatChairStyle() === 'wizard' ? 282 : 260;
-  const radius = ring.clientWidth < 500 ? ring.clientWidth * 0.38 : baseRadius;
+  // Seat Wizards' chairs are taller than every other chair style, so
+  // chamber.css gives the ring a wider radius for them (.ring-wizard)
+  // rather than shrinking the character back down to fit the old spacing.
+  ring.classList.toggle('ring-wizard', getSeatChairStyle() === 'wizard');
   const n = TIER_I_SEATS.length;
 
   TIER_I_SEATS.forEach((seat, i) => {
     const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius;
 
     const chair = document.createElement('div');
     chair.className = `${chairClassBase()} state-idle`;
     chair.id = `chair-${seat.id}`;
-    chair.style.left = `calc(50% + ${x}px)`;
-    chair.style.top = `calc(50% + ${y}px)`;
+    // A point on the unit circle -- chamber.css multiplies it by the ring
+    // radius, or ignores it entirely on phones, where the ring becomes a
+    // grid. Keeping the radius in CSS is what lets that switch happen on
+    // resize/rotation without any JS re-layout.
+    chair.style.setProperty('--cx', Math.cos(angle).toFixed(4));
+    chair.style.setProperty('--cy', Math.sin(angle).toFixed(4));
     chair.innerHTML = getSeatChairStyle() === 'wizard'
       ? `
         <div class="wiz-chair-stage">

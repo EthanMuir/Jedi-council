@@ -13,7 +13,7 @@
   <h1 style="text-align:center; margin-bottom: 24px;">The High Council Chamber</h1>
 
   <div class="panel" style="margin-bottom: 20px;">
-    <div class="row" style="align-items:flex-end; justify-content: center; gap: 24px; flex-wrap: wrap;">
+    <div class="row control-row" style="align-items:flex-end; justify-content: center; gap: 24px;">
       <div>
         <h3>Ticker</h3>
         <input type="text" id="ticker-input" placeholder="NVDA" maxlength="8" />
@@ -33,7 +33,8 @@
     </div>
     <div style="margin-top:16px;">
       <h3>Question <span class="dim" style="font-weight:normal;">(optional)</span></h3>
-      <input type="text" id="context-input" style="width:100%;" placeholder="e.g. Is the recent capex guidance already priced in? -- framing for the Grand Master's synthesis only; every seat's own data is still ticker-driven and unaffected." />
+      <input type="text" id="context-input" style="width:100%;" placeholder="e.g. Is the recent capex guidance already priced in?" />
+      <div class="dim" style="font-size:12px; margin-top:6px;">Only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker.</div>
     </div>
     <div id="status-line" class="dim mono" style="text-align:center; margin-top: 12px; min-height: 18px;"></div>
   </div>
@@ -46,11 +47,11 @@
   </div>
 
   <div class="row" style="margin-top: 20px; align-items: stretch;">
-    <div class="panel" style="flex: 1; min-width: 320px;">
+    <div class="panel col">
       <h2>Reality Anchor</h2>
       <div id="reality-anchor" class="mono dim">No deliberation yet.</div>
     </div>
-    <div class="panel" style="flex: 1; min-width: 320px;">
+    <div class="panel col">
       <h2>Dissent Map</h2>
       <div id="dissent-map" class="mono dim">No deliberation yet.</div>
     </div>
@@ -62,11 +63,11 @@
   </div>
 
   <div class="row" style="margin-top: 20px; align-items: stretch;">
-    <div class="panel" style="flex: 1; min-width: 280px;">
+    <div class="panel col">
       <h2>Cost Auditor / Risk Warden</h2>
       <div id="audit-panel" class="mono dim">--</div>
     </div>
-    <div class="panel" style="flex: 2; min-width: 320px;" id="verdict-panel">
+    <div class="panel col-2" id="verdict-panel">
       <h2>Grand Master Synthesis</h2>
       <div id="grand-master-verdict" class="mono dim">The council has not yet convened.</div>
     </div>

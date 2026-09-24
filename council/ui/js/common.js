@@ -1,5 +1,5 @@
-// Shared across all four screens: nav bar, audio blips (off by default),
-// and a small SSE consumption helper.
+// Shared across every screen: nav bar, audio blips (off by default), and a
+// small SSE consumption helper.
 
 const NAV_LINKS = [
   { href: '/index.html', label: 'The Chamber' },
@@ -41,17 +41,36 @@ function renderNav(activeHref) {
   brand.textContent = 'THE HIGH COUNCIL';
   nav.appendChild(brand);
 
+  // Only visible on narrow screens (theme.css), where the links collapse
+  // into a dropdown instead of pushing the page wider than the screen.
+  const toggle = document.createElement('button');
+  toggle.className = 'btn nav-toggle';
+  toggle.textContent = 'MENU';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', 'nav-links');
+  toggle.onclick = () => {
+    const open = nav.classList.toggle('open');
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.textContent = open ? 'CLOSE' : 'MENU';
+  };
+  nav.appendChild(toggle);
+
+  const links = document.createElement('div');
+  links.className = 'nav-links';
+  links.id = 'nav-links';
+  nav.appendChild(links);
+
   for (const link of NAV_LINKS) {
     const a = document.createElement('a');
     a.href = link.href;
     a.textContent = link.label;
     if (link.href === activeHref) a.classList.add('active');
-    nav.appendChild(a);
+    links.appendChild(a);
   }
 
   const spacer = document.createElement('span');
   spacer.className = 'spacer';
-  nav.appendChild(spacer);
+  links.appendChild(spacer);
 
   const audioBtn = document.createElement('button');
   audioBtn.className = 'btn';
@@ -62,7 +81,7 @@ function renderNav(activeHref) {
     audioBtn.textContent = AudioBlips.enabled ? 'SOUND: ON' : 'SOUND: OFF';
     if (AudioBlips.enabled) AudioBlips.blip();
   };
-  nav.appendChild(audioBtn);
+  links.appendChild(audioBtn);
 
   // council_logged_in is a non-HttpOnly flag cookie set alongside the real
   // (HttpOnly, unreadable from JS on purpose) session cookie -- with auth
@@ -73,7 +92,7 @@ function renderNav(activeHref) {
     logoutLink.href = '/logout';
     logoutLink.textContent = 'LOGOUT';
     logoutLink.style.marginLeft = '4px';
-    nav.appendChild(logoutLink);
+    links.appendChild(logoutLink);
   }
 
   document.body.prepend(nav);

@@ -257,6 +257,21 @@ input[type="text"]:focus {
   background: var(--navy-deep);
   border-bottom: 2px solid #131722;
   align-items: center;
+  position: relative;
+  z-index: 50;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex: 1;
+}
+
+.nav-toggle {
+  display: none;
+  font-size: 9px;
+  padding: 8px 12px;
 }
 
 .nav a {
@@ -289,6 +304,36 @@ input[type="text"]:focus {
   flex: 1;
 }
 
+/* Five pixel-font links plus the brand and sound toggle need ~1040px in
+   one row, so the nav tightens first and collapses into a menu below
+   940px rather than pushing the whole page wider than the screen. */
+@media (max-width: 1100px) {
+  .nav { padding: 10px 14px; }
+  .nav .brand { font-size: 10px; margin-right: 12px; }
+  .nav a { font-size: 9px; padding: 8px 10px; }
+}
+
+@media (max-width: 940px) {
+  .nav { flex-wrap: wrap; }
+  .nav-toggle { display: inline-block; margin-left: auto; }
+  .nav-links {
+    display: none;
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding-top: 8px;
+  }
+  .nav.open .nav-links { display: flex; }
+  .nav-links a {
+    font-size: 10px;
+    padding: 12px 10px;
+    border-top: 1px solid #131722;
+  }
+  .nav-links .spacer { display: none; }
+  .nav-links .btn { align-self: flex-start; margin-top: 10px; }
+}
+
 /* ---- layout helpers ---------------------------------------------------- */
 .container {
   max-width: 1200px;
@@ -300,6 +345,28 @@ input[type="text"]:focus {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+/* Side-by-side panels that fall to one column once there isn't room for
+   two -- min-width:0 (not the old inline min-width:320px) is what stops a
+   narrow phone from being pushed wider than its own screen. */
+.row > .col { flex: 1 1 300px; min-width: 0; }
+
+/* Wide tables scroll inside their own box on narrow screens instead of
+   dragging the whole page sideways. */
+.table-scroll { overflow-x: auto; }
+.row > .col-2 { flex: 2 1 320px; min-width: 0; }
+
+@media (max-width: 760px) {
+  .container { padding: 16px 12px 48px; }
+  h1 { font-size: 15px; }
+  h2 { font-size: 12px; }
+  .panel { padding: 12px; }
+  .toggle-row { width: 100%; flex-wrap: wrap; }
+  .toggle-option { flex: 1 1 auto; padding: 10px 8px; }
+  .btn-lever { width: 100%; padding: 14px 12px; }
+  /* 16px is the size below which iOS Safari zooms the page on focus. */
+  input[type="text"] { width: 100%; font-size: 16px; }
 }
 
 .grid {

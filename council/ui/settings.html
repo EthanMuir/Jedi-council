@@ -12,25 +12,11 @@
 
 <div class="container">
   <h1 style="text-align:center; margin-bottom: 8px;">Settings</h1>
-  <p class="dim" style="text-align:center; margin-bottom: 24px;">Assign a model to each seat. Sorted most to least expensive; the recommended model is starred.</p>
+  <p class="dim" style="text-align:center; margin-bottom: 24px;">How the Chamber looks, and which AI model each seat runs on.</p>
 
-  <div class="panel" style="margin-bottom: 20px;">
-    <h2 style="margin-top:0;">Estimated Cost Per Run</h2>
-    <div class="toggle-row" id="horizon-toggle">
-      <button class="toggle-option" data-horizon="1d">1D</button>
-      <button class="toggle-option" data-horizon="1w">1W</button>
-      <button class="toggle-option" data-horizon="1m">1M</button>
-      <button class="toggle-option" data-horizon="1y">1Y</button>
-    </div>
-    <div class="cost-summary" style="margin-top:16px;" id="cost-summary">
-      <span class="dim">Loading...</span>
-    </div>
-    <table class="cost-lineitems mono" id="cost-lineitems"></table>
-  </div>
-
-  <div class="panel" style="margin-bottom: 20px;">
+  <div class="panel" style="margin-bottom: 20px;" id="appearance">
     <h2 style="margin-top:0;">Chamber Appearance</h2>
-    <p class="dim" style="margin-top:-6px; margin-bottom:16px;">Purely visual -- saved to this browser, doesn't affect any deliberation.</p>
+    <p class="dim section-note">Saved to this browser only. Purely visual -- no effect on any deliberation.</p>
 
     <h3>Centerpiece</h3>
     <div class="appearance-grid" id="centerpiece-grid" style="margin-bottom:20px;"></div>
@@ -39,7 +25,33 @@
     <div class="appearance-grid" id="chair-grid"></div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="models">
+    <h2 style="margin-top:0;">Models &amp; Cost</h2>
+    <p class="dim section-note">
+      Pick the model each seat runs on -- saved on the server, so it applies to
+      every deliberation from now on. Options run most to least expensive;
+      &#9733; marks the recommended one.
+    </p>
+
+    <div class="cost-header">
+      <h3>Estimated cost per run</h3>
+      <div class="toggle-row" id="horizon-toggle">
+        <button class="toggle-option" data-horizon="1d">1D</button>
+        <button class="toggle-option" data-horizon="1w">1W</button>
+        <button class="toggle-option" data-horizon="1m">1M</button>
+        <button class="toggle-option" data-horizon="1y">1Y</button>
+      </div>
+    </div>
+    <div class="cost-summary" id="cost-summary">
+      <span class="dim">Loading...</span>
+    </div>
+    <details class="cost-breakdown">
+      <summary>Per-seat breakdown</summary>
+      <table class="cost-lineitems mono" id="cost-lineitems"></table>
+    </details>
+
+    <div id="model-status" class="mono model-status" role="status"></div>
+
     <table class="settings-table mono" id="settings-table">
       <thead>
         <tr>

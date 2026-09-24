@@ -1,3 +1,41 @@
+.section-note {
+  margin-top: -6px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 70ch;
+}
+
+.cost-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.cost-header h3 { margin: 0; }
+
+.cost-breakdown {
+  margin-top: 10px;
+}
+
+.cost-breakdown summary {
+  cursor: pointer;
+  font-family: var(--font-header);
+  font-size: 9px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  padding: 6px 0;
+}
+
+.model-status {
+  min-height: 20px;
+  margin: 16px 0 6px;
+  font-size: 13px;
+}
+
 .settings-table {
   width: 100%;
   border-collapse: collapse;
@@ -182,3 +220,19 @@ select.model-select:focus {
   cursor: default;
 }
 .chair-preview-wrap .seat-chair:hover { transform: none; }
+
+/* ---- phones: the five-column model table stacks into one card per seat,
+   instead of forcing the page sideways around a 260px-wide dropdown. ---- */
+@media (max-width: 760px) {
+  .settings-table thead { display: none; }
+  .settings-table,
+  .settings-table tbody,
+  .settings-table tr,
+  .settings-table td { display: block; width: 100%; }
+  .settings-table tr { padding: 12px 0; border-bottom: 1px solid #2a3348; }
+  .settings-table td { border: none; padding: 4px 0; }
+  .settings-table td[data-label]::before { content: attr(data-label) ": "; color: var(--bone-dim); }
+  select.model-select { min-width: 0; width: 100%; font-size: 16px; }
+  .reset-link { margin-left: 0; }
+  .appearance-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+}
