@@ -9,12 +9,12 @@ Dispersion is already baked into each seat's stored `probability` (Phase 2's
 sampling discount), so it is not applied a second time here -- see
 council/engine/sampling.py. seat_weight is the Calibration Officer's output
 (council/calibration/officer.py); it stays 1.0 per seat until that seat has
-20+ resolved predictions. NO_READ contributes to neither numerator nor
+20+ resolved predictions. An abstention (NO_READ / NO_CONVICTION) contributes to neither numerator nor
 denominator.
 """
 from __future__ import annotations
 
-from council.seats.base import SeatVerdict
+from council.seats.base import SeatVerdict, is_abstention
 
 DATA_QUALITY_MULTIPLIER = {"GOOD": 1.0, "PARTIAL": 0.7, "POOR": 0.4}
 
@@ -38,7 +38,7 @@ def weighted_vote(
     """Returns (vote, confidence, consensus_pct). `weights` defaults to 1.0
     per seat (Phase A blind round); pass a computed dict for Phase D."""
     weights = weights or {}
-    directional = {sid: v for sid, v in verdicts.items() if v.vote != "NO_READ"}
+    directional = {sid: v for sid, v in verdicts.items() if not is_abstention(v.vote)}
     if not directional:
         return "NO_CONVICTION", 0.5, 0.0
 

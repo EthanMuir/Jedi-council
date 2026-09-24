@@ -21,7 +21,7 @@ from council.engine.llm_client import LLMClient
 from council.engine.orchestrator import build_data_service
 from council.memory.reflection import generate_immediate_reflection
 from council.memory.store import MemoryStore
-from council.seats.base import SeatVerdict
+from council.seats.base import SeatVerdict, is_abstention
 
 
 @dataclass
@@ -126,7 +126,7 @@ async def _reflect_on_resolution(
     written = 0
     for row in seat_vote_rows:
         verdict = SeatVerdict(**json.loads(row["verdict_json"]))
-        if verdict.vote == "NO_READ":
+        if is_abstention(verdict.vote):
             continue  # nothing to learn from an abstention here
 
         lesson = await generate_immediate_reflection(

@@ -20,6 +20,7 @@ from council.engine.orchestrator import (
 from council.engine.llm_client import RunStopped
 from council.engine.resolution_sweep import sweep_unresolved
 from council.engine.routing import planned_run_mode
+from council.seats.base import is_abstention
 
 
 def _print_result(result: DeliberationResult) -> None:
@@ -36,7 +37,7 @@ def _print_result(result: DeliberationResult) -> None:
             f"    vote: {v.vote}   probability: {v.probability}   data_quality: {v.data_quality}"
             f"   dispersion: {sr.dispersion} (n={sr.sample_count})"
         )
-        if v.vote == "NO_READ":
+        if is_abstention(v.vote):
             print(f"    abstain_reason: {v.abstain_reason}")
         else:
             print(

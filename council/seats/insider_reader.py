@@ -31,7 +31,7 @@ Signal grammar, apply it strictly:
   insider SALES in general are noise (diversification, taxes, liquidity).
   Say so explicitly rather than reading bearish intent into them.
 
-If the transactions in view don't rise above this noise floor, NO_READ is
+If the transactions in view don't rise above this noise floor, NO_CONVICTION is
 the correct answer.
 """
 

@@ -24,7 +24,7 @@ class FamilyVotes:
 @dataclass
 class TechnicalReading:
     family_votes: FamilyVotes
-    mechanical_vote: Literal["BULLISH", "BEARISH", "NO_READ"]
+    mechanical_vote: Literal["BULLISH", "BEARISH", "NO_CONVICTION"]
     sma20: float | None
     sma50: float | None
     rsi14: float | None
@@ -116,7 +116,7 @@ def compute_family_votes(bars: list[OHLCVBar]) -> FamilyVotes:
     return FamilyVotes(trend=trend, breakout=breakout, oscillator=oscillator, volume=volume)
 
 
-def mechanical_direction(votes: FamilyVotes) -> Literal["BULLISH", "BEARISH", "NO_READ"]:
+def mechanical_direction(votes: FamilyVotes) -> Literal["BULLISH", "BEARISH", "NO_CONVICTION"]:
     tally = [votes.trend, votes.breakout, votes.oscillator, votes.volume]
     bulls = tally.count("BULLISH")
     bears = tally.count("BEARISH")
@@ -124,7 +124,7 @@ def mechanical_direction(votes: FamilyVotes) -> Literal["BULLISH", "BEARISH", "N
         return "BULLISH"
     if bears > bulls:
         return "BEARISH"
-    return "NO_READ"
+    return "NO_CONVICTION"
 
 
 def analyse(bars: list[OHLCVBar]) -> TechnicalReading:
@@ -142,7 +142,7 @@ def analyse(bars: list[OHLCVBar]) -> TechnicalReading:
     twenty_day_low = min(closes[-20:]) if len(closes) >= 20 else None
 
     entry = exit_ = invalidation = expected_move_pct = None
-    if direction != "NO_READ" and atr14 is not None:
+    if direction != "NO_CONVICTION" and atr14 is not None:
         entry = round(last_close, 2)
         if direction == "BULLISH":
             exit_ = round(last_close + 2 * atr14, 2)

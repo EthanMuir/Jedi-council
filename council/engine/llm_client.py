@@ -281,7 +281,7 @@ def _repair_seat_verdict_input(raw: dict) -> dict:
     reorder) -- fixed here in code instead of spending two more real
     retries hoping the model gets it right this time:
 
-    - vote=NO_READ with abstain_reason missing or empty. If the model
+    - vote=NO_READ/NO_CONVICTION with abstain_reason missing or empty. If the model
       instead put its reasoning in `thesis` -- a common substitution,
       since that's the field it's used to writing an explanation into --
       reuse that text rather than lose it; otherwise fall back to a
@@ -296,7 +296,7 @@ def _repair_seat_verdict_input(raw: dict) -> dict:
     which still fails and still retries as before."""
     repaired = dict(raw)
 
-    if repaired.get("vote") == "NO_READ" and not repaired.get("abstain_reason"):
+    if repaired.get("vote") in ("NO_READ", "NO_CONVICTION") and not repaired.get("abstain_reason"):
         fallback = repaired.get("thesis") or "Seat abstained; no explicit reason was provided."
         repaired["abstain_reason"] = str(fallback)[:500]
 

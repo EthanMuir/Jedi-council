@@ -46,15 +46,20 @@
       </div>
       <div class="legend-item">
         <div class="legend-swatch sw-noread"></div>
-        <div><b class="yellow">NO_READ / NO_CONVICTION</b><div class="dim" style="font-size:12px;">abstained -- data didn't support a call, or an audit gate blocked one</div></div>
+        <div><b class="yellow">NO_CONVICTION</b><div class="dim" style="font-size:12px;">read its data and landed in the middle -- no clear lean either way (for the final verdict: an audit gate blocked a call)</div></div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch sw-noread"></div>
+        <div><b class="yellow">NO_READ</b><div class="dim" style="font-size:12px;">couldn't form a read at all -- the AI call failed, its answer came back malformed, or the seat had no data</div></div>
       </div>
     </div>
     <p class="dim" style="margin-top:14px; margin-bottom:0; font-size:13px;">
       This mapping is the same everywhere -- seat chairs in the Chamber ring, the
       center holocron, the dissent map, the holo-panel, and every seat's vote in
-      the Crypt. A seat abstaining is a deliberate, valid answer in this system --
-      it is not a failure state, it means the seat's own data genuinely didn't
-      support a directional call for this ticker and horizon.
+      the Crypt. Both abstentions count the same in the vote. NO_CONVICTION is a
+      deliberate, valid answer -- the seat's data genuinely didn't support a
+      directional call for this ticker and horizon. NO_READ means something kept
+      the seat from reading at all; tap the seat to see why.
     </p>
   </div>
 

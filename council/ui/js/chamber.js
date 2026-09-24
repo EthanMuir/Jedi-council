@@ -255,7 +255,9 @@ function updateSeatChair(payload, silent = false) {
     if (!silent) AudioBlips.blip(392, 0.05);
   } else {
     chair.className = `${chairClassBase()} state-noread`;
-    voteEl.textContent = 'NO_READ';
+    // NO_CONVICTION: read its data, landed in the middle. NO_READ: couldn't
+    // read at all (API error, malformed answer, or no data).
+    voteEl.textContent = payload.vote === 'NO_CONVICTION' ? 'NO_CONVICTION' : 'NO_READ';
     voteEl.className = 'seat-vote status-noread';
     if (fill) fill.className = 'seat-bust-fill vote-noread';
     redrawWizardChair(payload.seat_id, 'noread');

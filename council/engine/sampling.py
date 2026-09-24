@@ -9,21 +9,23 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from council.seats.base import SeatVerdict
+from council.seats.base import SeatVerdict, is_abstention
 
 
 @dataclass
 class SampledSeatVerdict:
     seat_id: str
     samples: list[SeatVerdict]
-    consensus_vote: str  # "BULLISH" | "BEARISH" | "NO_READ"
+    consensus_vote: str  # "BULLISH" | "BEARISH" | "NO_CONVICTION" | "NO_READ"
     dispersion: float  # 0..1, fraction of samples disagreeing with consensus_vote
     representative: SeatVerdict  # the verdict downstream aggregation should use
 
 
-def _build_no_read(dispersion: float, sample_votes: list[str]) -> SeatVerdict:
+def _build_split(dispersion: float, sample_votes: list[str]) -> SeatVerdict:
+    # The samples were real answers that disagreed -- a genuine "in between",
+    # not a failure to read, so NO_CONVICTION rather than NO_READ.
     return SeatVerdict(
-        vote="NO_READ",
+        vote="NO_CONVICTION",
         probability=0.5,
         expected_move_pct=0.0,
         thesis=(
@@ -38,7 +40,7 @@ def _build_no_read(dispersion: float, sample_votes: list[str]) -> SeatVerdict:
 
 
 def aggregate_samples(seat_id: str, samples: list[SeatVerdict]) -> SampledSeatVerdict:
-    """Majority vote across `samples` (ties -> NO_READ), dispersion = fraction
+    """Majority vote across `samples` (ties -> NO_CONVICTION), dispersion = fraction
     of samples disagreeing with that majority, and a representative verdict
     whose probability is discounted toward 0.5 in proportion to dispersion."""
     if not samples:
@@ -48,14 +50,14 @@ def aggregate_samples(seat_id: str, samples: list[SeatVerdict]) -> SampledSeatVe
     counts = Counter(votes)
     max_count = max(counts.values())
     winners = [v for v, c in counts.items() if c == max_count]
-    consensus_vote = winners[0] if len(winners) == 1 else "NO_READ"
+    consensus_vote = winners[0] if len(winners) == 1 else "NO_CONVICTION"
 
     agreeing = [s for s in samples if s.vote == consensus_vote]
     n = len(samples)
     dispersion = round(1 - (len(agreeing) / n), 3)
 
-    if consensus_vote == "NO_READ":
-        representative = agreeing[0] if agreeing else _build_no_read(dispersion, votes)
+    if is_abstention(consensus_vote):
+        representative = agreeing[0] if agreeing else _build_split(dispersion, votes)
     else:
         sorted_agree = sorted(agreeing, key=lambda s: s.probability)
         median_sample = sorted_agree[(len(sorted_agree) - 1) // 2]

@@ -41,15 +41,18 @@ def test_steady_downtrend_is_mechanically_bearish():
     assert reading.invalidation > reading.entry
 
 
-def test_insufficient_history_yields_no_read():
+def test_insufficient_history_has_no_direction_and_no_trend_family():
+    # The technician turns this into NO_READ (too little history to read)
+    # rather than NO_CONVICTION, keyed off sma50 being uncomputable.
     bars = _bars_from_closes([100, 101, 99, 100.5])
     reading = analyse(bars)
-    assert reading.mechanical_vote == "NO_READ"
+    assert reading.mechanical_vote == "NO_CONVICTION"
+    assert reading.sma50 is None
     assert reading.entry is None
 
 
-def test_mechanical_direction_ties_to_no_read():
+def test_mechanical_direction_ties_to_no_conviction():
     from council.seats.technical_indicators import FamilyVotes
 
     votes = FamilyVotes(trend="BULLISH", breakout="BEARISH", oscillator="FLAT", volume="FLAT")
-    assert mechanical_direction(votes) == "NO_READ"
+    assert mechanical_direction(votes) == "NO_CONVICTION"

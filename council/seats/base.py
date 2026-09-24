@@ -106,8 +106,25 @@ def _is_multiple_of_005(value: float) -> bool:
     return abs(scaled - round(scaled)) < 1e-6
 
 
+# The two ways a seat can abstain, which count identically in every vote,
+# weight and score:
+# - NO_READ: the seat couldn't form a read at all -- the API call failed,
+#   the answer came back malformed, or its data was missing/unusable.
+# - NO_CONVICTION: the seat read its data fine and genuinely landed in the
+#   middle (no edge either way, or its own samples split evenly).
+ABSTENTIONS = frozenset({"NO_READ", "NO_CONVICTION"})
+
+
+def is_abstention(vote: str) -> bool:
+    return vote in ABSTENTIONS
+
+
 class SeatVerdict(BaseModel):
-    vote: Literal["BULLISH", "BEARISH", "NO_READ"]
+    vote: Literal["BULLISH", "BEARISH", "NO_CONVICTION", "NO_READ"] = Field(
+        description="BULLISH or BEARISH for a directional call. NO_CONVICTION when you "
+        "read your data and it genuinely points neither way. NO_READ only when your data "
+        "is missing or unusable -- you could not form a read at all."
+    )
 
     # Addendum A1: three decimals, reject anything rounded to a multiple of
     # 0.05 for a directional call -- superforecaster-grade granularity is a
@@ -115,7 +132,7 @@ class SeatVerdict(BaseModel):
     probability: float = Field(
         ge=0.0,
         le=1.0,
-        description="REQUIRED for every vote, including NO_READ (use 0.5 there). For a "
+        description="REQUIRED for every vote, including NO_CONVICTION/NO_READ (use 0.5 there). For a "
         "directional vote (BULLISH/BEARISH) this must be a genuine probability estimate "
         "given to exactly three decimal places, and must NOT round to a multiple of 0.05 "
         "(0.700, 0.650, 0.500, etc. are all rejected) -- state real granularity, e.g. 0.632 "
@@ -131,7 +148,7 @@ class SeatVerdict(BaseModel):
     exit: float | None = None
     invalidation: float | None = None
     expected_move_pct: float = Field(
-        description="REQUIRED for every vote, including NO_READ (use 0.0 there). The "
+        description="REQUIRED for every vote, including NO_CONVICTION/NO_READ (use 0.0 there). The "
         "expected magnitude of the underlying's price move over this horizon, as a "
         "percentage (e.g. 3.5 means +/-3.5%, not 0.035) -- a distribution width, not a "
         "directional target. Base it on whatever your seat's own data actually supports "
@@ -157,10 +174,11 @@ class SeatVerdict(BaseModel):
     )
     abstain_reason: str | None = Field(
         default=None,
-        description="REQUIRED (a non-empty string) when vote is NO_READ -- explain what's "
-        "missing or unusable about the data. Enforced after generation: a NO_READ with this "
-        "left null is rejected outright and the call is wasted. Must be left null for any "
-        "other vote (BULLISH/BEARISH) -- do not use it as a hedge or caveat there.",
+        description="REQUIRED (a non-empty string) when vote is NO_CONVICTION or NO_READ -- "
+        "for NO_CONVICTION, why the data points neither way; for NO_READ, what's missing or "
+        "unusable about the data. Enforced after generation: an abstention with this left "
+        "null is rejected outright and the call is wasted. Must be left null for a "
+        "directional vote (BULLISH/BEARISH) -- do not use it as a hedge or caveat there.",
     )
     key_evidence: list[EvidenceItem] = Field(default_factory=list)
     thesis: str = Field(
@@ -187,12 +205,12 @@ class SeatVerdict(BaseModel):
 
     @model_validator(mode="after")
     def _cross_field_rules(self) -> "SeatVerdict":
-        if self.vote == "NO_READ":
+        if self.vote in ABSTENTIONS:
             if not self.abstain_reason:
-                raise ValueError("NO_READ requires abstain_reason")
+                raise ValueError(f"{self.vote} requires abstain_reason")
         else:
             if self.abstain_reason:
-                raise ValueError("abstain_reason must be null unless vote is NO_READ")
+                raise ValueError("abstain_reason must be null unless the seat abstains")
             if self.comparison_class is None:
                 raise ValueError(
                     "a directional vote requires a comparison_class; a seat "

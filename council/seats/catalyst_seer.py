@@ -24,8 +24,8 @@ edge -- it is very likely already reflected in the price. For every SURPRISE
 catalyst, state your reasoning for why the market has or has not already
 priced it in, given how long ago it was published relative to `as_of`.
 
-If the feed contains nothing you can turn into a genuine edge, NO_READ is the
-correct answer.
+If the feed contains nothing you can turn into a genuine edge, NO_CONVICTION is
+the correct answer.
 """
 
 

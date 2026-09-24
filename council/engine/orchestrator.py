@@ -52,7 +52,7 @@ from council.engine.schemas import (
     summarize_tier1,
 )
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
-from council.seats.base import SeatContext, SeatVerdict
+from council.seats.base import SeatContext, SeatVerdict, is_abstention
 from council.seats.catalyst_seer import CatalystSeerSeat
 from council.seats.cross_market import CrossMarketSeat
 from council.seats.estimate_scribe import EstimateScribeSeat
@@ -182,10 +182,10 @@ def _gate_eligible_weight(seat_ids, horizon: str) -> float:
 
 def _directional_weight(verdicts_by_id: dict[str, SeatVerdict], horizon: str) -> float:
     """Competence-weighted numerator: sum of horizon-competence across
-    every seat that actually voted a direction (not NO_READ). Extracted
+    every seat that actually voted a direction (not an abstention). Extracted
     for direct unit testing (Task #76), same as its denominator above."""
     return round(
-        sum(competence(sid, horizon) for sid, v in verdicts_by_id.items() if v.vote != "NO_READ"), 4
+        sum(competence(sid, horizon) for sid, v in verdicts_by_id.items() if not is_abstention(v.vote)), 4
     )
 
 
@@ -288,7 +288,7 @@ async def run_deliberation(
             verdict = await seat.deliberate(
                 ctx, llm_client, sample_index=sample_index, memories=memory_lessons
             )
-            if memory_lessons and verdict.vote != "NO_READ":
+            if memory_lessons and not is_abstention(verdict.vote):
                 verdict = verdict.model_copy(update={"memory_applied": memory_lessons})
             return verdict
 
@@ -395,14 +395,14 @@ async def run_deliberation(
     oracle_verdict = verdicts_by_id.get("oracle_options")
     options_implied_move_pct = (
         oracle_verdict.expected_move_pct
-        if oracle_verdict and oracle_verdict.vote != "NO_READ"
+        if oracle_verdict and not is_abstention(oracle_verdict.vote)
         else None
     )
     reality_anchor = compute_reality_anchor(anchor_series.bars, horizon, options_implied_move_pct)
     plausibility_flags = {
         sid: check_plausibility(v.expected_move_pct, reality_anchor)
         for sid, v in verdicts_by_id.items()
-        if v.vote != "NO_READ"
+        if not is_abstention(v.vote)
     }
     await emit(
         "phase_b_reality_anchor",
@@ -472,7 +472,7 @@ async def run_deliberation(
     # ---- Phase D: weighted vote ---------------------------------------------
     phase_d_weights = {}
     for sid, v in verdicts_by_id.items():
-        if v.vote == "NO_READ":
+        if is_abstention(v.vote):
             continue
         plausibility_multiplier = 0.5 if plausibility_flags.get(sid) == "IMPLAUSIBLE" else 1.0
         coherence_multiplier = (
@@ -497,7 +497,7 @@ async def run_deliberation(
     )
 
     # ---- Phase E: audit gates -----------------------------------------------
-    directional_count = sum(1 for v in verdicts_by_id.values() if v.vote != "NO_READ")
+    directional_count = sum(1 for v in verdicts_by_id.values() if not is_abstention(v.vote))
     gate_eligible_weight = _gate_eligible_weight(verdicts_by_id.keys(), horizon)
     directional_weight = _directional_weight(verdicts_by_id, horizon)
     # gate_eligible_weight == 0 only when every called seat is in
@@ -513,7 +513,7 @@ async def run_deliberation(
     base_rate_gate = not (plausibility_flags and implausible_count > len(plausibility_flags) / 2)
 
     directional_moves = [
-        v.expected_move_pct for v in verdicts_by_id.values() if v.vote != "NO_READ"
+        v.expected_move_pct for v in verdicts_by_id.values() if not is_abstention(v.vote)
     ]
     audit_move_pct = options_implied_move_pct or (
         sum(directional_moves) / len(directional_moves) if directional_moves else 0.0

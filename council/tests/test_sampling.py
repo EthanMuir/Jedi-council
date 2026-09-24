@@ -47,12 +47,16 @@ def test_disagreeing_sample_raises_dispersion_and_discounts_confidence():
     assert 0.5 < result.representative.probability < 0.713
 
 
-def test_three_way_tie_yields_no_read_with_high_dispersion():
+def test_three_way_tie_yields_no_conviction_with_high_dispersion():
+    # Real answers that disagree are a genuine "in between", not a failure
+    # to read -- NO_CONVICTION, not NO_READ.
     samples = [_v("BULLISH", 0.612), _v("BEARISH", 0.612), _v("NO_READ", 0.5)]
     result = aggregate_samples("technician", samples)
-    assert result.consensus_vote == "NO_READ"
-    assert result.representative.vote == "NO_READ"
-    assert result.dispersion == pytest.approx(2 / 3, abs=1e-3)
+    assert result.consensus_vote == "NO_CONVICTION"
+    assert result.representative.vote == "NO_CONVICTION"
+    # No sample matches the synthesized consensus: full disagreement, the
+    # same reading the two-sample split below gets.
+    assert result.dispersion == pytest.approx(1.0, abs=1e-3)
 
 
 def test_majority_no_read_is_no_read():
@@ -62,10 +66,10 @@ def test_majority_no_read_is_no_read():
     assert result.dispersion == pytest.approx(1 / 3, abs=1e-3)
 
 
-def test_full_disagreement_falls_back_to_synthesized_no_read():
-    # two-sample edge case with no natural NO_READ among samples but a tie
+def test_full_disagreement_falls_back_to_synthesized_no_conviction():
+    # two-sample edge case with no natural abstention among samples but a tie
     samples = [_v("BULLISH", 0.612), _v("BEARISH", 0.612)]
     result = aggregate_samples("technician", samples)
-    assert result.consensus_vote == "NO_READ"
-    assert result.representative.vote == "NO_READ"
+    assert result.consensus_vote == "NO_CONVICTION"
+    assert result.representative.vote == "NO_CONVICTION"
     assert result.representative.abstain_reason == "run_to_run_disagreement"

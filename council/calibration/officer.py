@@ -48,7 +48,7 @@ def _seat_history_rows(conn: sqlite3.Connection, seat_id: str) -> list[sqlite3.R
         FROM seat_votes sv
         JOIN predictions p ON p.id = sv.prediction_id
         JOIN resolutions r ON r.prediction_id = sv.prediction_id
-        WHERE sv.seat_id = ? AND sv.vote != 'NO_READ'
+        WHERE sv.seat_id = ? AND sv.vote NOT IN ('NO_READ', 'NO_CONVICTION')
         """,
         (seat_id,),
     ).fetchall()

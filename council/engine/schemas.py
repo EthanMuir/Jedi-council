@@ -8,13 +8,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from council.seats.base import SeatVerdict
+from council.seats.base import SeatVerdict, is_abstention
 
 
 class Tier1Summary(BaseModel):
     seat_id: str
     title: str
-    vote: Literal["BULLISH", "BEARISH", "NO_READ"]
+    vote: Literal["BULLISH", "BEARISH", "NO_CONVICTION", "NO_READ"]
     probability: float
     expected_move_pct: float
     thesis: str
@@ -63,7 +63,7 @@ class ProsecutorVerdict(BaseModel):
 def summarize_dissent(summaries: list[Tier1Summary]) -> str:
     bulls = [s.seat_id for s in summaries if s.vote == "BULLISH"]
     bears = [s.seat_id for s in summaries if s.vote == "BEARISH"]
-    abstains = [s.seat_id for s in summaries if s.vote == "NO_READ"]
+    abstains = [s.seat_id for s in summaries if is_abstention(s.vote)]
     parts = []
     if bulls:
         parts.append(f"{len(bulls)} bullish ({', '.join(bulls)})")

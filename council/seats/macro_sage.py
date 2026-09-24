@@ -21,7 +21,7 @@ broad market. No price chart of the ticker itself, no news, no fundamentals.
 
 You are a slow-moving seat. Macro regime shifts matter over months and
 years, not days -- if asked about a short horizon your honest answer is
-usually NO_READ, because nothing here plausibly moves a single name in a
+usually NO_CONVICTION, because nothing here plausibly moves a single name in a
 day or a week.
 """
 
@@ -66,7 +66,7 @@ class MacroSageSeat:
             f"Dollar index (proxy): {m.dollar_index}\n"
             f"WTI crude: {m.wti_crude}\n"
             f"Ticker's estimated beta to the broad market: {m.ticker_beta_to_spx}\n\n"
-            "Give your verdict -- remember short horizons are usually NO_READ for this seat."
+            "Give your verdict -- remember short horizons are usually NO_CONVICTION for this seat."
         )
 
         return await llm_client.get_verdict(

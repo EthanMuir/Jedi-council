@@ -9,7 +9,7 @@ from typing import Any
 from council.data.service import DataService
 from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, SeatContext, SeatVerdict, is_abstention
 from council.seats.debiasing import DEBIASING_PREAMBLE
 from council.seats.technical_indicators import analyse
 
@@ -60,13 +60,25 @@ class TechnicianSeat:
         series = ctx["ohlcv"]
         reading = analyse(series.bars)
 
-        if reading.mechanical_vote == "NO_READ":
+        if reading.mechanical_vote == "NO_CONVICTION":
+            # Under 50 bars the trend family can't even be computed -- that's
+            # too little history to read, not a genuine split.
+            if reading.sma50 is None:
+                return SeatVerdict(
+                    vote="NO_READ",
+                    probability=0.5,
+                    expected_move_pct=0.0,
+                    thesis="Not enough price history to compute the four technical families.",
+                    what_would_change_my_mind="At least 50 days of price history.",
+                    data_quality="POOR",
+                    abstain_reason="insufficient_history",
+                )
             return SeatVerdict(
-                vote="NO_READ",
+                vote="NO_CONVICTION",
                 probability=0.5,
                 expected_move_pct=0.0,
-                thesis="Insufficient history or the four technical families split evenly with no majority direction.",
-                what_would_change_my_mind="Enough additional history to break the tie, or a fresh majority forming across the trend, breakout, oscillator, and volume families.",
+                thesis="The four technical families split evenly with no majority direction.",
+                what_would_change_my_mind="A fresh majority forming across the trend, breakout, oscillator, and volume families.",
                 data_quality="PARTIAL" if series.staleness_seconds else "POOR",
                 abstain_reason="no_mechanical_majority",
             )
@@ -100,7 +112,7 @@ class TechnicianSeat:
             memories=memories,
         )
 
-        if verdict.vote == "NO_READ":
+        if is_abstention(verdict.vote):
             return verdict
 
         # Direction is mechanical, not the LLM's to set -- enforce it even if

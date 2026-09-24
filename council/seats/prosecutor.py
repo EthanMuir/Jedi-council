@@ -16,7 +16,7 @@ from council.engine.schemas import (
     Tier1Summary,
     format_debate_transcript,
 )
-from council.seats.base import SeatVerdict
+from council.seats.base import SeatVerdict, is_abstention
 
 # Addendum A7: |implied - stated| beyond this is INCOHERENT_CONFIDENCE.
 _COHERENCE_TOLERANCE = 0.15
@@ -60,7 +60,7 @@ def detect_correlated_evidence(summaries: list[Tier1Summary]) -> list[str]:
     directional Tier I seats is correlated evidence by definition."""
     source_to_seats: dict[str, set[str]] = defaultdict(set)
     for s in summaries:
-        if s.vote == "NO_READ":
+        if is_abstention(s.vote):
             continue
         for source in s.evidence_sources:
             source_to_seats[source].add(s.seat_id)
@@ -110,7 +110,7 @@ def check_decomposition_coherence(seat_id: str, verdict: SeatVerdict) -> Coheren
 def detect_incoherent_decompositions(verdicts: dict[str, SeatVerdict]) -> dict[str, CoherenceCheckResult]:
     results = {}
     for seat_id, v in verdicts.items():
-        if v.vote == "NO_READ":
+        if is_abstention(v.vote):
             continue
         result = check_decomposition_coherence(seat_id, v)
         if result.has_decomposition and not result.coherent:
