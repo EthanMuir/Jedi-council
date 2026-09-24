@@ -18,14 +18,20 @@ CREATE TABLE IF NOT EXISTS cache_entries (
 
 
 class DiskCache:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, namespace: str = ""):
+        """`namespace` keeps entries from different data sources apart in
+        one file -- without it, sample data cached before a market-data key
+        was added would keep being served as if it were live, for up to
+        its full TTL (hours, for fundamentals)."""
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._prefix = f"{namespace}:" if namespace else ""
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute(_SCHEMA)
         self._conn.commit()
 
     def get(self, key: str) -> Any | None:
+        key = self._prefix + key
         row = self._conn.execute(
             "SELECT value, expires_at FROM cache_entries WHERE key = ?", (key,)
         ).fetchone()
@@ -43,7 +49,7 @@ class DiskCache:
             "INSERT INTO cache_entries (key, value, expires_at) VALUES (?, ?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value, "
             "expires_at = excluded.expires_at",
-            (key, json.dumps(value), time.time() + ttl_seconds),
+            (self._prefix + key, json.dumps(value), time.time() + ttl_seconds),
         )
         self._conn.commit()
 

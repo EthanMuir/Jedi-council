@@ -102,6 +102,43 @@ function renderNav(activeHref) {
   document.body.appendChild(overlay);
 }
 
+// Settings and the Guide show one .page-section at a time, picked from the
+// .section-nav menu. The URL hash says which (#keys, #models, ...) so links
+// and reloads land on the right section. Sections carry the name in
+// data-section rather than as an element id, so the browser never jumps
+// the page down to them on its own.
+function initSections() {
+  const sections = [...document.querySelectorAll('.page-section')];
+  const nav = document.querySelector('.section-nav');
+  if (!sections.length || !nav) return;
+
+  for (const section of sections) {
+    const a = document.createElement('a');
+    a.href = `#${section.dataset.section}`;
+    a.textContent = section.dataset.title;
+    nav.appendChild(a);
+  }
+
+  const show = () => {
+    const wanted = decodeURIComponent(location.hash.slice(1));
+    const target = sections.find(s => s.dataset.section === wanted) || sections[0];
+    for (const s of sections) s.hidden = s !== target;
+    for (const a of nav.querySelectorAll('a')) {
+      const active = a.getAttribute('href') === `#${target.dataset.section}`;
+      a.classList.toggle('active', active);
+      if (active) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    }
+  };
+
+  window.addEventListener('hashchange', () => {
+    show();
+    const top = nav.closest('.sectioned').getBoundingClientRect().top;
+    if (top < 0) window.scrollBy(0, top - 12);
+  });
+  show();
+}
+
 // Subtle UI blips, synthesized (no audio file dependency), off by default.
 const AudioBlips = {
   enabled: false,

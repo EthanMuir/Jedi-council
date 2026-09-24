@@ -198,7 +198,8 @@ h3 { font-size: 11px; color: var(--amber); }
   box-shadow: 0 0 12px rgba(79, 214, 232, 0.5);
 }
 
-input[type="text"] {
+input[type="text"],
+input[type="password"] {
   font-family: var(--font-data);
   font-size: 14px;
   background: var(--navy-deep);
@@ -208,7 +209,8 @@ input[type="text"] {
   padding: 10px 12px;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus,
+input[type="password"]:focus {
   outline: none;
   border-color: var(--cyan-dim);
 }
@@ -355,6 +357,86 @@ input[type="text"]:focus {
 /* Wide tables scroll inside their own box on narrow screens instead of
    dragging the whole page sideways. */
 .table-scroll { overflow-x: auto; }
+
+[hidden] { display: none !important; }
+
+/* Labels that screen readers announce but sighted users don't need. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- sectioned pages (Settings, the Guide) --------------------------------
+   One section at a time, picked from a side menu -- a scrolling tab row on
+   phones. common.js's initSections() builds the menu and keeps the URL
+   hash in sync, so links like /settings.html#keys open the right section. */
+.sectioned {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.section-nav {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--navy-deep);
+  border: 2px solid #131722;
+  padding: 6px;
+}
+
+.section-nav a {
+  font-family: var(--font-header);
+  font-size: 9px;
+  line-height: 1.5;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--bone-dim);
+  padding: 12px;
+  border-left: 2px solid transparent;
+}
+
+.section-nav a:hover { color: var(--bone); }
+
+.section-nav a.active {
+  color: var(--cyan);
+  background: var(--slate);
+  border-left-color: var(--cyan);
+}
+
+.page-section > * + * { margin-top: 16px; }
+
+.section-lede {
+  color: var(--bone-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: -4px 0 0;
+  max-width: 70ch;
+}
+
+@media (max-width: 760px) {
+  .sectioned { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .section-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 4px;
+  }
+  .section-nav a {
+    white-space: nowrap;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px;
+  }
+  .section-nav a.active { border-bottom-color: var(--cyan); }
+}
 .row > .col-2 { flex: 2 1 320px; min-width: 0; }
 
 @media (max-width: 760px) {
@@ -366,7 +448,8 @@ input[type="text"]:focus {
   .toggle-option { flex: 1 1 auto; padding: 10px 8px; }
   .btn-lever { width: 100%; padding: 14px 12px; }
   /* 16px is the size below which iOS Safari zooms the page on focus. */
-  input[type="text"] { width: 100%; font-size: 16px; }
+  input[type="text"],
+  input[type="password"] { width: 100%; font-size: 16px; }
 }
 
 .grid {

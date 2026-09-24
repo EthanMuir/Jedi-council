@@ -8,6 +8,8 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from council.key_store import apply_saved_keys
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -157,4 +159,6 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
-    return Settings()
+    """.env settings, with any API keys saved from the Settings screen
+    layered on top (see council/key_store.py)."""
+    return apply_saved_keys(Settings())

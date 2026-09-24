@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from council import key_store
 from council.api.auth import install_auth
 from council.api.serialize import to_jsonable
 from council.calibration.benchmark import compute_benchmark
@@ -264,6 +265,59 @@ async def set_model_setting(body: _ModelOverrideRequest):
     finally:
         conn.close()
     return {"role": body.role, "current_model": current, "is_override": body.model_id is not None}
+
+
+class _ApiKeyRequest(BaseModel):
+    name: str
+    value: str
+
+
+def _api_key_status(settings) -> list[dict]:
+    """Where each key comes from and its last four characters -- never the
+    key itself. Callers pass a freshly read get_settings() after any change,
+    since that's what layers saved keys over .env."""
+    saved = key_store.saved_keys(settings.settings_db_path)
+    status = []
+    for name in key_store.KEY_NAMES:
+        if name in saved:
+            value, source = saved[name], "app"
+        else:
+            value = getattr(settings, name, "") or ""
+            source = "env" if value else None
+        status.append(
+            {"name": name, "is_set": bool(value), "source": source, "last4": value[-4:] if value else None}
+        )
+    return status
+
+
+@app.get("/api/settings/keys")
+async def get_api_keys():
+    settings = get_settings()
+    settings.ensure_dirs()
+    return {"keys": _api_key_status(settings)}
+
+
+@app.post("/api/settings/keys")
+async def save_api_key(body: _ApiKeyRequest):
+    if body.name not in key_store.KEY_NAMES:
+        raise HTTPException(400, f"unknown key '{body.name}'")
+    settings = get_settings()
+    settings.ensure_dirs()
+    try:
+        key_store.save_key(settings.settings_db_path, body.name, body.value)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"keys": _api_key_status(get_settings())}
+
+
+@app.delete("/api/settings/keys/{name}")
+async def delete_api_key(name: str):
+    if name not in key_store.KEY_NAMES:
+        raise HTTPException(400, f"unknown key '{name}'")
+    settings = get_settings()
+    settings.ensure_dirs()
+    key_store.delete_key(settings.settings_db_path, name)
+    return {"keys": _api_key_status(get_settings())}
 
 
 @app.get("/api/settings/cost-estimate")

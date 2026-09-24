@@ -11,57 +11,88 @@
 <body>
 
 <div class="container">
-  <h1 style="text-align:center; margin-bottom: 8px;">Settings</h1>
-  <p class="dim" style="text-align:center; margin-bottom: 24px;">How the Chamber looks, and which AI model each seat runs on.</p>
+  <h1 style="margin: 0 0 20px;">Settings</h1>
 
-  <div class="panel" style="margin-bottom: 20px;" id="appearance">
-    <h2 style="margin-top:0;">Chamber Appearance</h2>
-    <p class="dim section-note">Saved to this browser only. Purely visual -- no effect on any deliberation.</p>
+  <div class="sectioned">
+    <nav class="section-nav" aria-label="Settings sections"></nav>
 
-    <h3>Centerpiece</h3>
-    <div class="appearance-grid" id="centerpiece-grid" style="margin-bottom:20px;"></div>
+    <div>
+      <!-- ================= API KEYS ================= -->
+      <section class="page-section" data-section="keys" data-title="API Keys">
+        <div class="panel">
+          <h2 style="margin-top:0;">API Keys</h2>
+          <p class="section-lede">
+            An API key is like a password that lets the Council use a service on
+            your account. Paste each one in once and it's saved -- you won't need
+            to do it again.
+          </p>
+          <div id="keys-summary" class="keys-summary mono" role="status"></div>
+        </div>
 
-    <h3>Seat Chair</h3>
-    <div class="appearance-grid" id="chair-grid"></div>
-  </div>
+        <h3 class="key-group-label">Needed for real analysis</h3>
+        <div id="keys-required" class="key-list"></div>
 
-  <div class="panel" id="models">
-    <h2 style="margin-top:0;">Models &amp; Cost</h2>
-    <p class="dim section-note">
-      Pick the model each seat runs on -- saved on the server, so it applies to
-      every deliberation from now on. Options run most to least expensive;
-      &#9733; marks the recommended one.
-    </p>
+        <h3 class="key-group-label">Optional</h3>
+        <div id="keys-optional" class="key-list"></div>
+      </section>
 
-    <div class="cost-header">
-      <h3>Estimated cost per run</h3>
-      <div class="toggle-row" id="horizon-toggle">
-        <button class="toggle-option" data-horizon="1d">1D</button>
-        <button class="toggle-option" data-horizon="1w">1W</button>
-        <button class="toggle-option" data-horizon="1m">1M</button>
-        <button class="toggle-option" data-horizon="1y">1Y</button>
-      </div>
+      <!-- ================= MODELS & COST ================= -->
+      <section class="page-section" data-section="models" data-title="Models &amp; Cost">
+        <div class="panel">
+          <h2 style="margin-top:0;">Estimated Cost Per Run</h2>
+          <div class="cost-header">
+            <div class="cost-summary" id="cost-summary">
+              <span class="dim">Loading...</span>
+            </div>
+            <div class="toggle-row" id="horizon-toggle">
+              <button class="toggle-option" data-horizon="1d">1D</button>
+              <button class="toggle-option" data-horizon="1w">1W</button>
+              <button class="toggle-option" data-horizon="1m">1M</button>
+              <button class="toggle-option" data-horizon="1y">1Y</button>
+            </div>
+          </div>
+          <details class="cost-breakdown">
+            <summary>Per-seat breakdown</summary>
+            <table class="cost-lineitems mono" id="cost-lineitems"></table>
+          </details>
+        </div>
+
+        <div class="panel">
+          <h2 style="margin-top:0;">Model For Each Seat</h2>
+          <p class="section-lede">
+            Options run most to least expensive; &#9733; marks the recommended one.
+            Seats set to an OpenAI or Google model use Claude instead until you
+            add that key under API Keys.
+          </p>
+          <div id="model-status" class="mono model-status" role="status"></div>
+          <table class="settings-table mono" id="settings-table">
+            <thead>
+              <tr>
+                <th>Seat</th><th>Provider</th><th>Model</th><th>Est. $/call</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="settings-tbody">
+              <tr><td colspan="5" class="dim">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= APPEARANCE ================= -->
+      <section class="page-section" data-section="appearance" data-title="Appearance">
+        <div class="panel">
+          <h2 style="margin-top:0;">Centerpiece</h2>
+          <p class="section-lede" style="margin-bottom:14px;">What spins in the middle of the Chamber. Saved to this browser only.</p>
+          <div class="appearance-grid" id="centerpiece-grid"></div>
+        </div>
+
+        <div class="panel">
+          <h2 style="margin-top:0;">Seat Chair</h2>
+          <p class="section-lede" style="margin-bottom:14px;">How each of the twelve seats looks. Saved to this browser only.</p>
+          <div class="appearance-grid" id="chair-grid"></div>
+        </div>
+      </section>
     </div>
-    <div class="cost-summary" id="cost-summary">
-      <span class="dim">Loading...</span>
-    </div>
-    <details class="cost-breakdown">
-      <summary>Per-seat breakdown</summary>
-      <table class="cost-lineitems mono" id="cost-lineitems"></table>
-    </details>
-
-    <div id="model-status" class="mono model-status" role="status"></div>
-
-    <table class="settings-table mono" id="settings-table">
-      <thead>
-        <tr>
-          <th>Seat</th><th>Provider</th><th>Model</th><th>Est. $/call</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="settings-tbody">
-        <tr><td colspan="5" class="dim">Loading...</td></tr>
-      </tbody>
-    </table>
   </div>
 </div>
 

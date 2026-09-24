@@ -33,5 +33,6 @@ function renderCompetenceTable() {
 
 document.addEventListener('DOMContentLoaded', () => {
   renderNav('/guide.html');
+  initSections();
   renderCompetenceTable();
 });

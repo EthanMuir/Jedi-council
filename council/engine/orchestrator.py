@@ -175,9 +175,10 @@ def _directional_weight(verdicts_by_id: dict[str, SeatVerdict], horizon: str) ->
 
 
 def build_data_service(settings: Settings) -> DataService:
-    cache = DiskCache(settings.cache_db_path)
+    use_sample_data = settings.resolved_use_data_fixtures
+    cache = DiskCache(settings.cache_db_path, namespace="sample" if use_sample_data else "")
     providers = []
-    if settings.resolved_use_data_fixtures:
+    if use_sample_data:
         providers.append(FixtureProvider())
     else:
         # YFinance first, not last: it's free with no hard daily cap, and it

@@ -52,11 +52,6 @@
 .guide-table .active-cell { color: var(--bone); }
 .guide-table .inactive-cell { color: var(--grey); }
 
-.tier-label {
-  margin-top: 32px;
-  margin-bottom: 12px;
-}
-
 .seat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
@@ -92,6 +87,8 @@
   padding-left: 20px;
 }
 
+.section-lede + .step-list { margin-top: 14px; }
+
 .step-list li {
   margin-bottom: 8px;
   line-height: 1.6;
@@ -100,28 +97,6 @@
 .screen-panel h3 {
   margin-top: 0;
 }
-
-/* ---- jump menu ---- */
-.guide-toc {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin: 0 auto 24px;
-}
-
-.guide-toc a {
-  font-family: var(--font-header);
-  font-size: 9px;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--cyan);
-  border: 2px solid #2a3348;
-  background: var(--navy-deep);
-  padding: 8px 12px;
-}
-
-.guide-toc a:hover { border-color: var(--cyan-dim); }
 
 .guide-callout {
   margin: 14px 0 0;

@@ -10,21 +10,29 @@
 <body>
 
 <div class="container">
-  <h1 style="text-align:center; margin-bottom: 8px;">The Guide</h1>
-  <p class="dim" style="text-align:center; max-width: 720px; margin: 0 auto 24px;">
-    How the Council actually works: what the colors mean, how to use each
-    screen, and what every Council Member does and is allowed to see.
-  </p>
+  <h1 style="margin: 0 0 20px;">The Guide</h1>
 
-  <nav class="guide-toc" aria-label="On this page">
-    <a href="#verdicts">Reading a Verdict</a>
-    <a href="#screens">The Screens</a>
-    <a href="#horizons">Seats by Horizon</a>
-    <a href="#council">The Council</a>
-  </nav>
+  <div class="sectioned">
+    <nav class="section-nav" aria-label="Guide sections"></nav>
 
-  <!-- ================= COLOR LEGEND ================= -->
-  <div class="panel" style="margin-bottom: 20px;" id="verdicts">
+    <div>
+    <!-- ================= GETTING STARTED ================= -->
+    <section class="page-section" data-section="start" data-title="Getting Started">
+  <div class="panel">
+    <h2>Getting Started</h2>
+    <p class="section-lede">The Council is a panel of AI analysts that each study one slice of a stock's data, argue it out, and reach a verdict on where the price is headed.</p>
+    <ol class="step-list mono start-steps">
+      <li><b>Add your keys.</b> Go to <a href="/settings.html#keys">Settings &rarr; API Keys</a> and add an Anthropic key and a Financial Modeling Prep key. Each comes with step-by-step instructions -- no technical knowledge needed.</li>
+      <li><b>Ask about a stock.</b> In the Chamber, type a ticker (like NVDA), pick how far ahead to look, and press <b>Convene the Council</b>.</li>
+      <li><b>Watch the Council work.</b> Each seat reads its own data and votes. Tap any seat to see its reasoning.</li>
+      <li><b>Read the verdict.</b> The Grand Master's final call appears in the center, with its reasoning below. Every run is saved in the Crypt.</li>
+    </ol>
+  </div>
+    </section>
+
+    <!-- ================= READING A VERDICT ================= -->
+    <section class="page-section" data-section="verdicts" data-title="Reading a Verdict">
+  <div class="panel">
     <h2>Reading a Verdict</h2>
     <div class="legend-row">
       <div class="legend-item">
@@ -49,10 +57,11 @@
     </p>
   </div>
 
-  <!-- ================= HOW EACH SCREEN WORKS ================= -->
-  <h2 style="margin-top: 32px;" id="screens">The Screens</h2>
+    </section>
 
-  <div class="panel screen-panel" style="margin-bottom: 16px;">
+    <!-- ================= THE SCREENS ================= -->
+    <section class="page-section" data-section="screens" data-title="The Screens">
+  <div class="panel screen-panel">
     <h3 class="cyan">The Chamber</h3>
     <ol class="step-list mono">
       <li>Type a stock ticker, e.g. <b>NVDA</b>.</li>
@@ -62,14 +71,13 @@
       <li>Once every seat has reported: the Reality Anchor appears, then the Bull/Bear debate with the Prosecutor's rulings, then the audit gates and position size, and finally the Grand Master's verdict fills the centerpiece. The whole run is saved to the Crypt automatically.</li>
     </ol>
     <p class="guide-callout mono">
-      <b>Running your own copy?</b> Without an FMP key in <code>.env</code> the Council
-      uses built-in sample market data (which really only covers NVDA), and without an
-      Anthropic key it replays sample answers instead of calling a model, at no cost.
-      Settings shows which mode you're in.
+      <b>No keys added yet?</b> The Council still runs, but on built-in sample
+      market data (NVDA only) and sample answers. Add your keys in
+      <a href="/settings.html#keys">Settings &rarr; API Keys</a> to analyze any stock for real.
     </p>
   </div>
 
-  <div class="panel screen-panel" style="margin-bottom: 16px;">
+  <div class="panel screen-panel">
     <h3 class="cyan">The Crypt</h3>
     <ol class="step-list mono">
       <li>Every deliberation ever run lives here, permanently -- the ledger is append-only and hash-chained, so nothing can be edited or quietly deleted after the fact.</li>
@@ -79,7 +87,7 @@
     </ol>
   </div>
 
-  <div class="panel screen-panel" style="margin-bottom: 16px;">
+  <div class="panel screen-panel">
     <h3 class="cyan">The Archives</h3>
     <ol class="step-list mono">
       <li>Once real resolutions accumulate in the Crypt, this shows each seat's actual track record: hit rate, Brier score, log loss, and a calibration curve (predicted probability vs. how often that was actually right).</li>
@@ -87,16 +95,20 @@
     </ol>
   </div>
 
-  <div class="panel screen-panel" style="margin-bottom: 16px;">
+  <div class="panel screen-panel">
     <h3 class="cyan">Settings</h3>
     <ol class="step-list mono">
-      <li><b>Chamber Appearance</b> -- pick the centerpiece and the seat-chair style (including the pixel-art Seat Wizards). Purely visual, saved to your browser only.</li>
-      <li><b>Models &amp; Cost</b> -- choose the AI model each seat runs on and see the estimated cost of one run at each horizon. These choices are saved on the server, so they apply to every deliberation on this copy of the Council.</li>
+      <li><b>API Keys</b> -- connect the Council to the AI and market-data services it uses. Each key comes with step-by-step instructions for getting it.</li>
+      <li><b>Models &amp; Cost</b> -- choose the AI model each seat runs on and see the estimated cost of one run at each horizon. Saved on the server, so it applies to every deliberation on this copy of the Council.</li>
+      <li><b>Appearance</b> -- pick the centerpiece and the seat-chair style (including the pixel-art Seat Wizards). Purely visual, saved to your browser only.</li>
     </ol>
   </div>
 
-  <!-- ================= HORIZON COMPETENCE ================= -->
-  <div class="panel" style="margin-bottom: 8px;" id="horizons">
+    </section>
+
+    <!-- ================= SEATS BY HORIZON ================= -->
+    <section class="page-section" data-section="horizons" data-title="Seats by Horizon">
+  <div class="panel">
     <h2>Which Seats Vote at Which Horizon</h2>
     <p class="dim" style="font-size:13px;">
       A hardcoded competence weight per seat per horizon (0.0-1.0). A seat at
@@ -117,9 +129,11 @@
     </div>
   </div>
 
-  <!-- ================= TIER I: THE TWELVE SEATS ================= -->
-  <h2 class="tier-label" id="council">The Council</h2>
-  <p class="dim" style="font-size:13px; margin-top:-6px; margin-bottom:16px;">
+    </section>
+
+    <!-- ================= THE COUNCIL ================= -->
+    <section class="page-section" data-section="council" data-title="The Council">
+  <p class="section-lede">
     Four tiers, in the order a deliberation runs them. Open a tier to see
     each member, what it's allowed to see, and what it does.
   </p>
@@ -276,6 +290,9 @@
     </div>
   </div>
   </details>
+    </section>
+    </div>
+  </div>
 </div>
 
 <script src="/js/common.js"></script>
