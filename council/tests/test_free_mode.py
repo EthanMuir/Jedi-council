@@ -606,3 +606,46 @@ def test_every_provider_client_has_a_timeout_and_no_hidden_retries(tmp_path):
         assert sdk_client.max_retries == 0
     gemini_timeout_ms = client._gemini_client._api_client._http_options.timeout
     assert gemini_timeout_ms == llm_client_module._CALL_TIMEOUT_SECONDS * 1000
+
+
+# --- #115: free-tier requests are paced, paid ones aren't ---------------------
+
+
+async def test_free_gemini_calls_get_evenly_spaced_slots(tmp_path, _fresh):
+    settings = _free_settings(tmp_path, google_api_key="AIza-test")
+    queued = []
+
+    async def on_queue(seat_id, provider, seconds):
+        queued.append((seat_id, provider, seconds))
+
+    client = LLMClient(settings, on_queue=on_queue)
+    client._gemini_client = _Gemini(_gemini_ok)
+    # Seats routed to the free Gemini model (not macro_sage/senate_watcher,
+    # which default to Gemini Pro -- a paid model, never paced).
+    for seat in ("technician", "fundamentalist", "catalyst_seer"):
+        assert (await _verdict(client, seat)).vote == "BULLISH"
+
+    gap = 60 / free_models.GEMINI_REQUESTS_PER_MINUTE
+    # asyncio.sleep is faked here, so the clock barely moves: each call's
+    # wait is its distance from the first slot.
+    assert _fresh == [pytest.approx(gap, abs=0.1), pytest.approx(2 * gap, abs=0.1)]
+    assert [(s, p) for s, p, _ in queued] == [("fundamentalist", "Gemini"), ("catalyst_seer", "Gemini")]
+
+
+def test_groq_is_paced_by_tokens_per_minute():
+    small = free_models.pace_interval_seconds("groq", "openai/gpt-oss-120b", 100)
+    seat_sized = free_models.pace_interval_seconds("groq", "openai/gpt-oss-120b", 3_750)
+    assert small == pytest.approx(60 / free_models.GROQ_REQUESTS_PER_MINUTE)
+    assert seat_sized == pytest.approx(60 * 3_750 / 7_500)  # ~2 seat calls a minute
+    unknown = free_models.pace_interval_seconds("groq", "some/new-model", 3_750)
+    assert unknown > seat_sized  # unknown models get the cautious default
+    assert free_models.pace_interval_seconds("anthropic", "claude-sonnet-5", 3_750) == 0.0
+
+
+async def test_paid_calls_are_never_paced(tmp_path, _fresh):
+    settings = _free_settings(tmp_path, openai_api_key="sk-test")
+    client = LLMClient(settings)
+    client._openai_client = _Groq(_groq_ok)  # same OpenAI-shaped fake
+    for seat in ("fundamentalist", "estimate_scribe", "bear_advocate"):
+        await _verdict(client, seat)
+    assert _fresh == []

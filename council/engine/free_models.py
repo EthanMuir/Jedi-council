@@ -93,3 +93,35 @@ async def resolve_groq(client, seat_id: str) -> str:
 
 def clear_cache() -> None:
     _cache.clear()
+
+
+# ---- pacing: stay under free tiers' per-minute limits ----------------------
+# Sending requests in bursts (the Council runs up to 8 at once) earned real
+# "429 Too Many Requests" replies on free Gemini, which allows about 15
+# requests a minute. Free-tier calls are instead given evenly spaced slots a
+# little under each limit. Groq's free models are also capped on tokens per
+# minute, per model, which is the tighter limit for seat-sized prompts.
+GEMINI_REQUESTS_PER_MINUTE = 14
+GROQ_REQUESTS_PER_MINUTE = 28
+GROQ_TOKENS_PER_MINUTE = {
+    "openai/gpt-oss-120b": 7_500,
+    "llama-3.3-70b-versatile": 11_000,
+    "openai/gpt-oss-20b": 7_500,
+}
+GROQ_DEFAULT_TOKENS_PER_MINUTE = 5_500
+
+
+def estimate_call_tokens(system_prompt: str, user_prompt: str) -> int:
+    """Rough prompt size (about 4 characters a token) plus a typical
+    structured answer."""
+    return (len(system_prompt) + len(user_prompt)) // 4 + 1_200
+
+
+def pace_interval_seconds(provider: str, model: str, est_tokens: int) -> float:
+    """Seconds to leave before the next free-tier call to this model."""
+    if provider == "google":
+        return 60.0 / GEMINI_REQUESTS_PER_MINUTE
+    if provider == "groq":
+        tokens_per_minute = GROQ_TOKENS_PER_MINUTE.get(model, GROQ_DEFAULT_TOKENS_PER_MINUTE)
+        return max(60.0 / GROQ_REQUESTS_PER_MINUTE, 60.0 * est_tokens / tokens_per_minute)
+    return 0.0

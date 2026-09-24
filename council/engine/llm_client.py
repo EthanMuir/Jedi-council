@@ -324,6 +324,22 @@ def _repair_seat_verdict_input(raw: dict) -> dict:
     return repaired
 
 
+class _Pacer:
+    """Evenly spaced call slots per (provider, model). Reserving is
+    synchronous -- no await between reading and moving the next free slot --
+    so concurrent seats can't claim the same slot."""
+
+    def __init__(self) -> None:
+        self._next_at: dict[tuple[str, str], float] = {}
+
+    def reserve(self, key: tuple[str, str], interval: float) -> float:
+        """Claim the next slot; returns how long to wait for it."""
+        now = time.monotonic()
+        slot = max(now, self._next_at.get(key, now))
+        self._next_at[key] = slot + interval
+        return slot - now
+
+
 def _friendly_duration(seconds: float) -> str:
     if seconds >= 5400:
         return f"{round(seconds / 3600)} hours"
@@ -383,14 +399,18 @@ class LLMClient:
         call_log: list[LLMCallRecord] | None = None,
         on_notice: Callable[[str], Awaitable[None]] | None = None,
         on_wait: Callable[[str, str, float], Awaitable[None]] | None = None,
+        on_queue: Callable[[str, str, float], Awaitable[None]] | None = None,
     ):
         """`on_wait(seat_id, provider_name, seconds)` is awaited just before
-        sitting out a provider's rate limit, so the UI can say a seat is
-        waiting rather than looking stuck."""
+        sitting out a provider's rate limit, and `on_queue` (same arguments)
+        before a free-tier call waits for its paced slot -- so the UI can say
+        a seat is waiting or queued rather than looking stuck."""
         self.settings = settings
         self.call_log: list[LLMCallRecord] = call_log if call_log is not None else []
         self._on_notice = on_notice
         self._on_wait = on_wait
+        self._on_queue = on_queue
+        self._pacer = _Pacer()
         self._client = None
         self._openai_client = None
         self._gemini_client = None
@@ -553,6 +573,25 @@ class LLMClient:
             )
         return ResolvedRoute(route.seat_id, "google", FREE_MODELS["google"], routed_as_intended=False)
 
+    async def _wait_for_free_tier_slot(
+        self, route: ResolvedRoute, model: str, seat_id: str, system_prompt: str, user_prompt: str
+    ) -> None:
+        """Free tiers get evenly paced requests instead of bursts; paid
+        routes are never paced."""
+        model_info = get_model(route.model)
+        if not (model_info and model_info.free):
+            return
+        est_tokens = free_models.estimate_call_tokens(system_prompt, user_prompt)
+        interval = free_models.pace_interval_seconds(route.provider, model, est_tokens)
+        wait = self._pacer.reserve((route.provider, model), interval)
+        if wait <= 0:
+            return
+        provider_name = _PROVIDER_NAMES.get(route.provider, route.provider)
+        if wait >= 1 and self._on_queue:
+            await self._on_queue(seat_id, provider_name, wait)
+        log.debug("%s pacing: %s waits %.1fs for its slot on %s", provider_name, seat_id, wait, model)
+        await asyncio.sleep(wait)
+
     async def _notice(self, message: str) -> None:
         if self._on_notice:
             await self._on_notice(message)
@@ -623,6 +662,7 @@ class LLMClient:
             model = await self._concrete_model(route)
             client_attr, call_adapter = _PROVIDER_ADAPTERS[route.provider]
             client = getattr(self, client_attr)
+            await self._wait_for_free_tier_slot(route, model, seat_id, system_prompt, user_prompt)
             start = time.monotonic()
             try:
                 try:

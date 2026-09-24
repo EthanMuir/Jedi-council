@@ -252,18 +252,22 @@ function clearWait(seatId) {
 function showSeatWaiting(payload) {
   const chair = document.getElementById(`chair-${payload.seat_id}`);
   const resumeAt = Date.now() + (payload.resume_in || 0) * 1000;
+  const queued = payload.stage === 'queued';
   const label = () => {
     const left = Math.max(0, Math.round((resumeAt - Date.now()) / 1000));
-    return left > 0 ? `waiting on ${payload.provider} limit · ${left}s` : 'deliberating...';
+    if (left <= 0) return 'deliberating...';
+    return queued ? `queued for ${payload.provider} · ${left}s` : `waiting on ${payload.provider} limit · ${left}s`;
   };
   if (!chair) {
     // Debate / Prosecutor / Grand Master have no chair on the ring.
-    setStatus(`Waiting on ${payload.provider}'s rate limit -- resumes in ${payload.resume_in}s.`);
+    setStatus(queued
+      ? `Queued for ${payload.provider} (free tier pace) -- starts in ${payload.resume_in}s.`
+      : `Waiting on ${payload.provider}'s rate limit -- resumes in ${payload.resume_in}s.`);
     return;
   }
   const voteEl = chair.querySelector('.seat-vote');
   clearWait(payload.seat_id);
-  voteEl.className = 'seat-vote yellow';
+  voteEl.className = queued ? 'seat-vote dim' : 'seat-vote yellow';
   voteEl.textContent = label();
   waitTimers[payload.seat_id] = setInterval(() => {
     voteEl.textContent = label();
@@ -275,7 +279,7 @@ function showSeatWaiting(payload) {
 }
 
 function updateSeatProgress(payload) {
-  if (payload.stage === 'waiting') {
+  if (payload.stage === 'waiting' || payload.stage === 'queued') {
     showSeatWaiting(payload);
     return;
   }
