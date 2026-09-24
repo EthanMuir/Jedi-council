@@ -264,7 +264,9 @@ async function loadKeys() {
   } catch (err) {
     const el = document.getElementById('keys-summary');
     el.className = 'keys-summary mono crimson';
-    el.textContent = `Couldn't load your keys: ${friendlyError(err)}`;
+    el.textContent = String(err.message).startsWith('404')
+      ? "Couldn't load your keys: the server is still running an older version. Restart it (sudo systemctl restart jedi-council) and reload this page."
+      : `Couldn't load your keys: ${friendlyError(err)}`;
   }
 }
 

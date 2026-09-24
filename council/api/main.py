@@ -12,12 +12,12 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from council import key_store
 from council.api.auth import install_auth
 from council.api.serialize import to_jsonable
+from council.api.ui_files import UIFiles
 from council.calibration.benchmark import compute_benchmark
 from council.calibration.officer import compute_seat_calibration, rank_for_seat
 from council.config import get_settings
@@ -340,4 +340,4 @@ async def get_settings_cost_estimate(horizon: str = "1w"):
 
 
 if _UI_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(_UI_DIR), html=True), name="ui")
+    app.mount("/", UIFiles(directory=str(_UI_DIR), html=True), name="ui")
