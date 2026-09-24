@@ -7,7 +7,7 @@
 }
 
 /* Which run the ring shows (top right) and, once it's finished, the
-   verdict call-out (bottom left). Corners of the ring panel on wide
+   verdict call-out (bottom right). Corners of the ring panel on wide
    screens; stacked above/below the seat grid on phones. */
 .ring-meta {
   position: absolute;
@@ -34,8 +34,9 @@
 
 .ring-spoken {
   position: absolute;
-  left: 22px;
+  right: 22px;
   bottom: 18px;
+  text-align: right;
   z-index: 2;
 }
 

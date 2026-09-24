@@ -556,7 +556,7 @@ async function convene() {
       else if (event === 'phase_g_crypt_write') setStatus(`Written to the Crypt: ${payload.prediction_id}`);
       else if (event === 'error') setStatus(`ERROR: ${payload.message}`);
       // The ring itself now shows the finished run (ticker/horizon top right,
-      // "The Council has spoken" bottom left), so the status line clears.
+      // "The Council has spoken" bottom right), so the status line clears.
       else if (event === 'done') setStatus('');
       saveChamberState();
     });
