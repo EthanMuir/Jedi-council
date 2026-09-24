@@ -1,8 +1,50 @@
 .chamber-ring-wrap {
+  position: relative;
   display: flex;
   justify-content: center;
   padding: 40px 20px;
   overflow: hidden;
+}
+
+/* Which run the ring shows (top right) and, once it's finished, the
+   verdict call-out (bottom left). Corners of the ring panel on wide
+   screens; stacked above/below the seat grid on phones. */
+.ring-meta {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  text-align: right;
+  z-index: 2;
+}
+
+.ring-ticker {
+  font-family: var(--font-header);
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--bone);
+}
+
+.ring-horizon {
+  margin-top: 6px;
+  font-family: var(--font-header);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.ring-spoken {
+  position: absolute;
+  left: 22px;
+  bottom: 18px;
+  z-index: 2;
+}
+
+.ring-spoken-title {
+  font-family: var(--font-header);
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 10px;
 }
 
 .chamber-ring {
@@ -732,7 +774,16 @@
   .control-row { gap: 14px; }
   .control-row > * { flex: 1 1 100%; }
 
-  .chamber-ring-wrap { padding: 16px 10px; }
+  .chamber-ring-wrap {
+    padding: 16px 10px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .ring-meta, .ring-spoken { position: static; }
+  .ring-meta { text-align: center; }
+  .ring-spoken { text-align: center; }
+  .ring-spoken .btn { width: 100%; }
   .chamber-ring {
     width: 100%;
     height: auto;

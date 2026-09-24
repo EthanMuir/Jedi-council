@@ -20,6 +20,9 @@ let selectedHorizon = '1w';
 let selectedShape = 'full'; // 'full' | 'lite' -- see SHAPE_HINTS
 let seatDetails = {}; // seat_id -> full seat_result payload, for the holo-panel
 let runAlerts = []; // { kind: 'notice' | 'stopped', message, link }
+let runInfo = null; // { ticker, horizon, shape } of the run shown on the ring
+
+const HORIZON_NAMES = { '1d': 'Next Day', '1w': 'Next Week', '1m': 'Next Month', '1y': 'Next Year' };
 
 const SHAPE_HINTS = {
   full: 'Full: every seat answers 3 times and the debate runs 2 rounds (43 model calls).',
@@ -51,6 +54,7 @@ function saveChamberState() {
     horizon: selectedHorizon,
     shape: selectedShape,
     runAlerts,
+    runInfo,
     statusText: lastStatusText,
     seatDetails,
     realityAnchor: lastRealityAnchor,
@@ -103,10 +107,14 @@ function restoreChamberState() {
   if (state.gatesPayload || state.riskPayload) {
     renderAuditPanel(state.gatesPayload, state.riskPayload);
   }
+  runInfo = state.runInfo || null;
+  renderRunInfo();
   if (state.grandMaster) renderGrandMaster(state.grandMaster);
 
   const status = document.getElementById('status-line');
-  if (state.statusText) {
+  // A finished run speaks for itself on the ring -- only an unfinished
+  // one needs the "may have finished since you left" caveat.
+  if (state.statusText && !state.grandMaster) {
     // The stream itself can't be resumed client-side (a page navigation
     // aborts the fetch), so this is honest about being a snapshot, not a
     // live view -- the deliberation may already have finished server-side
@@ -200,6 +208,7 @@ function resetRing() {
     redrawWizardChair(seat.id, 'deliberating');
   }
   setHolocronVerdict(null);
+  document.getElementById('ring-spoken').hidden = true;
   document.getElementById('holocron-label').innerHTML = 'DELIBERATING';
   document.getElementById('reality-anchor').innerHTML = '<span class="dim">Awaiting Phase B...</span>';
   document.getElementById('dissent-map').innerHTML = '<span class="dim">Awaiting verdicts...</span>';
@@ -342,6 +351,8 @@ function renderGrandMaster(payload) {
     <div style="margin-top:8px;"><b>Reasoning:</b> ${payload.reasoning}</div>
   `;
 
+  document.getElementById('ring-spoken').hidden = false;
+
   document.getElementById('dissent-map').innerHTML = Object.entries(seatDetails).map(([sid, d]) => {
     const seat = TIER_I_SEATS.find(s => s.id === sid);
     return `<div>${d.vote === 'BULLISH' ? '&#9650;' : d.vote === 'BEARISH' ? '&#9660;' : '&#9679;'}
@@ -363,6 +374,30 @@ function openHoloPanel(seatId, title) {
       <div style="margin-top:12px;">${d.thesis}</div>
     `;
   }
+  document.getElementById('holo-backdrop').classList.add('open');
+}
+
+// Which run the ring is showing -- the ticker and horizon it was convened
+// with, not whatever is typed in the box now.
+function renderRunInfo() {
+  const meta = document.getElementById('ring-meta');
+  meta.hidden = !runInfo;
+  if (!runInfo) return;
+  document.getElementById('ring-ticker').textContent = runInfo.ticker;
+  const shape = runInfo.shape === 'lite' ? ' · Lite run' : '';
+  document.getElementById('ring-horizon').textContent = `${HORIZON_NAMES[runInfo.horizon] || runInfo.horizon}${shape}`;
+}
+
+function openSynthesis() {
+  if (!lastGrandMaster) return;
+  const modal = document.getElementById('holo-modal');
+  const heading = runInfo ? `${runInfo.ticker} · ${HORIZON_NAMES[runInfo.horizon] || runInfo.horizon}` : '';
+  modal.innerHTML = `
+    <button class="btn close-btn" onclick="closeHoloPanel()">CLOSE</button>
+    <h2>The Grand Master's Synthesis</h2>
+    <div class="dim" style="margin-bottom:12px;">${heading}</div>
+    ${document.getElementById('grand-master-verdict').innerHTML}
+  `;
   document.getElementById('holo-backdrop').classList.add('open');
 }
 
@@ -424,6 +459,8 @@ async function convene() {
   resetRing();
   runAlerts = [];
   renderRunAlerts();
+  runInfo = { ticker, horizon: selectedHorizon, shape: selectedShape };
+  renderRunInfo();
 
   const contextEl = document.getElementById('context-input');
   const context = contextEl ? contextEl.value.trim() : '';
@@ -455,7 +492,9 @@ async function convene() {
       else if (event === 'phase_f_synthesis') renderGrandMaster(payload);
       else if (event === 'phase_g_crypt_write') setStatus(`Written to the Crypt: ${payload.prediction_id}`);
       else if (event === 'error') setStatus(`ERROR: ${payload.message}`);
-      else if (event === 'done') setStatus(`Deliberation complete -- ${ticker} @ ${selectedHorizon}`);
+      // The ring itself now shows the finished run (ticker/horizon top right,
+      // "The Council has spoken" bottom left), so the status line clears.
+      else if (event === 'done') setStatus('');
       saveChamberState();
     });
   } catch (e) {
@@ -489,6 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setShape('full', true);
 
   document.getElementById('convene-btn').onclick = convene;
+  document.getElementById('view-synthesis-btn').onclick = openSynthesis;
   document.getElementById('holo-backdrop').onclick = (e) => {
     if (e.target.id === 'holo-backdrop') closeHoloPanel();
   };
