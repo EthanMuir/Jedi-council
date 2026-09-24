@@ -8,9 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 from council.data.service import DataService
-from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, MultiTermVerdict, SeatContext
 from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
@@ -31,10 +30,9 @@ class CrossMarketSeat:
     id = "cross_market"
     title = "Reader of Distant Stars"
     allowed_data = frozenset({"cross_market"})
-    horizons = competent_horizons("cross_market")
 
     async def gather(
-        self, data_service: DataService, ticker: str, as_of: Any, horizon: str
+        self, data_service: DataService, ticker: str, as_of: Any
     ) -> SeatContext:
         snapshot = await data_service.get_cross_market_snapshot(ticker, as_of=as_of)
         return SeatContext(
@@ -43,7 +41,6 @@ class CrossMarketSeat:
             {"cross_market": snapshot},
             ticker=ticker,
             as_of=as_of,
-            horizon=horizon,
         )
 
     async def deliberate(
@@ -54,7 +51,7 @@ class CrossMarketSeat:
         sample_index: int = 0,
         memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
-    ) -> SeatVerdict:
+    ) -> MultiTermVerdict:
         x = ctx["cross_market"]
 
         def pct(value: float | None) -> str:
@@ -63,7 +60,7 @@ class CrossMarketSeat:
         sector = f"Sector ETF ({x.sector_etf_symbol})" if x.sector_etf_symbol else "Sector ETF"
         peers = f"Peer basket ({', '.join(x.peer_symbols)})" if x.peer_symbols else "Peer basket"
         user_prompt = (
-            f"Cross-market snapshot, horizon {ctx.horizon}. Data as of {x.as_of.isoformat()}. "
+            f"Cross-market snapshot. Data as of {x.as_of.isoformat()}. "
             "All changes are 5-day returns.\n\n"
             f"{sector}: {pct(x.sector_etf_return_5d_pct)}\n"
             f"{peers}: {pct(x.peer_basket_return_5d_pct)}\n"
@@ -72,10 +69,10 @@ class CrossMarketSeat:
             f"Oil (USO): {pct(x.oil_change_pct)}\n"
             f"Overseas proxy (EWJ): {pct(x.overseas_session_return_pct)}\n\n"
             "Treat an unavailable input as missing, not as flat. Reason only from "
-            "co-movement/divergence across these other markets and give your verdict."
+            "co-movement/divergence across these other markets and give your lean for each term."
         )
 
-        return await llm_client.get_verdict(
+        return await llm_client.get_seat_answer(
             seat_id=self.id,
             model=llm_client.settings.seat_model,
             system_prompt=_SYSTEM_PROMPT,

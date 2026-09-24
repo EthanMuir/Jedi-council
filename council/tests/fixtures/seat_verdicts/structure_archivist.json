@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.518,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "Evidence the buyback is not actually being executed, or a subsequent dilutive filing.",
+  "short": {
+    "vote": "NO_CONVICTION",
+    "probability": 0.5,
+    "expected_move_pct": 0.0,
+    "rationale": "Recent filings are routine; nothing that moves the stock this week."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.514,
+    "expected_move_pct": 5.0,
+    "rationale": "No debt walls or dilution in view over the next quarter."
+  },
+  "long": {
+    "vote": "BEARISH",
+    "probability": 0.517,
+    "expected_move_pct": 15.0,
+    "rationale": "A new shelf registration leaves room for share sales later -- a faint negative."
+  },
   "comparison_class": {
     "definition": "Names announcing an incremental buyback authorization without any concurrent dilutive registration or covenant/litigation flag",
     "n_observations": 38,
@@ -8,16 +28,12 @@
     "why_this_class": "closest analogue isolating a clean buyback authorization from confounding structural events"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 1.0,
-  "thesis": "The expanded buyback authorization is the one structurally notable item in view; there is no dilutive registration, no covenant flag, and no litigation flag alongside it. The investor-day 8-K and the routine 10-Q carry no signal on their own. This is a low-conviction lean, not a strong call -- an authorization is not the same as execution, and pace/timing are entirely at management's discretion.",
   "key_evidence": [
-    {"claim": "Incremental buyback authorization, no offsetting dilution/covenant/litigation flags", "source": "filings_derived", "as_of": "2026-08-09"}
+    {
+      "claim": "Incremental buyback authorization, no offsetting dilution/covenant/litigation flags",
+      "source": "filings_derived",
+      "as_of": "2026-08-09"
+    }
   ],
-  "what_would_change_my_mind": "Evidence the buyback is not actually being executed, or a subsequent dilutive filing.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "The expanded buyback authorization is the one structurally notable item in view; there is no dilutive registration, no covenant flag, and no litigation flag alongside it. The investor-day 8-K and the routine 10-Q carry no signal on their own. This is a low-conviction lean, not a strong call -- an authorization is not the same as execution, and pace/timing are entirely at management's discretion."
 }

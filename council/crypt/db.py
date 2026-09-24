@@ -25,6 +25,11 @@ _PREDICTIONS_COLUMN_MIGRATIONS = [
     ("total_output_tokens", "INTEGER"),
     ("run_mode", "TEXT"),  # "free" | "paid" | "sample"
     ("run_shape", "TEXT"),  # "full" | "lite"
+    # One run writes one row per term (short/medium/long); run_id ties them
+    # together, and synthesis_json carries the Grand Master's notes and each
+    # term's position and warnings, identical on all three rows.
+    ("run_id", "TEXT"),
+    ("synthesis_json", "TEXT"),
 ]
 
 

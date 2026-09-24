@@ -18,21 +18,9 @@ from council.config import Settings
 from council.engine import free_models, model_settings
 from council.engine.llm_client import LLMCallFailed, LLMClient, RunStopped, _retry_hint_seconds
 from council.engine.routing import resolve_route
+from council.tests.seat_answers import seat_answer_payload
 
-_VERDICT = {
-    "vote": "BULLISH",
-    "probability": 0.612,
-    "comparison_class": {
-        "definition": "test comparison class",
-        "n_observations": 50,
-        "base_rate": 0.5,
-        "why_this_class": "test",
-    },
-    "expected_move_pct": 3.2,
-    "thesis": "test thesis",
-    "what_would_change_my_mind": "test",
-    "data_quality": "GOOD",
-}
+_VERDICT = seat_answer_payload()
 
 _GEMINI_DAILY = {
     "error": {
@@ -123,9 +111,10 @@ def _use_free_model(settings, role, model_id):
 
 
 async def _verdict(client, seat_id="technician"):
-    return await client.get_verdict(
+    answer = await client.get_seat_answer(
         seat_id=seat_id, model="claude-sonnet-5", system_prompt="s", user_prompt="u"
     )
+    return answer.short
 
 
 # --- picking free models ------------------------------------------------
@@ -289,7 +278,7 @@ async def test_run_stops_when_every_free_provider_is_used_up(tmp_path):
     with pytest.raises(LLMCallFailed):
         await client.get_structured(
             seat_id="macro_sage", model="claude-sonnet-5", system_prompt="s",
-            user_prompt="u", response_model=llm_client_module.SeatVerdict,
+            user_prompt="u", response_model=llm_client_module.SeatAnswer,
         )
     assert (client._gemini_client.calls, client._groq_client.calls) == calls_before
 
@@ -360,15 +349,16 @@ async def test_lite_run_uses_one_sample_and_one_debate_round(tmp_path):
     from council.engine.orchestrator import run_deliberation
 
     settings = _sample_settings(tmp_path)
-    result = await run_deliberation("NVDA", "1w", settings, as_of=AS_OF, lite=True)
+    result = await run_deliberation("NVDA", settings, as_of=AS_OF, lite=True)
 
     assert all(s.sample_count == 1 for s in result.seat_results)
     assert len(result.prosecutor_verdicts) == 1
     assert (result.run_mode, result.run_shape) == ("sample", "lite")
     conn = connect(settings.council_db_path)
-    row = conn.execute("SELECT run_mode, run_shape FROM predictions").fetchone()
+    rows = conn.execute("SELECT run_mode, run_shape FROM predictions").fetchall()
     conn.close()
-    assert (row["run_mode"], row["run_shape"]) == ("sample", "lite")
+    assert len(rows) == 3  # one per term
+    assert {(r["run_mode"], r["run_shape"]) for r in rows} == {("sample", "lite")}
 
 
 async def test_a_stopped_run_is_never_saved(tmp_path, monkeypatch):
@@ -387,7 +377,7 @@ async def test_a_stopped_run_is_never_saved(tmp_path, monkeypatch):
         events.append(event)
 
     with pytest.raises(RunStopped, match="daily limit"):
-        await run_deliberation("NVDA", "1w", settings, as_of=AS_OF, progress=progress)
+        await run_deliberation("NVDA", settings, as_of=AS_OF, progress=progress)
 
     assert "phase_a_complete" not in events
     conn = connect(settings.council_db_path)
@@ -447,7 +437,7 @@ def test_free_mode_switches_every_seat_and_restores_previous_choices(api):
     assert on["enabled"] is True and on["run_mode"] == "free"
     roles = client.get("/api/settings/models").json()["roles"]
     assert {r["current_model"] for r in roles} == {"free:gemini"}
-    estimate = client.get("/api/settings/cost-estimate", params={"horizon": "1w"}).json()
+    estimate = client.get("/api/settings/cost-estimate", params={}).json()
     assert estimate["total_cost_usd"] == 0 and estimate["run_mode"] == "free"
 
     off = client.post("/api/settings/free-mode", json={"enabled": False}).json()
@@ -467,8 +457,8 @@ def test_groq_is_used_when_it_is_the_only_free_key(api):
 
 def test_lite_estimate_makes_far_fewer_calls(api):
     client, _ = api
-    full = client.get("/api/settings/cost-estimate", params={"horizon": "1w"}).json()
-    lite = client.get("/api/settings/cost-estimate", params={"horizon": "1w", "lite": "true"}).json()
+    full = client.get("/api/settings/cost-estimate", params={}).json()
+    lite = client.get("/api/settings/cost-estimate", params={"lite": "true"}).json()
     assert (full["total_calls"], lite["total_calls"]) == (43, 16)
 
 
@@ -498,7 +488,7 @@ def test_a_stopped_run_streams_the_reason_instead_of_an_error(api, monkeypatch):
 
     monkeypatch.setattr(main_module, "run_deliberation", stopped_run)
     client, _ = api
-    with client.stream("GET", "/api/deliberate/stream", params={"ticker": "NVDA", "horizon": "1w"}) as response:
+    with client.stream("GET", "/api/deliberate/stream", params={"ticker": "NVDA"}) as response:
         lines = list(response.iter_lines())
     events = [line.removeprefix("event: ") for line in lines if line.startswith("event: ")]
     assert events == ["mode", "stopped"]

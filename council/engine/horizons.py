@@ -1,13 +1,37 @@
-"""Horizon set and the hardcoded seat/horizon competence matrix (spec
-section 4). A seat with competence 0 at a horizon is not called at all --
-"do not pay tokens for a fundamental analyst's opinion on tomorrow"."""
+"""The three terms every deliberation covers, and how much each seat counts
+toward each one.
+
+Every run judges a stock over all three terms at once -- SHORT (the next
+week), MEDIUM (the next three months) and LONG (the next year and beyond;
+seats may reason further out, but the Crypt checks long-term calls after a
+year). One piece of news can point different ways over different terms: an
+acquisition can weigh on a stock now and help it later.
+
+Each seat's data speaks more to some terms than others -- charts, options
+and news are short-term evidence, fundamentals and macro are long-term --
+so every seat gives a lean for all three, and this matrix sets how much
+that lean counts per term. No seat is ever left out of a term entirely.
+
+The old Day/Week/Month/Year horizons ("1d".."1y") are kept only in the
+time tables below, so runs saved before the switch can still be resolved."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-HORIZONS = ("1d", "1w", "1m", "1y")
+TERMS = ("short", "medium", "long")
+
+TERM_NAMES = {"short": "Short term", "medium": "Medium term", "long": "Long term"}
+TERM_WINDOWS = {
+    "short": "the next week",
+    "medium": "the next 3 months",
+    "long": "the next year and beyond",
+}
 
 HORIZON_TIMEDELTA: dict[str, timedelta] = {
+    "short": timedelta(days=7),
+    "medium": timedelta(days=91),
+    "long": timedelta(days=365),
+    # Legacy horizons (runs saved before terms existed).
     "1d": timedelta(days=1),
     "1w": timedelta(weeks=1),
     "1m": timedelta(days=30),
@@ -19,37 +43,37 @@ def resolve_at_for(horizon: str, as_of: datetime) -> datetime:
     return as_of + HORIZON_TIMEDELTA[horizon]
 
 
-# Trading days (not calendar days) matching each horizon, for the Base-Rate
-# Keeper's rolling-return statistics.
-HORIZON_TRADING_DAYS: dict[str, int] = {"1d": 1, "1w": 5, "1m": 21, "1y": 252}
-
-
-# Full Tier I roster from the spec, even though only technician /
-# catalyst_seer / oracle_options are wired up as of Phase 1. Hardcoding the
-# whole table now avoids re-deriving it inconsistently in Phase 2.
-COMPETENCE_MATRIX: dict[str, dict[str, float]] = {
-    "technician": {"1d": 1.0, "1w": 0.9, "1m": 0.6, "1y": 0.3},
-    "fundamentalist": {"1d": 0.0, "1w": 0.2, "1m": 0.6, "1y": 1.0},
-    "catalyst_seer": {"1d": 0.9, "1w": 1.0, "1m": 0.7, "1y": 0.4},
-    "insider_reader": {"1d": 0.1, "1w": 0.4, "1m": 0.8, "1y": 0.9},
-    "senate_watcher": {"1d": 0.1, "1w": 0.3, "1m": 0.7, "1y": 0.8},
-    "flow_cartographer": {"1d": 0.2, "1w": 0.4, "1m": 0.8, "1y": 0.9},
-    "oracle_options": {"1d": 1.0, "1w": 0.9, "1m": 0.6, "1y": 0.3},
-    "macro_sage": {"1d": 0.0, "1w": 0.3, "1m": 0.8, "1y": 1.0},
-    "cross_market": {"1d": 1.0, "1w": 0.8, "1m": 0.6, "1y": 0.4},
-    "estimate_scribe": {"1d": 0.2, "1w": 0.5, "1m": 0.9, "1y": 0.9},
-    "transcript_linguist": {"1d": 0.3, "1w": 0.6, "1m": 0.8, "1y": 0.7},
-    "structure_archivist": {"1d": 0.4, "1w": 0.5, "1m": 0.7, "1y": 0.8},
+# Trading days (not calendar days) per term, for the Base-Rate Keeper's
+# rolling-return statistics.
+HORIZON_TRADING_DAYS: dict[str, int] = {
+    "short": 5,
+    "medium": 63,
+    "long": 252,
+    "1d": 1,
+    "1w": 5,
+    "1m": 21,
+    "1y": 252,
 }
 
 
-def competence(seat_id: str, horizon: str) -> float:
-    return COMPETENCE_MATRIX.get(seat_id, {}).get(horizon, 0.0)
+# How much each seat's lean counts toward each term (0-1). Never 0: every
+# seat weighs in on every term, it just counts for less where its data is
+# weaker evidence.
+COMPETENCE_MATRIX: dict[str, dict[str, float]] = {
+    "technician": {"short": 1.0, "medium": 0.6, "long": 0.3},
+    "fundamentalist": {"short": 0.2, "medium": 0.6, "long": 1.0},
+    "catalyst_seer": {"short": 1.0, "medium": 0.7, "long": 0.4},
+    "insider_reader": {"short": 0.4, "medium": 0.8, "long": 0.9},
+    "senate_watcher": {"short": 0.3, "medium": 0.7, "long": 0.8},
+    "flow_cartographer": {"short": 0.4, "medium": 0.8, "long": 0.9},
+    "oracle_options": {"short": 0.9, "medium": 0.6, "long": 0.3},
+    "macro_sage": {"short": 0.3, "medium": 0.8, "long": 1.0},
+    "cross_market": {"short": 0.8, "medium": 0.6, "long": 0.4},
+    "estimate_scribe": {"short": 0.5, "medium": 0.9, "long": 0.9},
+    "analyst_ratings": {"short": 0.6, "medium": 0.8, "long": 0.9},
+    "structure_archivist": {"short": 0.5, "medium": 0.7, "long": 0.8},
+}
 
 
-def is_competent(seat_id: str, horizon: str) -> bool:
-    return competence(seat_id, horizon) > 0.0
-
-
-def competent_horizons(seat_id: str) -> frozenset[str]:
-    return frozenset(h for h in HORIZONS if is_competent(seat_id, h))
+def competence(seat_id: str, term: str) -> float:
+    return COMPETENCE_MATRIX.get(seat_id, {}).get(term, 0.0)

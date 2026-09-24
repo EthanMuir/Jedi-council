@@ -1,18 +1,39 @@
 {
-  "vote": "NO_READ",
-  "probability": 0.5,
-  "comparison_class": null,
-  "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 0.0,
-  "thesis": "Two sales (one routine 10b5-1, one single director sale) against one single open-market buy. None of the transactions form a cluster, and the one clean signal -- the officer buy -- is not large relative to their existing holding. This does not clear the bar for a directional call under the signal grammar; most insider activity in this window is noise.",
-  "key_evidence": [
-    {"claim": "No cluster of buys present, single officer purchase only", "source": "insider_derived", "as_of": "2026-09-18"}
-  ],
-  "what_would_change_my_mind": "A cluster of two or more officers buying in the same window.",
+  "status": "READ",
   "data_quality": "GOOD",
-  "abstain_reason": "no_clear_majority_signal"
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A cluster of two or more officers buying in the same window.",
+  "short": {
+    "vote": "NO_CONVICTION",
+    "probability": 0.5,
+    "expected_move_pct": 0.0,
+    "rationale": "Sales are pre-planned and small relative to holdings."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.508,
+    "expected_move_pct": 4.0,
+    "rationale": "Selling is lighter than last year's pace -- barely positive."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.516,
+    "expected_move_pct": 12.0,
+    "rationale": "Insiders retaining large stakes is a faint vote of confidence."
+  },
+  "comparison_class": {
+    "definition": "Large-cap semiconductor names with a comparable setup over the last decade",
+    "n_observations": 40,
+    "base_rate": 0.54,
+    "why_this_class": "Same sector and size bucket; the base rate of a positive move is the anchor before seat-specific evidence."
+  },
+  "decomposition": [],
+  "key_evidence": [
+    {
+      "claim": "No cluster of buys present, single officer purchase only",
+      "source": "insider_derived",
+      "as_of": "2026-09-18"
+    }
+  ],
+  "thesis": "Two sales (one routine 10b5-1, one single director sale) against one single open-market buy. None of the transactions form a cluster, and the one clean signal -- the officer buy -- is not large relative to their existing holding. This does not clear the bar for a directional call under the signal grammar; most insider activity in this window is noise."
 }

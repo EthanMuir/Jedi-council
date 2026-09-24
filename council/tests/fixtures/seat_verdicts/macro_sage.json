@@ -1,18 +1,39 @@
 {
-  "vote": "NO_READ",
-  "probability": 0.5,
-  "comparison_class": null,
-  "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 0.0,
-  "thesis": "The curve is mildly positively sloped, CPI is near target, and the Fed funds rate is well off its cycle peak -- a broadly unremarkable macro backdrop with no acute regime shift in view. This seat's signal operates on a slower clock than most horizons this council is asked about; absent a clear regime change, the honest answer is no read rather than a forced directional lean.",
-  "key_evidence": [
-    {"claim": "10y-2y curve +0.37%, CPI YoY 2.6%, unemployment 4.1%", "source": "macro_derived", "as_of": "2026-09-18"}
-  ],
-  "what_would_change_my_mind": "A CPI print materially above or below trend, or a clear inflection in the curve shape signalling a policy regime change.",
+  "status": "READ",
   "data_quality": "GOOD",
-  "abstain_reason": "macro_regime_moves_slower_than_this_horizon"
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A CPI print materially above or below trend, or a clear inflection in the curve shape signalling a policy regime change.",
+  "short": {
+    "vote": "NO_CONVICTION",
+    "probability": 0.5,
+    "expected_move_pct": 0.0,
+    "rationale": "Macro conditions don't move a single stock in a week."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.519,
+    "expected_move_pct": 7.0,
+    "rationale": "Inflation near target and a positively sloped curve are mild tailwinds."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.536,
+    "expected_move_pct": 18.0,
+    "rationale": "A stable rate outlook supports growth stocks over a year."
+  },
+  "comparison_class": {
+    "definition": "Large-cap semiconductor names with a comparable setup over the last decade",
+    "n_observations": 40,
+    "base_rate": 0.54,
+    "why_this_class": "Same sector and size bucket; the base rate of a positive move is the anchor before seat-specific evidence."
+  },
+  "decomposition": [],
+  "key_evidence": [
+    {
+      "claim": "10y-2y curve +0.37%, CPI YoY 2.6%, unemployment 4.1%",
+      "source": "macro_derived",
+      "as_of": "2026-09-18"
+    }
+  ],
+  "thesis": "The curve is mildly positively sloped, CPI is near target, and the Fed funds rate is well off its cycle peak -- a broadly unremarkable macro backdrop with no acute regime shift in view. This seat's signal operates on a slower clock than most terms this council is asked about; absent a clear regime change, the honest answer is no read rather than a forced directional lean."
 }

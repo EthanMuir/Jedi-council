@@ -103,14 +103,14 @@ async def test_the_seat_prompt_says_unavailable_instead_of_flat(tmp_path):
     provider = _Provider({}, missing_symbols={"UUP", "USO"})
     service = _service(tmp_path, provider)
     seat = CrossMarketSeat()
-    ctx = await seat.gather(service, "ZZZZ", AS_OF, "1w")
+    ctx = await seat.gather(service, "ZZZZ", AS_OF)
 
     captured = {}
 
     class _Client:
         settings = type("S", (), {"seat_model": "m"})()
 
-        async def get_verdict(self, **kwargs):
+        async def get_seat_answer(self, **kwargs):
             captured.update(kwargs)
             return None
 

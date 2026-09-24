@@ -74,6 +74,8 @@ def test_connect_migrates_a_pre_existing_database_missing_new_columns(tmp_path):
         "total_cost_usd",
         "total_input_tokens",
         "total_output_tokens",
+        "run_id",
+        "synthesis_json",
     ):
         assert expected in columns
 

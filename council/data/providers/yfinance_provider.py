@@ -1,5 +1,5 @@
 """yfinance fallback -- OHLCV, news, options, fundamentals, institutional
-holdings, and analyst estimates. Free, no key, no official rate limit, per
+holdings, analyst estimates, and analyst price targets & ratings. Free, no key, no official rate limit, per
 spec: "free, unreliable, use as backstop only".
 
 fetch_news used to be a permanent `return []` stub -- harmless-looking, but
@@ -13,10 +13,11 @@ reporting "No news items in the lookback window" for a ticker with real
 recent news. Wired up for real now, same spirit as fetch_option_chain's
 own former-stub history (see test_yfinance_provider.py's docstring).
 
-The three fundamentals/holdings/estimates methods lean on yfinance's
+The fundamentals/holdings/estimates/ratings methods lean on yfinance's
 `Ticker.info` dict and a handful of purpose-built DataFrames
 (`institutional_holders`, `major_holders`, `analyst_price_targets`,
-`earnings_estimate`, `revenue_estimate`, `eps_trend`, `earnings_history`).
+`earnings_estimate`, `revenue_estimate`, `eps_trend`, `earnings_history`,
+`recommendations_summary`, `upgrades_downgrades`).
 None of this is a documented, stable Yahoo API -- yfinance scrapes it,
 field availability varies by ticker and by yfinance version, and this
 couldn't be verified against live Yahoo data from the sandbox that built it
@@ -346,6 +347,83 @@ class YFinanceProvider:
             "etf_inclusion_notes": "",
             "short_interest_shares": _safe_int(info.get("sharesShort")) or 0,
             "days_to_cover": _safe_float(info.get("shortRatio")) or 0.0,
+        }
+
+    # ---- analyst price targets & ratings -------------------------------------
+
+    async def fetch_analyst_ratings(self, ticker: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._fetch_analyst_ratings_sync, ticker)
+
+    def _fetch_analyst_ratings_sync(self, ticker: str) -> dict[str, Any]:
+        import yfinance as yf
+
+        t = yf.Ticker(ticker)
+
+        targets: dict[str, Any] = {}
+        try:
+            targets = t.analyst_price_targets or {}
+        except Exception:  # noqa: BLE001
+            pass
+
+        analyst_count = None
+        try:
+            analyst_count = _safe_int((t.info or {}).get("numberOfAnalystOpinions"))
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Yahoo's recommendation trend: one row per month, "0m" (this
+        # month) back to "-3m".
+        splits: dict[str, dict[str, int]] = {}
+        try:
+            trend = t.recommendations_summary
+            if trend is not None and not trend.empty:
+                for _, row in trend.iterrows():
+                    splits[str(row.get("period"))] = {
+                        key: _safe_int(row.get(col)) or 0
+                        for key, col in (
+                            ("strong_buy", "strongBuy"), ("buy", "buy"), ("hold", "hold"),
+                            ("sell", "sell"), ("strong_sell", "strongSell"),
+                        )
+                    }
+        except Exception:  # noqa: BLE001
+            pass
+        now = splits.get("0m", {})
+        prior = splits.get("-3m")
+
+        changes: list[dict[str, Any]] = []
+        try:
+            history = t.upgrades_downgrades
+            if history is not None and not history.empty:
+                for changed_at, row in history.sort_index(ascending=False).head(40).iterrows():
+                    changes.append({
+                        "changed_at": changed_at.to_pydatetime().isoformat(),
+                        "firm": str(row.get("Firm") or ""),
+                        "action": str(row.get("Action") or ""),
+                        "from_grade": str(row.get("FromGrade") or ""),
+                        "to_grade": str(row.get("ToGrade") or ""),
+                        "price_target": _safe_float(row.get("currentPriceTarget")) or None,
+                        "prior_price_target": _safe_float(row.get("priorPriceTarget")) or None,
+                    })
+        except Exception:  # noqa: BLE001
+            pass
+
+        if not targets.get("mean") and not now and not changes:
+            raise ValueError(f"No analyst coverage for {ticker}")
+
+        return {
+            "current_price": _safe_float(targets.get("current")),
+            "target_mean": _safe_float(targets.get("mean")),
+            "target_median": _safe_float(targets.get("median")),
+            "target_high": _safe_float(targets.get("high")),
+            "target_low": _safe_float(targets.get("low")),
+            "analyst_count": analyst_count,
+            "strong_buy": now.get("strong_buy", 0),
+            "buy": now.get("buy", 0),
+            "hold": now.get("hold", 0),
+            "sell": now.get("sell", 0),
+            "strong_sell": now.get("strong_sell", 0),
+            **({f"prior_{k}": v for k, v in prior.items()} if prior else {}),
+            "recent_changes": changes,
         }
 
     # ---- analyst estimates -------------------------------------------------

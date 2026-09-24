@@ -57,7 +57,7 @@ def test_every_tier1_and_tier2_4_seat_has_a_routing_entry():
     expected = {
         "technician", "fundamentalist", "catalyst_seer", "insider_reader",
         "senate_watcher", "flow_cartographer", "oracle_options", "macro_sage",
-        "cross_market", "estimate_scribe", "transcript_linguist", "structure_archivist",
+        "cross_market", "estimate_scribe", "analyst_ratings", "structure_archivist",
         "bull_advocate", "bear_advocate", "prosecutor", "grand_master",
     }
     assert expected <= seat_ids

@@ -35,7 +35,7 @@ seats:
   macro_sage:          {provider: google,    model: gemini-3-pro, fallback_provider: anthropic, fallback_model: claude-sonnet-5}
   cross_market:        {provider: anthropic, model: claude-sonnet-5}
   estimate_scribe:     {provider: openai,    model: gpt-5,       fallback_provider: anthropic, fallback_model: claude-sonnet-5}
-  transcript_linguist: {provider: openai,    model: gpt-5,       fallback_provider: anthropic, fallback_model: claude-sonnet-5}
+  analyst_ratings:     {provider: openai,    model: gpt-5,       fallback_provider: anthropic, fallback_model: claude-sonnet-5}
   structure_archivist: {provider: anthropic, model: claude-sonnet-5}
 
   bull_advocate:  {provider: anthropic, model: claude-sonnet-5}

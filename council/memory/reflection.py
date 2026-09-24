@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import BaseModel, field_validator
 
 from council.crypt.resolution import ResolutionOutcome
+from council.engine.horizons import TERM_NAMES, TERM_WINDOWS
 from council.engine.llm_client import LLMClient, SchemaRetryExhausted
 from council.seats.base import SeatVerdict
 
@@ -76,8 +77,8 @@ was" is useful. "I should be more careful" is noise -- it will be rejected.
 Classify the error type precisely:
 - DIRECTION: you called the wrong direction entirely.
 - MAGNITUDE: right direction, wrong size of move.
-- TIMING: right thesis, wrong horizon -- would likely have been correct on
-  a different timeframe.
+- TIMING: right thesis, wrong term -- would likely have been correct over
+  a different timeframe (the next week, the next 3 months, the next year).
 - CALIBRATION: right direction, but your stated probability was badly
   miscalibrated (too confident or not confident enough).
 - CORRECT: your call and confidence were both good -- write what worked,
@@ -91,7 +92,8 @@ _EXTENDED_SYSTEM_PROMPT = """
 You are conducting your own monthly extended reflection, reviewing your
 last ~30 resolved predictions as a batch. Look for a SYSTEMATIC pattern,
 not a recap of individual calls: a consistent directional bias, consistent
-over/under-confidence, horizons where you should abstain more often, or
+over/under-confidence, terms (short/medium/long) where your leans should
+sit closer to 0.5, or
 tickers/sectors where you are reliably wrong.
 
 This reflection is written to memory only. It can never alter a stored
@@ -115,6 +117,7 @@ async def generate_immediate_reflection(
         verdict.comparison_class.definition if verdict.comparison_class else "none stated"
     )
     user_prompt = (
+        f"Term: {TERM_NAMES.get(horizon, horizon)} ({TERM_WINDOWS.get(horizon, horizon)})\n"
         f"Your verdict: vote={verdict.vote}, probability={verdict.probability}\n"
         f"Comparison class: {comparison_class}\n"
         f"Thesis: {verdict.thesis}\n\n"

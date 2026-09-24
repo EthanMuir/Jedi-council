@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.583,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "Two consecutive quarters of decelerating revenue growth toward the sector average would remove the justification for the multiple premium.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.512,
+    "expected_move_pct": 3.0,
+    "rationale": "Fundamentals rarely move a stock in a week; only a slight tilt from strong results."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.561,
+    "expected_move_pct": 9.0,
+    "rationale": "Next quarter's results should keep confirming the growth rate the price assumes."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.603,
+    "expected_move_pct": 28.0,
+    "rationale": "56% revenue growth at a 73.5% gross margin supports the valuation over a year."
+  },
   "comparison_class": {
     "definition": "High-growth, high-margin semiconductor names trading at a premium to sector median P/E while sustaining >40% YoY revenue growth",
     "n_observations": 19,
@@ -8,17 +28,17 @@
     "why_this_class": "closest available analogue for a name whose multiple premium is backed by realised growth, not narrative"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 4.0,
-  "thesis": "Revenue growth of 56% YoY with a 73.5% gross margin is unusually strong even against this instrument's own history. The P/E and EV/EBITDA premium to sector medians (42.3 vs 28.6, 31.1 vs 19.8) is real but not obviously unsupported given the growth and margin profile. Balance sheet is clean: cash well exceeds total debt, free cash flow is substantial. This seat is weak at short horizons by design -- this read matters most at 1y.",
   "key_evidence": [
-    {"claim": "Revenue growth 56% YoY, gross margin 73.5%", "source": "fundamentals_derived", "as_of": "2026-09-18"},
-    {"claim": "P/E 42.3 vs sector median 28.6", "source": "fundamentals_derived", "as_of": "2026-09-18"}
+    {
+      "claim": "Revenue growth 56% YoY, gross margin 73.5%",
+      "source": "fundamentals_derived",
+      "as_of": "2026-09-18"
+    },
+    {
+      "claim": "P/E 42.3 vs sector median 28.6",
+      "source": "fundamentals_derived",
+      "as_of": "2026-09-18"
+    }
   ],
-  "what_would_change_my_mind": "Two consecutive quarters of decelerating revenue growth toward the sector average would remove the justification for the multiple premium.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "Revenue growth of 56% YoY with a 73.5% gross margin is unusually strong even against this instrument's own history. The P/E and EV/EBITDA premium to sector medians (42.3 vs 28.6, 31.1 vs 19.8) is real but not obviously unsupported given the growth and margin profile. Balance sheet is clean: cash well exceeds total debt, free cash flow is substantial. This seat is weak at short terms by design -- this read matters most at 1y."
 }

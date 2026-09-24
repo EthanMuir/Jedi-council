@@ -34,7 +34,7 @@ async def test_sdk_call_type_error_fails_fast_as_llm_call_failed():
     client = LLMClient(settings)
     client._client = _SDKCallRaisesTypeError()
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="technician",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -42,8 +42,8 @@ async def test_sdk_call_type_error_fails_fast_as_llm_call_failed():
         fixture_name="technician",
         max_retries=2,
     )
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "llm_call_failed"
+    assert verdict.short.vote == "NO_READ"
+    assert verdict.short.abstain_reason == "llm_call_failed"
     # must fail on the FIRST attempt -- retrying a code-level TypeError is
     # pointless, it will raise identically every time
     assert client._client.calls == 1

@@ -8,9 +8,8 @@ from __future__ import annotations
 from typing import Any
 
 from council.data.service import DataService
-from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, MultiTermVerdict, SeatContext
 from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
@@ -31,8 +30,10 @@ Signal grammar, apply it strictly:
   insider SALES in general are noise (diversification, taxes, liquidity).
   Say so explicitly rather than reading bearish intent into them.
 
-If the transactions in view don't rise above this noise floor, NO_CONVICTION is
-the correct answer.
+Insiders trade on their view of the business over months and years, not
+next week -- their signal is strongest over the medium and long terms. If
+the transactions in view don't rise above the noise floor, keep your leans
+close to 0.5.
 """
 
 
@@ -40,10 +41,9 @@ class InsiderReaderSeat:
     id = "insider_reader"
     title = "Student of the Inner Circle"
     allowed_data = frozenset({"insider"})
-    horizons = competent_horizons("insider_reader")
 
     async def gather(
-        self, data_service: DataService, ticker: str, as_of: Any, horizon: str
+        self, data_service: DataService, ticker: str, as_of: Any
     ) -> SeatContext:
         feed = await data_service.get_insider_transactions(ticker, as_of=as_of)
         return SeatContext(
@@ -52,7 +52,6 @@ class InsiderReaderSeat:
             {"insider": feed},
             ticker=ticker,
             as_of=as_of,
-            horizon=horizon,
         )
 
     async def deliberate(
@@ -63,14 +62,11 @@ class InsiderReaderSeat:
         sample_index: int = 0,
         memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
-    ) -> SeatVerdict:
+    ) -> MultiTermVerdict:
         feed = ctx["insider"]
 
         if not feed.transactions:
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
+            return MultiTermVerdict.no_read(
                 thesis="No Form 4 transactions filed in the lookback window.",
                 what_would_change_my_mind="Any new Form 4 filing.",
                 data_quality="POOR",
@@ -93,13 +89,13 @@ class InsiderReaderSeat:
             )
 
         user_prompt = (
-            f"Form 4 filings, horizon {ctx.horizon}. Data as of "
+            f"Form 4 filings. Data as of "
             f"{feed.as_of.isoformat()}, staleness {feed.staleness_seconds:.0f}s.\n\n"
             + "\n".join(lines)
-            + "\n\nApply the signal grammar and give your verdict."
+            + "\n\nApply the signal grammar and give your lean for each term."
         )
 
-        return await llm_client.get_verdict(
+        return await llm_client.get_seat_answer(
             seat_id=self.id,
             model=llm_client.settings.seat_model,
             system_prompt=_SYSTEM_PROMPT,

@@ -1,12 +1,13 @@
 """NO_READ means a seat couldn't form a read (API error, malformed answer,
-missing data); NO_CONVICTION means it read its data and genuinely landed
-in the middle. Both are abstentions and count identically in the vote."""
+missing data) and is left out of the council's position. NO_CONVICTION
+means it read its data and found it genuinely dead even -- a real read,
+counted as exactly 0.5, so it pulls the position toward the middle."""
 from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
 
-from council.engine.aggregation import weighted_vote
+from council.engine.aggregation import council_position
 from council.engine.llm_client import LLMCallFailed, LLMClient, SchemaRetryExhausted
 from council.seats.base import SeatVerdict, is_abstention
 
@@ -20,14 +21,14 @@ def _abstain(vote: str) -> SeatVerdict:
     )
 
 
-def _bullish() -> SeatVerdict:
+def _bullish(probability: float = 0.612) -> SeatVerdict:
     return SeatVerdict(
-        vote="BULLISH", probability=0.612, expected_move_pct=2.0, thesis="t",
+        vote="BULLISH", probability=probability, expected_move_pct=2.0, thesis="t",
         what_would_change_my_mind="m", data_quality="GOOD", comparison_class=_COMPARISON,
     )
 
 
-def test_both_abstentions_need_a_reason():
+def test_both_need_a_reason():
     for vote in ("NO_READ", "NO_CONVICTION"):
         assert is_abstention(vote)
         with pytest.raises(ValidationError):
@@ -38,10 +39,13 @@ def test_both_abstentions_need_a_reason():
     assert not is_abstention("BULLISH")
 
 
-def test_no_conviction_counts_exactly_like_no_read_in_the_vote():
-    with_no_read = weighted_vote({"a": _bullish(), "b": _abstain("NO_READ")})
-    with_no_conviction = weighted_vote({"a": _bullish(), "b": _abstain("NO_CONVICTION")})
-    assert with_no_read == with_no_conviction
+def test_dead_even_pulls_toward_the_middle_but_no_read_is_left_out():
+    with_no_read = council_position({"a": _bullish(), "b": _abstain("NO_READ")})
+    with_no_conviction = council_position({"a": _bullish(), "b": _abstain("NO_CONVICTION")})
+    assert with_no_read.p_bullish == 0.612
+    assert with_no_conviction.p_bullish == 0.556
+    assert with_no_read.seats_counted == 1
+    assert with_no_conviction.seats_counted == 2
 
 
 @pytest.mark.parametrize("failure", [LLMCallFailed("boom"), SchemaRetryExhausted("bad shape")])
@@ -54,18 +58,20 @@ async def test_api_and_schema_failures_are_no_read(monkeypatch, failure):
         raise failure
 
     monkeypatch.setattr(client, "get_structured", failing)
-    verdict = await client.get_verdict(
+    answer = await client.get_seat_answer(
         seat_id="technician", model="m", system_prompt="s", user_prompt="u"
     )
-    assert verdict.vote == "NO_READ"
+    assert not answer.read
+    assert {answer.term(t).vote for t in ("short", "medium", "long")} == {"NO_READ"}
 
 
-def test_an_exact_tie_between_bulls_and_bears_is_no_conviction():
+def test_an_exact_tie_between_bulls_and_bears_is_dead_even():
     # From a real MCD run: one seat BULLISH 0.673, one BEARISH 0.673 -- the
     # blind vote came out "BULLISH (0.5)".
-    bull = _bullish().model_copy(update={"probability": 0.673})
-    bear = _bullish().model_copy(update={"vote": "BEARISH", "probability": 0.673})
-    assert weighted_vote({"a": bull, "b": bear}) == ("NO_CONVICTION", 0.5, 0.0)
+    bull = _bullish(0.673)
+    bear = _bullish(0.673).model_copy(update={"vote": "BEARISH"})
+    tie = council_position({"a": bull, "b": bear})
+    assert (tie.vote, tie.p_bullish, tie.lean_label) == ("NO_CONVICTION", 0.5, "Dead even")
 
-    leaning = weighted_vote({"a": bull, "b": bear.model_copy(update={"probability": 0.612})})
-    assert leaning[0] == "BULLISH"
+    leaning = council_position({"a": bull, "b": bear.model_copy(update={"probability": 0.612})})
+    assert leaning.vote == "BULLISH"

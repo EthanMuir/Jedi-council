@@ -29,7 +29,7 @@ def client(tmp_path, monkeypatch):
 def test_deliberate_stream_emits_seat_results_then_done(client):
     test_client, _settings = client
     with test_client.stream(
-        "GET", "/api/deliberate/stream", params={"ticker": "NVDA", "horizon": "1w"}
+        "GET", "/api/deliberate/stream", params={"ticker": "NVDA"}
     ) as response:
         assert response.status_code == 200
         events = []
@@ -50,7 +50,7 @@ def test_deliberate_stream_emits_mode_first_and_it_is_fixture(client):
     # otherwise until the bill did.
     test_client, _settings = client
     with test_client.stream(
-        "GET", "/api/deliberate/stream", params={"ticker": "NVDA", "horizon": "1w"}
+        "GET", "/api/deliberate/stream", params={"ticker": "NVDA"}
     ) as response:
         lines = list(response.iter_lines())
 
@@ -63,12 +63,25 @@ def test_deliberate_stream_emits_mode_first_and_it_is_fixture(client):
     assert "$0" in payload["message"]
 
 
-def test_deliberate_stream_rejects_invalid_horizon(client):
+def _stream_events(test_client, **params) -> list[tuple[str, dict]]:
+    events, event = [], None
+    with test_client.stream("GET", "/api/deliberate/stream", params=params) as response:
+        for line in response.iter_lines():
+            if line.startswith("event: "):
+                event = line.removeprefix("event: ")
+            elif line.startswith("data: "):
+                events.append((event, json.loads(line.removeprefix("data: "))))
+    return events
+
+
+def test_deliberate_stream_needs_only_a_ticker(client):
     test_client, _settings = client
-    response = test_client.get(
-        "/api/deliberate/stream", params={"ticker": "NVDA", "horizon": "3w"}
-    )
-    assert response.status_code == 400
+    events = _stream_events(test_client, ticker="NVDA", as_of="2026-08-01T16:00:00")
+    names = [e for e, _ in events]
+    assert names[0] == "mode" and names[-1] == "done"
+    done = events[-1][1]
+    assert set(done["terms"]) == {"short", "medium", "long"}
+    assert done["terms"]["long"]["position"]["lean_label"]
 
 
 def test_resolve_endpoint_returns_swept_list(client):
@@ -81,26 +94,36 @@ def test_resolve_endpoint_returns_swept_list(client):
 
 def test_predictions_list_and_detail_round_trip(client):
     test_client, settings = client
-    with test_client.stream(
-        "GET",
-        "/api/deliberate/stream",
-        params={"ticker": "NVDA", "horizon": "1w", "as_of": "2026-08-01T16:00:00"},
-    ) as response:
-        prediction_id = None
-        for line in response.iter_lines():
-            if line.startswith("data: "):
-                payload = json.loads(line.removeprefix("data: "))
-                if "prediction_id" in payload and "ticker" in payload:
-                    prediction_id = payload["prediction_id"]
-    assert prediction_id is not None
+    events = _stream_events(test_client, ticker="NVDA", as_of="2026-08-01T16:00:00")
+    written = next(p for e, p in events if e == "phase_g_crypt_write")
+    run_id, prediction_ids = written["run_id"], written["prediction_ids"]
 
     listed = test_client.get("/api/predictions", params={"ticker": "NVDA"}).json()
-    assert any(p["id"] == prediction_id for p in listed["predictions"])
+    assert len(listed["runs"]) == 1
+    run = listed["runs"][0]
+    assert run["run_id"] == run_id and not run["legacy"]
+    assert {t: row["id"] for t, row in run["terms"].items()} == prediction_ids
+    assert len(listed["predictions"]) == 3
 
-    detail = test_client.get(f"/api/predictions/{prediction_id}").json()
-    assert detail["prediction"]["id"] == prediction_id
-    assert len(detail["seat_votes"]) > 0
-    assert detail["seat_votes"][0]["verdict"]["vote"] in ("BULLISH", "BEARISH", "NO_READ")
+    only_long = test_client.get("/api/predictions", params={"term": "long"}).json()
+    assert list(only_long["runs"][0]["terms"]) == ["long"]
+
+    detail = test_client.get(f"/api/runs/{run_id}").json()
+    assert detail["synthesis"]["headline"]
+    assert set(detail["synthesis"]["terms"]) == {"short", "medium", "long"}
+    for term, body in detail["terms"].items():
+        assert body["prediction"]["id"] == prediction_ids[term]
+        assert len(body["seat_votes"]) == 12
+        assert "synthesis_json" not in body["prediction"]
+
+    one = test_client.get(f"/api/predictions/{prediction_ids['short']}").json()
+    assert one["prediction"]["horizon"] == "short"
+    assert one["seat_votes"][0]["verdict"]["vote"] in ("BULLISH", "BEARISH", "NO_CONVICTION", "NO_READ")
+
+
+def test_run_detail_404_for_unknown_id(client):
+    test_client, _settings = client
+    assert test_client.get("/api/runs/does-not-exist").status_code == 404
 
 
 def test_prediction_detail_404_for_unknown_id(client):
@@ -188,7 +211,7 @@ def test_cost_estimate_reflects_current_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(main_module, "get_settings", lambda: settings)
     test_client = TestClient(main_module.app)
 
-    baseline = test_client.get("/api/settings/cost-estimate", params={"horizon": "1w"}).json()
+    baseline = test_client.get("/api/settings/cost-estimate").json()
     assert baseline["is_fixture"] is False
     assert baseline["total_cost_usd"] > 0
     assert baseline["total_calls"] > 0
@@ -196,17 +219,18 @@ def test_cost_estimate_reflects_current_overrides(tmp_path, monkeypatch):
     # Route the Grand Master (an expensive, single-call role) to the
     # cheapest model in the catalog and confirm the estimate actually moves.
     test_client.post("/api/settings/models", json={"role": "grand_master", "model_id": "gpt-5-nano"})
-    cheaper = test_client.get("/api/settings/cost-estimate", params={"horizon": "1w"}).json()
+    cheaper = test_client.get("/api/settings/cost-estimate").json()
     assert cheaper["total_cost_usd"] < baseline["total_cost_usd"]
 
     gm_line = next(li for li in cheaper["line_items"] if li["label"] == "Grand Master synthesis")
     assert gm_line["model"] == "gpt-5-nano"
 
 
-def test_cost_estimate_rejects_invalid_horizon(client):
+def test_cost_estimate_covers_a_whole_run(client):
     test_client, _settings = client
-    response = test_client.get("/api/settings/cost-estimate", params={"horizon": "3w"})
-    assert response.status_code == 400
+    response = test_client.get("/api/settings/cost-estimate").json()
+    assert response["total_calls"] == 43
+    assert "horizon" not in response
 
 
 def test_cost_estimate_is_zero_and_flagged_in_fixture_mode(client):
@@ -214,7 +238,7 @@ def test_cost_estimate_is_zero_and_flagged_in_fixture_mode(client):
     # confusion this whole endpoint exists to prevent (see the "mode" event
     # on /api/deliberate/stream) applies here too.
     test_client, _settings = client
-    response = test_client.get("/api/settings/cost-estimate", params={"horizon": "1w"}).json()
+    response = test_client.get("/api/settings/cost-estimate").json()
     assert response["is_fixture"] is True
     assert response["total_cost_usd"] == 0.0
     assert response["total_calls"] > 0
@@ -227,14 +251,14 @@ def test_full_lifecycle_through_api_moves_archives(client):
     with test_client.stream(
         "GET",
         "/api/deliberate/stream",
-        params={"ticker": "NVDA", "horizon": "1w", "as_of": "2026-08-01T16:00:00"},
+        params={"ticker": "NVDA", "as_of": "2026-08-01T16:00:00"},
     ) as response:
         for _ in response.iter_lines():
             pass
 
     resolve_response = test_client.post("/api/resolve")
     swept = resolve_response.json()["swept"]
-    assert len(swept) == 1
+    assert [s["horizon"] for s in swept] == ["short"]  # the other terms are still open
 
     archives_response = test_client.get("/api/archives").json()
     assert archives_response["benchmark"]["n_resolutions"] == 1

@@ -7,9 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 from council.data.service import DataService
-from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, MultiTermVerdict, SeatContext
 from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
@@ -24,8 +23,11 @@ edge -- it is very likely already reflected in the price. For every SURPRISE
 catalyst, state your reasoning for why the market has or has not already
 priced it in, given how long ago it was published relative to `as_of`.
 
-If the feed contains nothing you can turn into a genuine edge, NO_CONVICTION is
-the correct answer.
+News is mostly a short-term force: a surprise can move the stock this week
+and fade by next quarter, while a real change to the business (a new
+contract, a lost customer, a regulatory ruling) carries into the longer
+terms. If the feed holds little beyond noise, keep your leans close to 0.5
+rather than inventing conviction.
 """
 
 
@@ -33,10 +35,9 @@ class CatalystSeerSeat:
     id = "catalyst_seer"
     title = "Watcher of Omens"
     allowed_data = frozenset({"news"})
-    horizons = competent_horizons("catalyst_seer")
 
     async def gather(
-        self, data_service: DataService, ticker: str, as_of: Any, horizon: str
+        self, data_service: DataService, ticker: str, as_of: Any
     ) -> SeatContext:
         news = await data_service.get_news(ticker, as_of=as_of, lookback_days=14)
         return SeatContext(
@@ -45,7 +46,6 @@ class CatalystSeerSeat:
             {"news": news},
             ticker=ticker,
             as_of=as_of,
-            horizon=horizon,
         )
 
     async def deliberate(
@@ -56,14 +56,11 @@ class CatalystSeerSeat:
         sample_index: int = 0,
         memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
-    ) -> SeatVerdict:
+    ) -> MultiTermVerdict:
         news = ctx["news"]
 
         if not news.items:
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
+            return MultiTermVerdict.no_read(
                 thesis="No news items in the lookback window.",
                 what_would_change_my_mind="Any dated, sourced headline entering the feed.",
                 data_quality="POOR",
@@ -80,14 +77,14 @@ class CatalystSeerSeat:
             )
 
         user_prompt = (
-            f"Ticker news feed, horizon {ctx.horizon}. Data as of "
+            f"Ticker news feed. Data as of "
             f"{news.as_of.isoformat()}, staleness {news.staleness_seconds:.0f}s.\n\n"
             + "\n".join(lines)
             + "\n\nClassify each catalyst SCHEDULED vs SURPRISE, assess pricing-in, "
-            "and give your verdict."
+            "and give your lean for each term."
         )
 
-        return await llm_client.get_verdict(
+        return await llm_client.get_seat_answer(
             seat_id=self.id,
             model=llm_client.settings.seat_model,
             system_prompt=_SYSTEM_PROMPT,

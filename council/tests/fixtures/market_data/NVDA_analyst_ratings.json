@@ -1,0 +1,26 @@
+{
+  "current_price": 162.07,
+  "target_mean": 203.4,
+  "target_median": 205.0,
+  "target_high": 250.0,
+  "target_low": 140.0,
+  "analyst_count": 58,
+  "strong_buy": 14,
+  "buy": 36,
+  "hold": 6,
+  "sell": 1,
+  "strong_sell": 1,
+  "prior_strong_buy": 13,
+  "prior_buy": 35,
+  "prior_hold": 8,
+  "prior_sell": 1,
+  "prior_strong_sell": 1,
+  "recent_changes": [
+    {"changed_at": "2026-09-16T11:02:00", "firm": "Harbor & Vance", "action": "up", "from_grade": "Neutral", "to_grade": "Buy", "price_target": 215.0, "prior_price_target": 170.0},
+    {"changed_at": "2026-09-02T08:30:00", "firm": "Castell Research", "action": "main", "from_grade": "Outperform", "to_grade": "Outperform", "price_target": 210.0, "prior_price_target": 200.0},
+    {"changed_at": "2026-08-28T07:45:00", "firm": "Northfield Securities", "action": "main", "from_grade": "Buy", "to_grade": "Buy", "price_target": 225.0, "prior_price_target": 225.0},
+    {"changed_at": "2026-08-27T09:10:00", "firm": "Pellam Brothers", "action": "reit", "from_grade": "Overweight", "to_grade": "Overweight", "price_target": 230.0, "prior_price_target": 215.0},
+    {"changed_at": "2026-07-14T10:00:00", "firm": "Ardent Capital", "action": "down", "from_grade": "Buy", "to_grade": "Hold", "price_target": 160.0, "prior_price_target": 190.0},
+    {"changed_at": "2026-09-30T09:00:00", "firm": "Quarry Hill Research", "action": "down", "from_grade": "Buy", "to_grade": "Sell", "price_target": 120.0, "prior_price_target": 200.0}
+  ]
+}

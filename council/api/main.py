@@ -66,13 +66,10 @@ _ROLE_TITLES = {
 @app.get("/api/deliberate/stream")
 async def deliberate_stream(
     ticker: str,
-    horizon: str,
     as_of: str | None = None,
     context: str | None = None,
     lite: bool = False,
 ):
-    if horizon not in ("1d", "1w", "1m", "1y"):
-        raise HTTPException(400, f"invalid horizon '{horizon}'")
     settings = get_settings()
     settings.ensure_dirs()
     as_of_dt = datetime.fromisoformat(as_of) if as_of else None
@@ -108,7 +105,6 @@ async def deliberate_stream(
             try:
                 result = await run_deliberation(
                     ticker.upper(),
-                    horizon,
                     settings,
                     as_of=as_of_dt,
                     progress=progress,
@@ -150,29 +146,69 @@ async def resolve():
     return {"swept": to_jsonable(swept)}
 
 
+_PREDICTION_COLUMNS = (
+    "p.id, p.created_at, p.ticker, p.horizon, p.resolve_at, p.council_vote, "
+    "p.council_confidence, p.p_raw, p.blind_vote, p.entry, p.exit, p.invalidation, "
+    "p.expected_move_pct, p.total_cost_usd, p.total_input_tokens, p.total_output_tokens, "
+    "p.run_mode, p.run_shape, p.run_id, "
+    "r.direction_correct, r.realised_move_pct, r.resolved_at"
+)
+
+
+def _prediction_row(row) -> dict:
+    prediction = dict(row)
+    prediction["run_mode"] = effective_run_mode(row["run_mode"], row["total_cost_usd"])
+    prediction["run_shape"] = row["run_shape"] or "full"
+    return prediction
+
+
+def _group_runs(predictions: list[dict]) -> list[dict]:
+    """One entry per run, its term rows under "terms". A row saved before
+    terms existed has no run_id and stands alone, keyed by its old horizon."""
+    runs: dict[str, dict] = {}
+    for prediction in predictions:
+        run_id = prediction["run_id"] or prediction["id"]
+        run = runs.setdefault(
+            run_id,
+            {
+                "run_id": run_id,
+                "ticker": prediction["ticker"],
+                "created_at": prediction["created_at"],
+                "run_mode": prediction["run_mode"],
+                "run_shape": prediction["run_shape"],
+                # Run-wide totals, repeated on every row of the run.
+                "total_cost_usd": prediction["total_cost_usd"],
+                "legacy": prediction["run_id"] is None,
+                "terms": {},
+            },
+        )
+        run["terms"][prediction["horizon"]] = prediction
+    return list(runs.values())
+
+
 @app.get("/api/predictions")
 async def list_predictions(
-    ticker: str | None = None, horizon: str | None = None, mode: str | None = None, limit: int = 50
+    ticker: str | None = None,
+    term: str | None = None,
+    mode: str | None = None,
+    limit: int = 50,
 ):
+    """`limit` counts runs; `term` keeps only that term's row of each run."""
     settings = get_settings()
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
         query = (
-            "SELECT p.id, p.created_at, p.ticker, p.horizon, p.resolve_at, p.council_vote, "
-            "p.council_confidence, p.blind_vote, p.entry, p.exit, p.invalidation, "
-            "p.total_cost_usd, p.total_input_tokens, p.total_output_tokens, "
-            "p.run_mode, p.run_shape, "
-            "r.direction_correct, r.realised_move_pct, r.resolved_at "
+            f"SELECT {_PREDICTION_COLUMNS} "
             "FROM predictions p LEFT JOIN resolutions r ON r.prediction_id = p.id WHERE 1=1"
         )
         params: list = []
         if ticker:
             query += " AND p.ticker = ?"
             params.append(ticker.upper())
-        if horizon:
+        if term:
             query += " AND p.horizon = ?"
-            params.append(horizon)
+            params.append(term)
         if mode:
             # Same rule as crypt.db.effective_run_mode, for rows saved
             # before runs were labeled.
@@ -181,16 +217,15 @@ async def list_predictions(
                 "THEN 'paid' ELSE 'sample' END) = ?"
             )
             params.append(mode)
-        query += " ORDER BY p.created_at DESC LIMIT ?"
-        params.append(limit)
-        rows = conn.execute(query, params).fetchall()
-        predictions = []
-        for row in rows:
-            prediction = dict(row)
-            prediction["run_mode"] = effective_run_mode(row["run_mode"], row["total_cost_usd"])
-            prediction["run_shape"] = row["run_shape"] or "full"
-            predictions.append(prediction)
-        return {"predictions": predictions}
+        query += " ORDER BY p.created_at DESC, p.rowid ASC LIMIT ?"
+        params.append(limit * 3)
+        predictions = [_prediction_row(row) for row in conn.execute(query, params).fetchall()]
+        runs = _group_runs(predictions)[:limit]
+        kept = {run["run_id"] for run in runs}
+        return {
+            "runs": runs,
+            "predictions": [p for p in predictions if (p["run_id"] or p["id"]) in kept],
+        }
     finally:
         conn.close()
 
@@ -216,6 +251,54 @@ async def get_prediction(prediction_id: str):
                 {**dict(v), "verdict": json.loads(v["verdict_json"])} for v in votes
             ],
             "resolution": dict(resolution) if resolution else None,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/runs/{run_id}")
+async def get_run(run_id: str):
+    """Everything saved for one run: each term's row, resolution and seat
+    votes, plus the Grand Master's synthesis. A pre-terms prediction id
+    works too (its run is just that one row)."""
+    settings = get_settings()
+    settings.ensure_dirs()
+    conn = connect(settings.council_db_path)
+    try:
+        preds = conn.execute(
+            "SELECT * FROM predictions WHERE run_id = ? OR (run_id IS NULL AND id = ?) "
+            "ORDER BY rowid ASC",
+            (run_id, run_id),
+        ).fetchall()
+        if not preds:
+            raise HTTPException(404, "run not found")
+        terms = {}
+        for pred in preds:
+            votes = conn.execute(
+                "SELECT * FROM seat_votes WHERE prediction_id = ?", (pred["id"],)
+            ).fetchall()
+            resolution = conn.execute(
+                "SELECT * FROM resolutions WHERE prediction_id = ?", (pred["id"],)
+            ).fetchone()
+            prediction = dict(pred)
+            prediction.pop("synthesis_json", None)
+            terms[pred["horizon"]] = {
+                "prediction": prediction,
+                "seat_votes": [
+                    {**dict(v), "verdict": json.loads(v["verdict_json"])} for v in votes
+                ],
+                "resolution": dict(resolution) if resolution else None,
+            }
+        first = preds[0]
+        return {
+            "run_id": run_id,
+            "ticker": first["ticker"],
+            "created_at": first["created_at"],
+            "run_mode": effective_run_mode(first["run_mode"], first["total_cost_usd"]),
+            "run_shape": first["run_shape"] or "full",
+            "legacy": first["run_id"] is None,
+            "synthesis": json.loads(first["synthesis_json"]) if first["synthesis_json"] else None,
+            "terms": terms,
         }
     finally:
         conn.close()
@@ -419,9 +502,7 @@ async def set_free_mode(body: _FreeModeRequest):
 
 
 @app.get("/api/settings/cost-estimate")
-async def get_settings_cost_estimate(horizon: str = "1w", lite: bool = False):
-    if horizon not in ("1d", "1w", "1m", "1y"):
-        raise HTTPException(400, f"invalid horizon '{horizon}'")
+async def get_settings_cost_estimate(lite: bool = False):
     settings = get_settings()
     settings.ensure_dirs()
     if lite:
@@ -429,9 +510,8 @@ async def get_settings_cost_estimate(horizon: str = "1w", lite: bool = False):
     # The ticker is a placeholder -- cost depends only on which models are
     # routed to and how many calls each seat/round makes, never on the
     # symbol itself, so any value here estimates identically.
-    estimate = estimate_deliberation_cost("EST", horizon, settings)
+    estimate = estimate_deliberation_cost("EST", settings)
     return {
-        "horizon": horizon,
         "is_fixture": estimate.is_fixture,
         "run_mode": planned_run_mode(settings),
         "lite": lite,

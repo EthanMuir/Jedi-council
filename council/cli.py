@@ -1,4 +1,4 @@
-"""python -m council deliberate NVDA --horizon 1w
+"""python -m council deliberate NVDA
 python -m council resolve"""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from council.config import as_lite, get_settings
 from council.crypt.db import connect
 from council.crypt.export import fetch_predictions_for_export, write_csv, write_json
 from council.engine.cost_estimate import CostEstimate, estimate_deliberation_cost
-from council.engine.horizons import is_competent
+from council.engine.horizons import TERMS
 from council.engine.orchestrator import (
     TIER_I_SEATS,
     DeliberationResult,
@@ -21,52 +21,47 @@ from council.engine.orchestrator import (
 from council.engine.llm_client import RunStopped
 from council.engine.resolution_sweep import sweep_unresolved
 from council.engine.routing import planned_run_mode
-from council.seats.base import is_abstention
+
+
+def _format_lean(v) -> str:
+    if v.vote == "NO_READ":
+        return "no read"
+    if v.vote == "NO_CONVICTION":
+        return "dead even"
+    return f"{v.vote.lower()} {v.probability}"
 
 
 def _print_result(result: DeliberationResult) -> None:
-    print(f"\n=== THE HIGH COUNCIL -- {result.ticker} @ {result.horizon} ===")
+    print(f"\n=== THE HIGH COUNCIL -- {result.ticker} ===")
     print(f"as_of: {result.as_of.isoformat()}   price_at_prediction: {result.price_at_prediction}")
-    print(f"resolve_at: {result.resolve_at.isoformat()}")
-    print(f"prediction_id: {result.prediction_id}")
+    print(f"run_id: {result.run_id}")
 
-    print("\n--- PHASE A: BLIND ROUND ---")
+    print("\n--- PHASE A: BLIND ROUND (short / medium / long) ---")
     for sr in result.seat_results:
-        v = sr.verdict
-        print(f"\n  [{sr.seat_id}] {sr.title}")
+        v = sr.verdicts
+        print(f"\n  [{sr.seat_id}] {sr.title}   overall lean: {sr.lean} {sr.lean_p_bullish}")
         print(
-            f"    vote: {v.vote}   probability: {v.probability}   data_quality: {v.data_quality}"
-            f"   dispersion: {sr.dispersion} (n={sr.sample_count})"
-        )
-        if is_abstention(v.vote):
-            print(f"    abstain_reason: {v.abstain_reason}")
-        else:
-            print(
-                f"    entry: {v.entry}   exit: {v.exit}   invalidation: {v.invalidation}"
-                f"   expected_move: {v.expected_move_pct}%"
+            "    "
+            + "   ".join(
+                f"{t}: {_format_lean(v.term(t))} (disp {sr.dispersion[t]})" for t in TERMS
             )
-        print(f"    thesis: {v.thesis}")
-        if v.memory_applied:
-            print(f"    memory_applied: {[m.lesson for m in v.memory_applied]}")
-    print(
-        f"\n  BLIND VOTE: {result.blind_vote}   probability={result.blind_probability}"
-        f"   consensus={result.blind_consensus_pct}%"
-    )
-
-    print("\n--- PHASE B: REALITY ANCHOR ---")
-    ra = result.reality_anchor
-    print(
-        f"  horizon={ra.horizon} ({ra.horizon_trading_days}td)   n_observations={ra.n_observations}"
-        f"   hit_rate_up={ra.hit_rate_up}"
-    )
-    print(
-        f"  realised_vol_annualised={ra.realised_vol_annualised_pct}%"
-        f"   atr_implied_range={ra.atr_implied_range_pct}%"
-        f"   max_plausible_move={ra.max_plausible_move_pct}%"
-        f"   options_implied_move={ra.options_implied_move_pct}%"
-    )
-    implausible = [sid for sid, f in result.plausibility_flags.items() if f == "IMPLAUSIBLE"]
-    print(f"  IMPLAUSIBLE targets: {implausible or 'none'}")
+            + f"   data_quality: {v.short.data_quality}   n={sr.sample_count}"
+        )
+        if not v.read:
+            print(f"    abstain_reason: {v.short.abstain_reason}")
+        else:
+            for t in TERMS:
+                rationale = v.term(t).term_rationale
+                if rationale:
+                    print(f"    {t}: {rationale}")
+            if v.short.entry is not None:
+                print(
+                    f"    short-term levels -- entry: {v.short.entry}   exit: {v.short.exit}"
+                    f"   invalidation: {v.short.invalidation}"
+                )
+        print(f"    thesis: {v.short.thesis}")
+        if v.short.memory_applied:
+            print(f"    memory_applied: {[m.lesson for m in v.short.memory_applied]}")
 
     print("\n--- PHASE C: DEBATE ---")
     for d in result.debate_transcript:
@@ -74,28 +69,44 @@ def _print_result(result: DeliberationResult) -> None:
         print(f"\n  [{d.side} round {d.round_n}]{rebut}")
         print(f"    {d.argument}")
     for pv in result.prosecutor_verdicts:
-        print(f"\n  [PROSECUTOR round {pv.round_n}] target={pv.target_direction} veto={pv.veto}")
+        terms = f" terms={pv.veto_terms or 'all'}" if pv.veto else ""
+        print(f"\n  [PROSECUTOR round {pv.round_n}] target={pv.target_direction} veto={pv.veto}{terms}")
         for f in pv.findings:
             print(f"    - ({f.category}) {f.description}")
         if pv.veto_reason:
             print(f"    veto_reason: {pv.veto_reason}")
     print(f"\n  Correlated evidence: {result.correlated_evidence or 'none'}")
     if result.incoherent_decompositions:
-        print("  INCOHERENT_CONFIDENCE (decomposition doesn't support headline number):")
+        print("  INCOHERENT_CONFIDENCE (medium-term decomposition doesn't support the number):")
         for sid, r in result.incoherent_decompositions.items():
             print(f"    - {sid}: stated {r.stated_probability}, implied {r.implied_probability}")
 
-    print("\n--- PHASE D/E: WEIGHTED VOTE + AUDIT GATES ---")
-    wv_vote, wv_conf, wv_consensus = result.weighted_vote_result
-    print(f"  Weighted vote: {wv_vote}   confidence={wv_conf}   consensus={wv_consensus}%")
-    print(f"  p_raw={result.p_raw}   p_extremized={result.p_extremized}")
-    print(f"  Cost Auditor: edge={result.cost_audit.edge_pct}%   passed={result.cost_audit.passed}")
-    print(f"  Gates passed: {result.gates_passed}")
-    if result.gate_failure_reasons:
-        for reason in result.gate_failure_reasons:
-            print(f"    - {reason}")
+    print("\n--- THE COUNCIL'S POSITION, BY TERM ---")
+    for t, tr in result.terms.items():
+        pos = tr.position
+        ra = tr.reality_anchor
+        print(f"\n  {tr.name.upper()} ({tr.window}) -- {pos.lean_label}")
+        print(
+            f"    {pos.p_bullish:.1%} chance of rising   (blind round: {tr.blind.p_bullish:.1%})"
+            f"   consensus={pos.consensus_pct}%   seats counted={pos.seats_counted}"
+        )
+        print(
+            f"    expected move: {tr.expected_move_pct}%   p_extremized={tr.p_extremized}"
+            f"   resolves {tr.resolve_at.date().isoformat()}   prediction_id: {tr.prediction_id}"
+        )
+        print(
+            f"    Reality Anchor: max plausible move {ra.max_plausible_move_pct}%"
+            f"   hit_rate_up={ra.hit_rate_up}"
+            + (f"   options_implied_move={ra.options_implied_move_pct}%" if ra.options_implied_move_pct else "")
+        )
+        if tr.entry is not None:
+            print(f"    entry: {tr.entry}   exit: {tr.exit}   invalidation: {tr.invalidation}")
+        for w in tr.warnings:
+            print(f"    WARNING ({w.kind}): {w.message}")
+        print(f"    note: {tr.note}")
+        print(f"    who leaned which way: {tr.dissent_summary}")
 
-    print("\n--- RISK WARDEN (sizing only, never sees the vote) ---")
+    print("\n--- RISK WARDEN (sizing only, never sees the leans) ---")
     rs = result.risk_sizing
     print(
         f"  position_size={rs.position_size_pct_of_book}% of book"
@@ -106,10 +117,8 @@ def _print_result(result: DeliberationResult) -> None:
         print(f"  WARNING: {rs.concentration_warning}")
 
     print("\n--- PHASE F: GRAND MASTER SYNTHESIS ---")
-    gm = result.grand_master_verdict
-    print(f"  VERDICT: {gm.vote}   confidence={gm.confidence}   expected_move={gm.expected_move_pct}%")
-    if gm.entry is not None:
-        print(f"  entry: {gm.entry}   exit: {gm.exit}   invalidation: {gm.invalidation}   stop: {gm.stop}")
+    gm = result.synthesis
+    print(f"  {gm.headline}")
     print(f"  dissent_summary: {gm.dissent_summary}")
     print(f"  correlated_evidence_warning: {gm.correlated_evidence_warning}")
     print(f"  reasoning: {gm.reasoning}")
@@ -148,7 +157,7 @@ def _print_llm_mode(settings) -> None:
 
 
 def _print_cost_estimate(estimate: CostEstimate) -> None:
-    print(f"\n=== DRY RUN -- estimated cost for {estimate.ticker} @ {estimate.horizon} ===")
+    print(f"\n=== DRY RUN -- estimated cost for {estimate.ticker} ===")
     if estimate.is_fixture:
         print("LLM MODE: FIXTURE -- every line item below is $0, no network call will be made.\n")
     else:
@@ -177,7 +186,7 @@ def _print_sweep_results(settings, swept) -> None:
             f"   {mark}   lessons_written={s.lessons_written}"
         )
 
-    print("\n--- CALIBRATION SNAPSHOT (per seat, all horizons) ---")
+    print("\n--- CALIBRATION SNAPSHOT (per seat, all terms) ---")
     from council.calibration.officer import compute_seat_calibration
     from council.crypt.db import connect
 
@@ -197,8 +206,8 @@ def _print_sweep_results(settings, swept) -> None:
     print()
 
 
-async def _dump_data(ticker: str, horizon: str, settings, seat_id: str | None = None) -> None:
-    """Runs each competent seat's real gather() and prints exactly what
+async def _dump_data(ticker: str, settings, seat_id: str | None = None) -> None:
+    """Runs each seat's real gather() and prints exactly what
     came back -- no LLM call anywhere in this path, fixture or live. This
     is the only way to actually verify the data layer works when
     NO_LLM=true, since every seat's thesis/probability is a canned
@@ -206,7 +215,7 @@ async def _dump_data(ticker: str, horizon: str, settings, seat_id: str | None = 
 
     seat_id narrows the dump to a single seat -- the full 12-seat output
     routinely exceeds a terminal's scrollback (confirmed live: a user
-    unable to see macro_sage's output because transcript_linguist's error
+    unable to see macro_sage's output because another seat's error
     further down had already pushed it off screen), so this is the
     practical way to check one specific seat/provider without redirecting
     to a file."""
@@ -219,25 +228,17 @@ async def _dump_data(ticker: str, horizon: str, settings, seat_id: str | None = 
         if seat_id not in known_ids:
             print(f"\nUnknown seat '{seat_id}'. Valid seat ids: {', '.join(sorted(known_ids))}")
             return
-        if not is_competent(seat_id, horizon):
-            print(f"\n'{seat_id}' is not competent at {horizon} -- it would never be called here.")
-            return
 
     data_service = build_data_service(settings)
     as_of = datetime.utcnow()
-    eligible = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
-    if seat_id is not None:
-        eligible = [s for s in eligible if s.id == seat_id]
+    seats = [s for s in TIER_I_SEATS if seat_id is None or s.id == seat_id]
 
-    print(f"\n=== RAW DATA DUMP -- {ticker} @ {horizon} (no LLM call made, fixture or live) ===")
-    if seat_id is None and len(eligible) < len(TIER_I_SEATS):
-        skipped = [s.id for s in TIER_I_SEATS if s not in eligible]
-        print(f"(not competent at this horizon, skipped: {', '.join(skipped)})")
+    print(f"\n=== RAW DATA DUMP -- {ticker} (no LLM call made, fixture or live) ===")
 
-    for seat in eligible:
+    for seat in seats:
         print(f"\n--- [{seat.id}] {seat.title} ---")
         try:
-            ctx = await seat.gather(data_service, ticker, as_of, horizon)
+            ctx = await seat.gather(data_service, ticker, as_of)
         except Exception as exc:  # noqa: BLE001 -- show every seat's result, don't stop at the first failure
             print(f"  FAILED: {exc}")
             continue
@@ -256,7 +257,6 @@ def main(argv: list[str] | None = None) -> None:
 
     deliberate = sub.add_parser("deliberate", help="Run a full council deliberation for a ticker")
     deliberate.add_argument("ticker")
-    deliberate.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], required=True)
     deliberate.add_argument(
         "--as-of",
         default=None,
@@ -281,7 +281,12 @@ def main(argv: list[str] | None = None) -> None:
     export.add_argument("--format", choices=["csv", "json"], required=True)
     export.add_argument("--out", required=True, help="Output file path")
     export.add_argument("--ticker", default=None)
-    export.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], default=None)
+    export.add_argument(
+        "--term",
+        choices=["short", "medium", "long", "1d", "1w", "1m", "1y"],
+        default=None,
+        help="Only this term (1d/1w/1m/1y: runs saved before terms existed).",
+    )
 
     inspect_data = sub.add_parser(
         "inspect-data",
@@ -291,11 +296,10 @@ def main(argv: list[str] | None = None) -> None:
         "what was actually fetched).",
     )
     inspect_data.add_argument("ticker")
-    inspect_data.add_argument("--horizon", choices=["1d", "1w", "1m", "1y"], required=True)
     inspect_data.add_argument(
         "--seat",
         default=None,
-        help="Only dump this one seat (e.g. macro_sage) instead of all competent seats -- "
+        help="Only dump this one seat (e.g. macro_sage) instead of all twelve -- "
         "the full dump routinely exceeds a terminal's scrollback.",
     )
 
@@ -307,15 +311,13 @@ def main(argv: list[str] | None = None) -> None:
         _print_llm_mode(settings)
         if args.dry_run_cost:
             estimate_settings = as_lite(settings) if args.lite else settings
-            estimate = estimate_deliberation_cost(args.ticker.upper(), args.horizon, estimate_settings)
+            estimate = estimate_deliberation_cost(args.ticker.upper(), estimate_settings)
             _print_cost_estimate(estimate)
             return
         as_of = datetime.fromisoformat(args.as_of) if args.as_of else None
         try:
             result = asyncio.run(
-                run_deliberation(
-                    args.ticker.upper(), args.horizon, settings, as_of=as_of, lite=args.lite
-                )
+                run_deliberation(args.ticker.upper(), settings, as_of=as_of, lite=args.lite)
             )
         except TickerNotFound as exc:
             print(f"\nTICKER NOT FOUND: {exc}")
@@ -334,7 +336,7 @@ def main(argv: list[str] | None = None) -> None:
         conn = connect(settings.council_db_path)
         try:
             rows = fetch_predictions_for_export(
-                conn, ticker=args.ticker.upper() if args.ticker else None, horizon=args.horizon
+                conn, ticker=args.ticker.upper() if args.ticker else None, horizon=args.term
             )
         finally:
             conn.close()
@@ -344,7 +346,7 @@ def main(argv: list[str] | None = None) -> None:
             write_json(rows, args.out)
         print(f"Exported {len(rows)} prediction(s) to {args.out}")
     elif args.command == "inspect-data":
-        asyncio.run(_dump_data(args.ticker.upper(), args.horizon, settings, seat_id=args.seat))
+        asyncio.run(_dump_data(args.ticker.upper(), settings, seat_id=args.seat))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.552,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A follow-up report showing hyperscaler capex guidance being walked back, or a broader-than-expected export restriction, would flip this bearish.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.552,
+    "expected_move_pct": 3.0,
+    "rationale": "Fresh hyperscaler capex guidance is a direct, recent positive catalyst."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.534,
+    "expected_move_pct": 8.0,
+    "rationale": "The capex cycle supports demand into next quarter, but it is partly priced already."
+  },
+  "long": {
+    "vote": "NO_CONVICTION",
+    "probability": 0.5,
+    "expected_move_pct": 0.0,
+    "rationale": "The news in view is too near-term to say anything about a year out."
+  },
   "comparison_class": {
     "definition": "Large-cap names with a raised hyperscaler-capex-driven analyst note within the prior 5 sessions, plus one SCHEDULED, already-dated earnings report on the calendar",
     "n_observations": 21,
@@ -8,17 +28,17 @@
     "why_this_class": "closest available analogue combining a demand-side catalyst with a known, dated event"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 3.0,
-  "thesis": "Two catalysts this week: hyperscaler capex guidance raises (SURPRISE, 4 days old, direction bullish) and an export-control clarification (SURPRISE, narrower in scope than feared, direction mildly bullish). Both are already partially reflected in sell-side commentary since publication, so the edge is small, not absent. A confirmed earnings date next month is SCHEDULED and therefore not an edge on its own. Net lean is mildly bullish, tempered because the strongest headline is several days old.",
   "key_evidence": [
-    {"claim": "Hyperscaler capex guidance raised, cited as bullish for accelerator demand", "source": "Bloomberg", "as_of": "2026-09-14"},
-    {"claim": "Export control clarification narrower than feared", "source": "Wall Street Journal", "as_of": "2026-09-12"}
+    {
+      "claim": "Hyperscaler capex guidance raised, cited as bullish for accelerator demand",
+      "source": "Bloomberg",
+      "as_of": "2026-09-14"
+    },
+    {
+      "claim": "Export control clarification narrower than feared",
+      "source": "Wall Street Journal",
+      "as_of": "2026-09-12"
+    }
   ],
-  "what_would_change_my_mind": "A follow-up report showing hyperscaler capex guidance being walked back, or a broader-than-expected export restriction, would flip this bearish.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "Two catalysts this week: hyperscaler capex guidance raises (SURPRISE, 4 days old, direction bullish) and an export-control clarification (SURPRISE, narrower in scope than feared, direction mildly bullish). Both are already partially reflected in sell-side commentary since publication, so the edge is small, not absent. A confirmed earnings date next month is SCHEDULED and therefore not an edge on its own. Net lean is mildly bullish, tempered because the strongest headline is several days old."
 }

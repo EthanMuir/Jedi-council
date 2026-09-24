@@ -90,16 +90,12 @@ class Settings(BaseSettings):
 
     # Phase 3: Tiers II-IV
     debate_rounds: int = 2
-    # A fraction of horizon-COMPETENCE-weighted seats, not a plain headcount
-    # (Task #76, building on Task #69) -- a seat only 20-30% competent at
-    # this horizon abstaining is expected, correct behaviour, not a sign the
-    # run lacks real conviction, so it shouldn't count against this gate as
-    # heavily as a 90%-competent seat abstaining does. senate_watcher and
-    # transcript_linguist are excluded from the weighted total entirely
-    # (Option 1 on congress trades / earnings transcripts: no solid free
-    # alternative exists, so they're permanently NO_READ regardless of their
-    # own competence score). See orchestrator._gate_eligible_weight /
-    # _directional_weight for the actual computation.
+    # Below this share of a term's competence-weighted seats reading their
+    # data, the term's position gets a "thin evidence" warning (Task #76,
+    # building on Task #69): a seat that barely counts on a term missing its
+    # data matters less than one that counts fully. senate_watcher is left
+    # out entirely -- no free congress-trades source exists, so it can never
+    # read (see orchestrator._eligible_weight / _read_weight).
     min_participating_seats_pct: float = 0.5
     assumed_spread_bps: float = 5.0  # no live bid/ask feed yet -- see Cost Auditor
     risk_budget_pct: float = 1.0

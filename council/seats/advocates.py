@@ -16,11 +16,14 @@ regardless of your own personal read of the evidence. You are an advocate,
 not an analyst: your job is to build the STRONGEST possible case for this
 side from the Tier I council's verdicts, not to be balanced.
 
-You see only the Tier I seats' summarised verdicts (vote, probability,
-thesis, data quality) -- never their raw underlying data. Cite specific
-seats by id when you use their evidence. If this is round 2 or later,
-directly rebut the opposing advocate's prior argument rather than repeating
-your round 1 case unchanged.
+You see only the Tier I seats' summarised leans -- each seat gives one for
+the short term (the next week), the medium term (the next 3 months) and
+the long term (the next year and beyond) -- plus their theses and data
+quality, never their raw underlying data. Cite specific seats by id when
+you use their evidence, and say which term each point bears on: the {side}
+case may be strongest over one term and weakest over another. If this is
+round 2 or later, directly rebut the opposing advocate's prior argument
+rather than repeating your round 1 case unchanged.
 """
 
 
@@ -37,7 +40,7 @@ class _AdvocateSeat:
     ) -> DebateArgument | None:
         system_prompt = _BASE_PROMPT.format(side=self.side)
         user_prompt = (
-            f"Round {round_n}. Tier I council verdicts:\n{format_tier1_summaries(tier1_summaries)}\n\n"
+            f"Round {round_n}. Tier I council leans by term:\n{format_tier1_summaries(tier1_summaries)}\n\n"
         )
         if opposing_prior is not None:
             user_prompt += (

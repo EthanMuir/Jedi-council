@@ -42,14 +42,16 @@ async def test_p_raw_and_p_extremized_stored_on_every_prediction(tmp_path):
         council_db_path=str(tmp_path / "council.db"),
         cache_db_path=str(tmp_path / "cache.db"),
     )
-    result = await run_deliberation("NVDA", "1w", settings, as_of=AS_OF)
+    result = await run_deliberation("NVDA", settings, as_of=AS_OF)
 
     conn = connect(settings.council_db_path)
-    row = conn.execute(
-        "SELECT p_raw, p_extremized FROM predictions WHERE id = ?", (result.prediction_id,)
-    ).fetchone()
+    rows = conn.execute(
+        "SELECT p_raw, p_extremized FROM predictions WHERE run_id = ?", (result.run_id,)
+    ).fetchall()
     conn.close()
 
-    assert row["p_raw"] is not None
-    assert row["p_extremized"] is not None
-    assert row["p_raw"] == row["p_extremized"]  # alpha=1.0 default -> no-op
+    assert len(rows) == 3  # one per term
+    for row in rows:
+        assert row["p_raw"] is not None
+        assert row["p_extremized"] is not None
+        assert row["p_raw"] == row["p_extremized"]  # alpha=1.0 default -> no-op

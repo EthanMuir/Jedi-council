@@ -33,15 +33,16 @@ async def test_one_seat_data_gather_failure_degrades_to_no_read(settings, monkey
 
     monkeypatch.setattr(broken_seat, "gather", _broken_gather)
 
-    result = await run_deliberation("NVDA", "1w", settings, as_of=AS_OF)
+    result = await run_deliberation("NVDA", settings, as_of=AS_OF)
 
     broken_result = next(sr for sr in result.seat_results if sr.seat_id == "technician")
-    assert broken_result.verdict.vote == "NO_READ"
-    assert broken_result.verdict.abstain_reason == "seat_infrastructure_failure"
-    # the deliberation as a whole must still complete -- 11 other seats
-    # unaffected, a final verdict still reached
+    for term in ("short", "medium", "long"):
+        assert broken_result.verdicts.term(term).vote == "NO_READ"
+        assert broken_result.verdicts.term(term).abstain_reason == "seat_infrastructure_failure"
+        # the other 11 seats still reach a position on every term
+        assert result.terms[term].position.seats_counted == len(TIER_I_SEATS) - 1
     assert len(result.seat_results) == len(TIER_I_SEATS)
-    assert result.grand_master_verdict.vote in ("BULLISH", "BEARISH", "NO_CONVICTION")
+    assert result.synthesis.headline
 
 
 @pytest.mark.asyncio
@@ -59,7 +60,7 @@ async def test_broken_seat_still_emits_seat_result_progress_event(settings, monk
         if event == "seat_result":
             events.append(payload)
 
-    await run_deliberation("NVDA", "1w", settings, as_of=AS_OF, progress=progress)
+    await run_deliberation("NVDA", settings, as_of=AS_OF, progress=progress)
 
     broken_payload = next(p for p in events if p["seat_id"] == "fundamentalist")
     assert broken_payload["vote"] == "NO_READ"

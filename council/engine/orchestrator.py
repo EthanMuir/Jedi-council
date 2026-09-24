@@ -1,25 +1,34 @@
-"""The full deliberation pipeline, Phases A-G (spec section 4). Everything
-runs in memory; the Crypt is written exactly once, at the very end (Phase
-G), because the immutability trigger makes a later UPDATE impossible -- see
-council/crypt/ledger.py.
+"""The full deliberation pipeline, Phases A-G (spec section 4). Every run
+covers all three terms at once -- short (the next week), medium (the next 3
+months), long (the next year and beyond) -- and every seat gives a lean on
+each in a single call. Everything runs in memory; the Crypt is written
+once, at the very end (Phase G): one row per term, tied together by a
+run_id, because the immutability trigger makes a later UPDATE impossible --
+see council/crypt/ledger.py.
 
 Phase A  Blind round: all Tier I seats, isolated, no peer visibility, each
-         sampled N times (dispersion capture).
-Phase B  Reality Anchor: Base-Rate Keeper + Oracle of Options establish the
-         plausible distribution; every Tier I target checked against it.
-Phase C  Debate: Bull vs Bear, N rounds, Prosecutor intervenes after each.
-Phase D  Weighted vote: horizon-competence x data-quality x plausibility.
-Phase E  Audit gates: Cost Auditor, Prosecutor veto, base-rate plausibility,
-         minimum participating seats -- any can force NO_CONVICTION.
-Phase F  Synthesis: Grand Master (skipped, synthetic verdict, if a gate
-         already failed -- no need to spend the call).
+         sampled N times (dispersion capture), aggregated per term.
+Phase B  Reality Anchor per term: Base-Rate Keeper (+ the Oracle of
+         Options' implied move, short term only) establish the plausible
+         distribution; every seat's expected move is checked against it.
+Phase C  Debate: Bull vs Bear, N rounds, Prosecutor intervenes after each --
+         once for the whole run, arguing across the terms.
+Phase D  Council position per term: the weighted average of every seat's
+         lean -- term competence x data quality x plausibility x coherence
+         x calibration.
+Phase E  Warnings per term: thin participation, implausible targets, an
+         edge that doesn't clear costs, a Prosecutor objection. They sit
+         next to the term's position; they never override it.
+Phase F  Synthesis: the Grand Master explains the three positions.
 Phase G  Crypt write.
 """
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hashlib
 import json
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Awaitable, Callable
@@ -34,25 +43,32 @@ from council.data.providers.fred import FREDProvider
 from council.data.providers.sec_edgar import SECEdgarProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
 from council.data.service import DataService
-from council.engine.aggregation import DATA_QUALITY_MULTIPLIER, extremize, weighted_vote
+from council.engine.aggregation import (
+    DATA_QUALITY_MULTIPLIER,
+    CouncilPosition,
+    council_position,
+    extremize,
+    p_bullish,
+)
 from council.engine.base_rate import RealityAnchor, check_plausibility, compute_reality_anchor
 from council.engine.cost_auditor import CostAuditResult, audit
-from council.engine.horizons import competence, is_competent, resolve_at_for
+from council.engine.horizons import TERM_NAMES, TERM_WINDOWS, TERMS, competence, resolve_at_for
 from council.engine.llm_client import LLMClient
 from council.engine.risk_warden import RiskSizing, size_position
 from council.engine.routing import resolve_route
 from council.engine.sampling import SampledSeatVerdict, aggregate_samples
-from council.memory.store import MemoryStore, to_seat_memory_lesson
 from council.engine.schemas import (
     DebateArgument,
-    GrandMasterVerdict,
+    GrandMasterSynthesis,
     ProsecutorVerdict,
     Tier1Summary,
     summarize_dissent,
     summarize_tier1,
 )
+from council.memory.store import MemoryStore, to_seat_memory_lesson
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
-from council.seats.base import SeatContext, SeatVerdict, is_abstention
+from council.seats.analyst_ratings import AnalystRatingsSeat
+from council.seats.base import MultiTermVerdict, SeatVerdict, is_abstention
 from council.seats.catalyst_seer import CatalystSeerSeat
 from council.seats.cross_market import CrossMarketSeat
 from council.seats.estimate_scribe import EstimateScribeSeat
@@ -71,7 +87,6 @@ from council.seats.prosecutor import (
 from council.seats.senate_watcher import SenateWatcherSeat
 from council.seats.structure_archivist import StructureArchivistSeat
 from council.seats.technician import TechnicianSeat
-from council.seats.transcript_linguist import TranscriptLinguistSeat
 
 # Full Tier I roster (spec section 3), in roster order.
 TIER_I_SEATS = [
@@ -85,7 +100,7 @@ TIER_I_SEATS = [
     MacroSageSeat(),
     CrossMarketSeat(),
     EstimateScribeSeat(),
-    TranscriptLinguistSeat(),
+    AnalystRatingsSeat(),
     StructureArchivistSeat(),
 ]
 
@@ -94,37 +109,70 @@ TIER_I_SEATS = [
 class SeatResult:
     seat_id: str
     title: str
-    verdict: SeatVerdict
-    dispersion: float
+    verdicts: MultiTermVerdict
+    dispersion: dict[str, float]
     sample_count: int
+    # The seat's leans across the terms, averaged by how much each term
+    # counts for this seat -- what colours its chair.
+    lean: str
+    lean_p_bullish: float | None
+
+
+@dataclass
+class TermWarning:
+    kind: str  # "participation" | "base_rate" | "cost" | "prosecutor"
+    message: str
+
+
+@dataclass
+class SeatTick:
+    """One seat's mark on a term's bearish<->bullish bar."""
+
+    seat_id: str
+    title: str
+    vote: str
+    p_bullish: float | None  # None: the seat couldn't read its data
+    weight: float
+
+
+@dataclass
+class TermResult:
+    term: str
+    name: str
+    window: str
+    prediction_id: str
+    resolve_at: datetime
+    blind: CouncilPosition
+    position: CouncilPosition
+    p_raw: float
+    p_extremized: float
+    expected_move_pct: float
+    entry: float | None
+    exit: float | None
+    invalidation: float | None
+    reality_anchor: RealityAnchor
+    plausibility_flags: dict[str, str]
+    cost_audit: CostAuditResult
+    warnings: list[TermWarning]
+    ticks: list[SeatTick]
+    note: str
+    dissent_summary: str
 
 
 @dataclass
 class DeliberationResult:
-    prediction_id: str
+    run_id: str
     ticker: str
-    horizon: str
     as_of: datetime
-    resolve_at: datetime
     price_at_prediction: float
     seat_results: list[SeatResult]
-    blind_vote: str
-    blind_probability: float
-    blind_consensus_pct: float
-    reality_anchor: RealityAnchor
-    plausibility_flags: dict[str, str]
+    terms: dict[str, TermResult]
     debate_transcript: list[DebateArgument]
     prosecutor_verdicts: list[ProsecutorVerdict]
     correlated_evidence: list[str]
-    weighted_vote_result: tuple[str, float, float]
-    p_raw: float
-    p_extremized: float
     incoherent_decompositions: dict
-    gates_passed: bool
-    gate_failure_reasons: list[str]
-    cost_audit: CostAuditResult
     risk_sizing: RiskSizing
-    grand_master_verdict: GrandMasterVerdict
+    synthesis: GrandMasterSynthesis
     call_log: list = field(default_factory=list)
     run_mode: str = "paid"  # "free" | "paid" | "sample" -- see _run_mode
     run_shape: str = "full"  # "full" | "lite"
@@ -149,49 +197,114 @@ def _run_mode(settings: Settings, call_log: list) -> str:
     return "paid"
 
 
-# Seats with no implemented data source for their domain (Task #69):
-# congressional trading disclosures and earnings call transcripts have no
-# solid free/official API -- researched directly, not assumed. (FMP, the
-# only provider that ever carried them, was removed: its free plan never
-# covered either.) There's no clean free alternative the way SEC
-# EDGAR/FRED were for insider trades/macro. Both seats are still called
-# (they're genuinely competent at these horizons) and still get a logged,
-# real abstain_reason every run -- but they will return NO_READ on
-# literally every call until one of them gets a working provider, so
-# counting them toward the participation gate's denominator would be
-# counting seats that can structurally never contribute, making every
-# run's real signal look thinner than it is. Remove a seat from this set
-# the moment it has a working data source (as insider_reader and
-# structure_archivist's own gaps already were, via SEC EDGAR).
-_STRUCTURALLY_NO_DATA_SEATS = frozenset({"senate_watcher", "transcript_linguist"})
+# The congress seat has no implemented data source for its domain (Task
+# #69): congressional trading disclosures have no solid free/official API
+# -- researched directly, not assumed. (FMP, the only provider that ever
+# carried them, was removed: its free plan never covered them.) The seat is
+# still called every run and still gets a logged, real abstain_reason --
+# but it returns NO_READ on every call until it gets a working provider, so
+# counting it toward the participation warning would make every run's real
+# evidence look thinner than it is. Remove a seat from this set the moment
+# it has a working data source (as insider_reader and structure_archivist's
+# own gaps already were, via SEC EDGAR).
+_STRUCTURALLY_NO_DATA_SEATS = frozenset({"senate_watcher"})
 
 
-def _gate_eligible_weight(seat_ids, horizon: str) -> float:
-    """Competence-weighted denominator for the participation gate (Task
-    #76). A plain headcount treats every seat's abstention the same, but a
-    seat that's only 20-30% competent at this horizon (fundamentalist,
-    macro_sage at 1w) is *expected* to abstain most weeks -- that's the
-    seat correctly declining to manufacture a signal, not a sign the run
-    lacks real conviction, and shouldn't weigh on the gate as heavily as a
-    90%-competent seat (technician, oracle_options at 1w) abstaining does.
-    Real case that motivated this: an ENB/1w run with 4/10 seats voting
-    directionally failed the old >=50% headcount gate by exactly one seat,
-    even though the 6 abstentions were mostly low-competence-at-1w seats
-    giving genuinely well-reasoned "nothing here" answers -- the
-    competence-weighted version of that same run clears 50% (52.5%).
-    Still excludes _STRUCTURALLY_NO_DATA_SEATS -- they can't contribute
-    regardless of their competence score."""
+def _eligible_weight(seat_ids, term: str) -> float:
+    """Competence-weighted denominator for the participation warning (Task
+    #76): a seat that barely counts on this term (the Fundamentalist on the
+    short term) missing its data matters less than one that counts fully
+    (the Technician on the short term). Excludes
+    _STRUCTURALLY_NO_DATA_SEATS -- they can't contribute regardless."""
     return round(
-        sum(competence(sid, horizon) for sid in seat_ids if sid not in _STRUCTURALLY_NO_DATA_SEATS), 4
+        sum(competence(sid, term) for sid in seat_ids if sid not in _STRUCTURALLY_NO_DATA_SEATS), 4
     )
 
 
-def _directional_weight(verdicts_by_id: dict[str, SeatVerdict], horizon: str) -> float:
-    """Competence-weighted numerator: sum of horizon-competence across
-    every seat that actually voted a direction (not an abstention). Extracted
-    for direct unit testing (Task #76), same as its denominator above."""
+def _read_weight(verdicts_by_id: dict[str, SeatVerdict], term: str) -> float:
+    """Competence-weighted numerator: every seat that could read its data
+    on this term -- a dead-even lean is still a read."""
     return round(
-        sum(competence(sid, horizon) for sid, v in verdicts_by_id.items() if not is_abstention(v.vote)), 4
+        sum(
+            competence(sid, term)
+            for sid, v in verdicts_by_id.items()
+            if v.vote != "NO_READ" and sid not in _STRUCTURALLY_NO_DATA_SEATS
+        ),
+        4,
+    )
+
+
+def seat_lean(seat_id: str, verdict: MultiTermVerdict) -> tuple[str, float | None]:
+    """A seat's overall lean across the terms, each weighted by how much it
+    counts for this seat."""
+    weighted_sum = weight_total = 0.0
+    for term in TERMS:
+        p = p_bullish(verdict.term(term))
+        if p is None:
+            continue
+        w = competence(seat_id, term)
+        weighted_sum += w * p
+        weight_total += w
+    if weight_total == 0:
+        return "NO_READ", None
+    p = round(weighted_sum / weight_total, 3)
+    if p == 0.5:
+        return "NO_CONVICTION", p
+    return ("BULLISH" if p > 0.5 else "BEARISH"), p
+
+
+def _term_expected_move(
+    verdicts: dict[str, SeatVerdict], weights: dict[str, float], anchor: RealityAnchor
+) -> float:
+    """The options market's implied move when there is one (short term),
+    otherwise the leaning seats' expected moves averaged by weight, falling
+    back to the stock's ATR-implied range."""
+    if anchor.options_implied_move_pct:
+        return round(abs(anchor.options_implied_move_pct), 2)
+    moves = [
+        (weights[sid], abs(v.expected_move_pct))
+        for sid, v in verdicts.items()
+        if not is_abstention(v.vote) and weights.get(sid, 0) > 0 and v.expected_move_pct
+    ]
+    if moves:
+        return round(sum(w * m for w, m in moves) / sum(w for w, _ in moves), 2)
+    return anchor.atr_implied_range_pct or 0.0
+
+
+def _position_payload(position: CouncilPosition) -> dict:
+    return dataclasses.asdict(position)
+
+
+def _fallback_synthesis(
+    tier1_summaries: list[Tier1Summary],
+    positions: dict[str, CouncilPosition],
+    warnings: dict[str, list[TermWarning]],
+    correlated_evidence: list[str],
+) -> GrandMasterSynthesis:
+    """Used when the Grand Master's own answer fails after retries: plain
+    notes built from the positions themselves, so the run still reads."""
+
+    def note(term: str) -> str:
+        p = positions[term]
+        text = (
+            f"{p.lean_label}: {p.p_bullish:.0%} chance of rising, from "
+            f"{p.seats_counted} seats' leans."
+        )
+        if warnings[term]:
+            text += " " + " ".join(w.message for w in warnings[term])
+        return text
+
+    return GrandMasterSynthesis(
+        headline="; ".join(f"{TERM_NAMES[t]}: {positions[t].lean_label.lower()}" for t in TERMS) + ".",
+        short=note("short"),
+        medium=note("medium"),
+        long=note("long"),
+        dissent_summary="; ".join(
+            f"{TERM_NAMES[t]}: {summarize_dissent(tier1_summaries, t)}" for t in TERMS
+        ),
+        correlated_evidence_warning="; ".join(correlated_evidence) if correlated_evidence else None,
+        reasoning="The Grand Master's own synthesis failed after retries, so these notes "
+        "are built directly from the council's positions.",
     )
 
 
@@ -216,33 +329,16 @@ def build_data_service(settings: Settings) -> DataService:
         # require a $199.99+/month plan, so fetch_option_chain never worked
         # on a free key regardless of quota). Without a FRED key, macro_sage
         # has no live source at all and abstains every run (the same
-        # graceful per-seat failure path senate_watcher/transcript_linguist
-        # already use for their own data gaps) -- get a free one at
+        # graceful per-seat failure path senate_watcher already uses for
+        # its own data gap) -- get a free one at
         # fred.stlouisfed.org, no daily cap, 120 req/min.
         if settings.fred_api_key:
             providers.append(FREDProvider(settings.fred_api_key))
     return DataService(providers=providers, cache=cache)
 
 
-def _synthetic_grand_master_verdict(
-    tier1_summaries: list[Tier1Summary], reasoning: str, correlated_evidence: list[str]
-) -> GrandMasterVerdict:
-    """Used when an audit gate already forces NO_CONVICTION (Grand Master
-    call skipped -- nothing left for it to decide) or when Grand Master's
-    own structured output fails schema validation after retries."""
-    return GrandMasterVerdict(
-        vote="NO_CONVICTION",
-        confidence=0.5,
-        expected_move_pct=0.0,
-        dissent_summary=summarize_dissent(tier1_summaries),
-        correlated_evidence_warning="; ".join(correlated_evidence) if correlated_evidence else None,
-        reasoning=reasoning,
-    )
-
-
 async def run_deliberation(
     ticker: str,
-    horizon: str,
     settings: Settings,
     as_of: datetime | None = None,
     progress: Callable[[str, dict], Awaitable[None]] | None = None,
@@ -310,29 +406,24 @@ async def run_deliberation(
     conn = connect(settings.council_db_path)
 
     # ---- Phase A: blind round -------------------------------------------
-    eligible_seats = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
-    if not eligible_seats:
-        raise ValueError(f"no Tier I seat is competent at horizon '{horizon}'")
-
-    calibration_weights = compute_weights(conn, [s.id for s in eligible_seats], settings, horizon)
+    seat_ids = [s.id for s in TIER_I_SEATS]
+    calibration_weights = {t: compute_weights(conn, seat_ids, settings, t) for t in TERMS}
     memory = MemoryStore(conn, cap_per_seat=settings.memory_cap_per_seat)
 
     n_samples = settings.n_samples_per_seat
 
-    async def deliberate_one(seat, ctx, sample_index, memory_lessons):
+    async def deliberate_one(seat, ctx, sample_index, memory_lessons) -> MultiTermVerdict:
         async with semaphore:
-            verdict = await seat.deliberate(
+            answer = await seat.deliberate(
                 ctx, llm_client, sample_index=sample_index, memories=memory_lessons
             )
-            if memory_lessons and not is_abstention(verdict.vote):
-                verdict = verdict.model_copy(update={"memory_applied": memory_lessons})
-            return verdict
+            return answer.with_memories(memory_lessons)
 
     async def run_seat(seat) -> tuple:
         try:
             await emit("seat_stage", {"seat_id": seat.id, "stage": "gathering"})
             async with semaphore:
-                ctx = await seat.gather(data_service, ticker, as_of, horizon)
+                ctx = await seat.gather(data_service, ticker, as_of)
             retrieved = memory.retrieve(seat_id=seat.id, ticker=ticker, as_of=as_of, limit=5)
             memory_lessons = [to_seat_memory_lesson(e) for e in retrieved]
 
@@ -346,7 +437,7 @@ async def run_deliberation(
 
             async def deliberate_one_tracked(i):
                 nonlocal samples_done
-                verdict = await deliberate_one(seat, ctx, i, memory_lessons)
+                answer = await deliberate_one(seat, ctx, i, memory_lessons)
                 samples_done += 1
                 await emit(
                     "seat_stage",
@@ -357,7 +448,7 @@ async def run_deliberation(
                         "samples_total": n_samples,
                     },
                 )
-                return verdict
+                return answer
 
             await emit(
                 "seat_stage",
@@ -368,90 +459,123 @@ async def run_deliberation(
                     "samples_total": n_samples,
                 },
             )
-            samples = await asyncio.gather(
+            answers = await asyncio.gather(
                 *(deliberate_one_tracked(i) for i in range(n_samples))
             )
-            sampled = aggregate_samples(seat.id, list(samples))
+            sampled = {
+                t: aggregate_samples(seat.id, [a.term(t) for a in answers]) for t in TERMS
+            }
         except Exception as exc:  # noqa: BLE001 -- one seat's data/LLM failure
-            # must never take down the other eleven. Abstention is already a
-            # valid answer for "no signal"; it's the right answer here too,
-            # for "infrastructure failed before a signal could be formed".
-            ctx = SeatContext(seat.id, frozenset(), {}, ticker=ticker, as_of=as_of, horizon=horizon)
-            failed_verdict = SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
-                thesis=f"Seat failed before producing a verdict: {exc}"[:500],
-                what_would_change_my_mind="N/A",
-                data_quality="POOR",
+            # must never take down the other eleven. NO_READ is the honest
+            # answer for "infrastructure failed before a read could be formed".
+            failed = MultiTermVerdict.no_read(
+                thesis=f"Seat failed before producing a verdict: {exc}",
                 abstain_reason="seat_infrastructure_failure",
             )
-            sampled = SampledSeatVerdict(
-                seat_id=seat.id,
-                samples=[failed_verdict],
-                consensus_vote="NO_READ",
-                dispersion=0.0,
-                representative=failed_verdict,
-            )
+            sampled = {
+                t: SampledSeatVerdict(
+                    seat_id=seat.id,
+                    samples=[failed.term(t)],
+                    consensus_vote="NO_READ",
+                    dispersion=0.0,
+                    representative=failed.term(t),
+                )
+                for t in TERMS
+            }
+        verdicts = MultiTermVerdict(**{t: sampled[t].representative for t in TERMS})
+        lean, lean_p = seat_lean(seat.id, verdicts)
+        result = SeatResult(
+            seat_id=seat.id,
+            title=seat.title,
+            verdicts=verdicts,
+            dispersion={t: sampled[t].dispersion for t in TERMS},
+            sample_count=len(sampled["short"].samples),
+            lean=lean,
+            lean_p_bullish=lean_p,
+        )
         await emit(
             "seat_result",
             {
                 "seat_id": seat.id,
                 "title": seat.title,
-                "vote": sampled.representative.vote,
-                "probability": sampled.representative.probability,
-                "dispersion": sampled.dispersion,
-                "data_quality": sampled.representative.data_quality,
-                "thesis": sampled.representative.thesis,
+                "vote": lean,
+                "lean_p_bullish": lean_p,
+                "data_quality": verdicts.short.data_quality,
+                "thesis": verdicts.short.thesis,
+                "terms": {
+                    t: {
+                        "vote": verdicts.term(t).vote,
+                        "probability": verdicts.term(t).probability,
+                        "p_bullish": p_bullish(verdicts.term(t)),
+                        "expected_move_pct": verdicts.term(t).expected_move_pct,
+                        "dispersion": sampled[t].dispersion,
+                        "rationale": verdicts.term(t).term_rationale
+                        or verdicts.term(t).abstain_reason,
+                    }
+                    for t in TERMS
+                },
             },
         )
-        return seat, ctx, sampled
+        return result
 
-    results: list[tuple] = await asyncio.gather(*(run_seat(seat) for seat in eligible_seats))
+    seat_results: list[SeatResult] = await asyncio.gather(*(run_seat(seat) for seat in TIER_I_SEATS))
     llm_client.raise_if_stopped()
 
-    verdicts_by_id: dict[str, SeatVerdict] = {
-        seat.id: sampled.representative for seat, _ctx, sampled in results
-    }
-    dispersion_by_id = {seat.id: sampled.dispersion for seat, _ctx, sampled in results}
-    title_by_id = {seat.id: seat.title for seat, _ctx, _sampled in results}
-    blind_vote, blind_probability, blind_consensus_pct = weighted_vote(verdicts_by_id)
-    await emit(
-        "phase_a_complete",
-        {"blind_vote": blind_vote, "blind_probability": blind_probability, "blind_consensus_pct": blind_consensus_pct},
-    )
+    by_id: dict[str, SeatResult] = {r.seat_id: r for r in seat_results}
 
-    # ---- Phase B: Reality Anchor ------------------------------------------
+    def term_verdicts(term: str) -> dict[str, SeatVerdict]:
+        return {sid: r.verdicts.term(term) for sid, r in by_id.items()}
+
+    blind = {t: council_position(term_verdicts(t)) for t in TERMS}
+    await emit("phase_a_complete", {"terms": {t: _position_payload(blind[t]) for t in TERMS}})
+
+    # ---- Phase B: Reality Anchor, per term ----------------------------------
     anchor_series = await data_service.get_ohlcv(ticker, as_of=as_of, lookback_days=730)
-    oracle_verdict = verdicts_by_id.get("oracle_options")
+    oracle = by_id.get("oracle_options")
+    # The option chain's nearest expiries speak to the next week, not to
+    # months or years -- only the short term is anchored to it.
     options_implied_move_pct = (
-        oracle_verdict.expected_move_pct
-        if oracle_verdict and not is_abstention(oracle_verdict.vote)
+        oracle.verdicts.short.expected_move_pct
+        if oracle and not is_abstention(oracle.verdicts.short.vote)
         else None
     )
-    reality_anchor = compute_reality_anchor(anchor_series.bars, horizon, options_implied_move_pct)
+    reality_anchors = {
+        t: compute_reality_anchor(
+            anchor_series.bars, t, options_implied_move_pct if t == "short" else None
+        )
+        for t in TERMS
+    }
     plausibility_flags = {
-        sid: check_plausibility(v.expected_move_pct, reality_anchor)
-        for sid, v in verdicts_by_id.items()
-        if not is_abstention(v.vote)
+        t: {
+            sid: check_plausibility(v.expected_move_pct, reality_anchors[t])
+            for sid, v in term_verdicts(t).items()
+            if not is_abstention(v.vote)
+        }
+        for t in TERMS
     }
     await emit(
         "phase_b_reality_anchor",
         {
-            "max_plausible_move_pct": reality_anchor.max_plausible_move_pct,
-            "hit_rate_up": reality_anchor.hit_rate_up,
-            "options_implied_move_pct": reality_anchor.options_implied_move_pct,
-            "plausibility_flags": plausibility_flags,
+            "terms": {
+                t: {
+                    "max_plausible_move_pct": reality_anchors[t].max_plausible_move_pct,
+                    "hit_rate_up": reality_anchors[t].hit_rate_up,
+                    "options_implied_move_pct": reality_anchors[t].options_implied_move_pct,
+                    "plausibility_flags": plausibility_flags[t],
+                }
+                for t in TERMS
+            }
         },
     )
 
     # ---- Phase C: Debate ---------------------------------------------------
     tier1_summaries = [
-        summarize_tier1(seat.id, seat.title, sampled.representative, sampled.dispersion)
-        for seat, _ctx, sampled in results
+        summarize_tier1(r.seat_id, r.title, r.verdicts, r.dispersion) for r in seat_results
     ]
     correlated_evidence = detect_correlated_evidence(tier1_summaries)
-    incoherent_decompositions = detect_incoherent_decompositions(verdicts_by_id)
+    # Seats decompose their medium-term probability only.
+    incoherent_decompositions = detect_incoherent_decompositions(term_verdicts("medium"))
+    converging = {t: f"{blind[t].lean_label} ({blind[t].p_bullish:.1%} chance of rising)" for t in TERMS}
 
     bull, bear, prosecutor = BullAdvocateSeat(), BearAdvocateSeat(), ProsecutorSeat()
     debate_transcript: list[DebateArgument] = []
@@ -479,7 +603,7 @@ async def run_deliberation(
                 plausibility_flags,
                 correlated_evidence,
                 incoherent_decompositions,
-                blind_vote,
+                converging,
                 round_n,
                 llm_client,
                 settings.synthesis_model,
@@ -494,95 +618,110 @@ async def run_deliberation(
                 "bull_argument": bull_arg.argument if bull_arg else None,
                 "bear_argument": bear_arg.argument if bear_arg else None,
                 "prosecutor_veto": pv.veto if pv else False,
+                "prosecutor_veto_terms": (pv.veto_terms or list(TERMS)) if pv and pv.veto else [],
                 "prosecutor_findings": [f.description for f in pv.findings] if pv else [],
             },
         )
 
     llm_client.raise_if_stopped()
 
-    # ---- Phase D: weighted vote ---------------------------------------------
-    phase_d_weights = {}
-    for sid, v in verdicts_by_id.items():
-        if is_abstention(v.vote):
-            continue
-        plausibility_multiplier = 0.5 if plausibility_flags.get(sid) == "IMPLAUSIBLE" else 1.0
-        coherence_multiplier = (
-            1 - INCOHERENCE_WEIGHT_DISCOUNT if sid in incoherent_decompositions else 1.0
-        )
-        phase_d_weights[sid] = (
-            competence(sid, horizon)
-            * DATA_QUALITY_MULTIPLIER.get(v.data_quality, 0.5)
-            * plausibility_multiplier
-            * coherence_multiplier
-            * calibration_weights.get(sid, 1.0)
-        )
-    weighted_vote_result = weighted_vote(verdicts_by_id, phase_d_weights)
-    wv_vote, wv_confidence, _wv_consensus = weighted_vote_result
-    p_raw = (
-        wv_confidence if wv_vote == "BULLISH" else 1 - wv_confidence if wv_vote == "BEARISH" else 0.5
-    )
-    p_extremized = extremize(p_raw, settings.extremize_alpha)
+    # ---- Phase D: the council's position on each term -------------------------
+    weights: dict[str, dict[str, float]] = {}
+    for t in TERMS:
+        weights[t] = {}
+        for sid, v in term_verdicts(t).items():
+            if v.vote == "NO_READ":
+                continue
+            plausibility_multiplier = 0.5 if plausibility_flags[t].get(sid) == "IMPLAUSIBLE" else 1.0
+            coherence_multiplier = (
+                1 - INCOHERENCE_WEIGHT_DISCOUNT
+                if t == "medium" and sid in incoherent_decompositions
+                else 1.0
+            )
+            weights[t][sid] = round(
+                competence(sid, t)
+                * DATA_QUALITY_MULTIPLIER.get(v.data_quality, 0.5)
+                * plausibility_multiplier
+                * coherence_multiplier
+                * calibration_weights[t].get(sid, 1.0),
+                4,
+            )
+    positions = {t: council_position(term_verdicts(t), weights[t]) for t in TERMS}
+    p_raw = {t: positions[t].p_bullish for t in TERMS}
+    p_extremized = {t: extremize(p_raw[t], settings.extremize_alpha) for t in TERMS}
+    expected_moves = {
+        t: _term_expected_move(term_verdicts(t), weights[t], reality_anchors[t]) for t in TERMS
+    }
     await emit(
         "phase_d_weighted_vote",
-        {"vote": wv_vote, "confidence": wv_confidence, "p_raw": p_raw, "p_extremized": p_extremized},
+        {
+            "terms": {
+                t: {
+                    **_position_payload(positions[t]),
+                    "p_raw": p_raw[t],
+                    "p_extremized": p_extremized[t],
+                    "expected_move_pct": expected_moves[t],
+                }
+                for t in TERMS
+            }
+        },
     )
 
-    # ---- Phase E: audit gates -----------------------------------------------
-    directional_count = sum(1 for v in verdicts_by_id.values() if not is_abstention(v.vote))
-    gate_eligible_weight = _gate_eligible_weight(verdicts_by_id.keys(), horizon)
-    directional_weight = _directional_weight(verdicts_by_id, horizon)
-    # gate_eligible_weight == 0 only when every called seat is in
-    # _STRUCTURALLY_NO_DATA_SEATS -- nothing could ever have contributed
-    # regardless of this run's data, so this gate has nothing to check
-    # (aggregation.py's own "zero directional votes" fallback still applies).
-    min_seats_gate = (
-        gate_eligible_weight == 0
-        or directional_weight >= gate_eligible_weight * settings.min_participating_seats_pct
+    # ---- Phase E: warnings, per term ------------------------------------------
+    warnings: dict[str, list[TermWarning]] = {t: [] for t in TERMS}
+    cost_audits: dict[str, CostAuditResult] = {}
+    for t in TERMS:
+        eligible = _eligible_weight(seat_ids, t)
+        read = _read_weight(term_verdicts(t), t)
+        if eligible > 0 and read < eligible * settings.min_participating_seats_pct:
+            warnings[t].append(
+                TermWarning(
+                    "participation",
+                    f"Thin evidence: only {read / eligible:.0%} of the seats that matter "
+                    "for this term could read their data.",
+                )
+            )
+
+        flags = plausibility_flags[t]
+        implausible = sum(1 for f in flags.values() if f == "IMPLAUSIBLE")
+        if flags and implausible > len(flags) / 2:
+            warnings[t].append(
+                TermWarning(
+                    "base_rate",
+                    f"{implausible} of {len(flags)} leaning seats expect a bigger move than "
+                    f"this stock has made over {TERM_WINDOWS[t]} 95% of the time.",
+                )
+            )
+
+        cost_audits[t] = audit(expected_moves[t], settings.assumed_spread_bps)
+        if not cost_audits[t].passed:
+            warnings[t].append(
+                TermWarning(
+                    "cost",
+                    f"The expected move ({expected_moves[t]}%) doesn't clear the "
+                    f"~{cost_audits[t].round_trip_cost_pct}% cost of trading in and out.",
+                )
+            )
+
+        objections = [pv for pv in prosecutor_verdicts if pv.vetoes(t)]
+        if objections:
+            warnings[t].append(
+                TermWarning(
+                    "prosecutor",
+                    "The Prosecutor objected: "
+                    + (objections[-1].veto_reason or "the case for this lean doesn't hold up."),
+                )
+            )
+    await emit(
+        "phase_e_warnings",
+        {"terms": {t: [dataclasses.asdict(w) for w in warnings[t]] for t in TERMS}},
     )
 
-    implausible_count = sum(1 for f in plausibility_flags.values() if f == "IMPLAUSIBLE")
-    base_rate_gate = not (plausibility_flags and implausible_count > len(plausibility_flags) / 2)
-
-    directional_moves = [
-        v.expected_move_pct for v in verdicts_by_id.values() if not is_abstention(v.vote)
-    ]
-    audit_move_pct = options_implied_move_pct or (
-        sum(directional_moves) / len(directional_moves) if directional_moves else 0.0
-    )
-    cost_audit_result = audit(audit_move_pct, settings.assumed_spread_bps)
-    cost_gate = cost_audit_result.passed
-
-    prosecutor_gate = not any(pv.veto for pv in prosecutor_verdicts)
-
-    gate_failure_reasons = []
-    if not min_seats_gate:
-        participation_pct = (
-            0.0 if gate_eligible_weight == 0 else round(100 * directional_weight / gate_eligible_weight, 1)
-        )
-        gate_failure_reasons.append(
-            f"competence-weighted participation is {participation_pct}% "
-            f"(directional weight {directional_weight} of eligible weight {gate_eligible_weight}, "
-            f"{directional_count} seats voted directionally), minimum is "
-            f"{settings.min_participating_seats_pct:.0%}"
-        )
-    if not base_rate_gate:
-        gate_failure_reasons.append(
-            f"{implausible_count}/{len(plausibility_flags)} directional targets flagged IMPLAUSIBLE"
-        )
-    if not cost_gate:
-        gate_failure_reasons.append(
-            f"edge {cost_audit_result.edge_pct}% does not clear the assumed spread"
-        )
-    if not prosecutor_gate:
-        gate_failure_reasons.append("Prosecutor veto")
-    gates_passed = min_seats_gate and base_rate_gate and cost_gate and prosecutor_gate
-    await emit("phase_e_gates", {"gates_passed": gates_passed, "reasons": gate_failure_reasons})
-
-    # ---- Risk Warden (sizing only, never sees the vote) ---------------------
+    # ---- Risk Warden (sizing only, never sees the leans) ------------------------
     open_tickers = get_open_tickers(conn)
     risk_sizing = size_position(
-        atr_implied_range_pct=reality_anchor.atr_implied_range_pct,
-        options_implied_move_pct=reality_anchor.options_implied_move_pct,
+        atr_implied_range_pct=reality_anchors["short"].atr_implied_range_pct,
+        options_implied_move_pct=reality_anchors["short"].options_implied_move_pct,
         risk_budget_pct=settings.risk_budget_pct,
         kelly_cap=settings.kelly_cap,
         ticker=ticker,
@@ -597,57 +736,78 @@ async def run_deliberation(
     )
 
     # ---- Phase F: synthesis ---------------------------------------------------
-    if gates_passed:
-        gm_verdict = await GrandMasterSeat().synthesize(
-            tier1_summaries=tier1_summaries,
-            debate_transcript=debate_transcript,
-            prosecutor_verdicts=prosecutor_verdicts,
-            weighted_vote_result=weighted_vote_result,
-            reality_anchor=reality_anchor,
-            cost_audit_result=cost_audit_result,
-            correlated_evidence=correlated_evidence,
-            llm_client=llm_client,
-            model=settings.synthesis_model,
-            user_context=context,
-        )
-        if gm_verdict is None:
-            gm_verdict = _synthetic_grand_master_verdict(
-                tier1_summaries,
-                "Grand Master schema validation failed after retries.",
-                correlated_evidence,
-            )
-    else:
-        gm_verdict = _synthetic_grand_master_verdict(
-            tier1_summaries,
-            "Audit gates failed: " + "; ".join(gate_failure_reasons),
-            correlated_evidence,
-        )
-    await emit(
-        "phase_f_synthesis",
-        {
-            "vote": gm_verdict.vote,
-            "confidence": gm_verdict.confidence,
-            "dissent_summary": gm_verdict.dissent_summary,
-            "correlated_evidence_warning": gm_verdict.correlated_evidence_warning,
-            "reasoning": gm_verdict.reasoning,
-        },
+    synthesis = await GrandMasterSeat().synthesize(
+        tier1_summaries=tier1_summaries,
+        debate_transcript=debate_transcript,
+        prosecutor_verdicts=prosecutor_verdicts,
+        positions=positions,
+        warnings={t: [w.message for w in warnings[t]] for t in TERMS},
+        reality_anchors=reality_anchors,
+        correlated_evidence=correlated_evidence,
+        llm_client=llm_client,
+        model=settings.synthesis_model,
+        user_context=context,
     )
+    if synthesis is None:
+        synthesis = _fallback_synthesis(tier1_summaries, positions, warnings, correlated_evidence)
+
+    ticks = {
+        t: [
+            SeatTick(
+                seat_id=r.seat_id,
+                title=r.title,
+                vote=r.verdicts.term(t).vote,
+                p_bullish=p_bullish(r.verdicts.term(t)),
+                weight=weights[t].get(r.seat_id, 0.0),
+            )
+            for r in seat_results
+        ]
+        for t in TERMS
+    }
+    dissent = {t: summarize_dissent(tier1_summaries, t) for t in TERMS}
+
+    # Short-term levels come from the Technician's chart read, and only when
+    # it leans the same way as the council -- no other seat sets prices.
+    technician = by_id.get("technician")
+    levels = {t: (None, None, None) for t in TERMS}
+    if (
+        technician
+        and technician.verdicts.short.vote == positions["short"].vote
+        and not is_abstention(positions["short"].vote)
+    ):
+        tv = technician.verdicts.short
+        levels["short"] = (tv.entry, tv.exit, tv.invalidation)
+
+    terms_payload = {
+        t: {
+            **_position_payload(positions[t]),
+            "name": TERM_NAMES[t],
+            "window": TERM_WINDOWS[t],
+            "expected_move_pct": expected_moves[t],
+            "warnings": [dataclasses.asdict(w) for w in warnings[t]],
+            "ticks": [dataclasses.asdict(k) for k in ticks[t]],
+            "note": synthesis.note(t),
+            "dissent_summary": dissent[t],
+        }
+        for t in TERMS
+    }
+    await emit("phase_f_synthesis", {**synthesis.model_dump(), "terms": terms_payload})
 
     llm_client.raise_if_stopped()
 
-    # ---- Phase G: Crypt write (exactly once) -----------------------------
+    # ---- Phase G: Crypt write -- one row per term, one run_id ------------------
+    run_id = str(uuid.uuid4())
     snapshot_fields = {
         "ticker": ticker,
-        "horizon": horizon,
+        "terms": list(TERMS),
         "as_of": as_of.isoformat(),
-        "seat_data_as_of": {seat.id: ctx.as_of.isoformat() for seat, ctx, _s in results},
+        "seats": seat_ids,
     }
     data_snapshot_hash = hashlib.sha256(
         json.dumps(snapshot_fields, sort_keys=True, default=str).encode()
     ).hexdigest()
-    resolve_at = resolve_at_for(horizon, as_of)
 
-    model_versions = {seat.id: settings.seat_model for seat in eligible_seats}
+    model_versions = {sid: settings.seat_model for sid in seat_ids}
     model_versions.update(
         {
             "bull_advocate": settings.seat_model,
@@ -664,89 +824,107 @@ async def run_deliberation(
     # What each seat's answer actually came from -- the concrete free-tier
     # model, or Groq after an overflow, not just what routing intended.
     model_used = {c.seat_id: (c.model, c.provider) for c in llm_client.call_log if c.success}
+    synthesis_json = json.dumps({**synthesis.model_dump(), "terms": terms_payload}, default=str)
+    prosecutor_json = json.dumps([pv.model_dump() for pv in prosecutor_verdicts])
 
+    prediction_ids: dict[str, str] = {}
     try:
-        prediction_id = write_prediction(
-            conn,
-            ticker=ticker,
-            horizon=horizon,
-            resolve_at=resolve_at,
-            price_at_prediction=price_at_prediction,
-            data_snapshot_hash=data_snapshot_hash,
-            model_versions=model_versions,
-            blind_vote=blind_vote,
-            blind_probability=blind_probability,
-            blind_consensus_pct=blind_consensus_pct,
-            council_vote=gm_verdict.vote,
-            council_confidence=gm_verdict.confidence,
-            consensus_pct=weighted_vote_result[2],
-            entry=gm_verdict.entry,
-            exit=gm_verdict.exit,
-            invalidation=gm_verdict.invalidation,
-            stop=gm_verdict.stop if gm_verdict.stop is not None else gm_verdict.invalidation,
-            expected_move_pct=gm_verdict.expected_move_pct,
-            base_rate_move_pct=reality_anchor.atr_implied_range_pct,
-            dissent_summary=gm_verdict.dissent_summary,
-            correlated_evidence_warning=gm_verdict.correlated_evidence_warning,
-            prosecutor_verdict=json.dumps([pv.model_dump() for pv in prosecutor_verdicts]),
-            cost_audit_passed=cost_audit_result.passed,
-            p_raw=p_raw,
-            p_extremized=p_extremized,
-            total_cost_usd=total_cost_usd,
-            total_input_tokens=total_input_tokens,
-            total_output_tokens=total_output_tokens,
-            run_mode=run_mode,
-            run_shape=run_shape,
-            created_at=as_of,
-        )
-        for seat, _ctx, sampled in results:
-            route = resolve_route(seat.id, settings, default_model=settings.seat_model)
-            used_model, used_provider = model_used.get(seat.id, (route.model, route.provider))
-            write_seat_vote(
+        for t in TERMS:
+            entry, exit_, invalidation = levels[t]
+            prediction_ids[t] = write_prediction(
                 conn,
-                prediction_id=prediction_id,
-                seat_id=seat.id,
-                verdict=sampled.representative,
-                dispersion=sampled.dispersion,
-                weight_applied=phase_d_weights.get(seat.id, 0.0),
-                model_id="fixture" if settings.resolved_no_llm else used_model,
-                provider="none" if settings.resolved_no_llm else used_provider,
+                ticker=ticker,
+                horizon=t,
+                resolve_at=resolve_at_for(t, as_of),
+                price_at_prediction=price_at_prediction,
+                data_snapshot_hash=data_snapshot_hash,
+                model_versions=model_versions,
+                blind_vote=blind[t].vote,
+                blind_probability=blind[t].confidence,
+                blind_consensus_pct=blind[t].consensus_pct,
+                council_vote=positions[t].vote,
+                council_confidence=positions[t].confidence,
+                consensus_pct=positions[t].consensus_pct,
+                entry=entry,
+                exit=exit_,
+                invalidation=invalidation,
+                stop=invalidation,
+                expected_move_pct=expected_moves[t],
+                base_rate_move_pct=reality_anchors[t].atr_implied_range_pct,
+                dissent_summary=dissent[t],
+                correlated_evidence_warning=synthesis.correlated_evidence_warning,
+                prosecutor_verdict=prosecutor_json,
+                cost_audit_passed=cost_audits[t].passed,
+                p_raw=p_raw[t],
+                p_extremized=p_extremized[t],
+                # Run-wide totals, repeated on each of the run's rows --
+                # count them once per run_id.
+                total_cost_usd=total_cost_usd,
+                total_input_tokens=total_input_tokens,
+                total_output_tokens=total_output_tokens,
+                run_mode=run_mode,
+                run_shape=run_shape,
+                run_id=run_id,
+                synthesis_json=synthesis_json,
+                created_at=as_of,
             )
+            for r in seat_results:
+                route = resolve_route(r.seat_id, settings, default_model=settings.seat_model)
+                used_model, used_provider = model_used.get(r.seat_id, (route.model, route.provider))
+                write_seat_vote(
+                    conn,
+                    prediction_id=prediction_ids[t],
+                    seat_id=r.seat_id,
+                    verdict=r.verdicts.term(t),
+                    dispersion=r.dispersion[t],
+                    weight_applied=weights[t].get(r.seat_id, 0.0),
+                    model_id="fixture" if settings.resolved_no_llm else used_model,
+                    provider="none" if settings.resolved_no_llm else used_provider,
+                )
     finally:
         conn.close()
 
-    seat_results = [
-        SeatResult(seat.id, seat.title, sampled.representative, sampled.dispersion, len(sampled.samples))
-        for seat, _ctx, sampled in results
-    ]
+    await emit("phase_g_crypt_write", {"run_id": run_id, "prediction_ids": prediction_ids})
 
-    await emit("phase_g_crypt_write", {"prediction_id": prediction_id})
+    term_results = {
+        t: TermResult(
+            term=t,
+            name=TERM_NAMES[t],
+            window=TERM_WINDOWS[t],
+            prediction_id=prediction_ids[t],
+            resolve_at=resolve_at_for(t, as_of),
+            blind=blind[t],
+            position=positions[t],
+            p_raw=p_raw[t],
+            p_extremized=p_extremized[t],
+            expected_move_pct=expected_moves[t],
+            entry=levels[t][0],
+            exit=levels[t][1],
+            invalidation=levels[t][2],
+            reality_anchor=reality_anchors[t],
+            plausibility_flags=plausibility_flags[t],
+            cost_audit=cost_audits[t],
+            warnings=warnings[t],
+            ticks=ticks[t],
+            note=synthesis.note(t),
+            dissent_summary=dissent[t],
+        )
+        for t in TERMS
+    }
 
     return DeliberationResult(
-        prediction_id=prediction_id,
+        run_id=run_id,
         ticker=ticker,
-        horizon=horizon,
         as_of=as_of,
-        resolve_at=resolve_at,
         price_at_prediction=price_at_prediction,
         seat_results=seat_results,
-        blind_vote=blind_vote,
-        blind_probability=blind_probability,
-        blind_consensus_pct=blind_consensus_pct,
-        reality_anchor=reality_anchor,
-        plausibility_flags=plausibility_flags,
+        terms=term_results,
         debate_transcript=debate_transcript,
         prosecutor_verdicts=prosecutor_verdicts,
         correlated_evidence=correlated_evidence,
-        weighted_vote_result=weighted_vote_result,
-        p_raw=p_raw,
-        p_extremized=p_extremized,
         incoherent_decompositions=incoherent_decompositions,
-        gates_passed=gates_passed,
-        gate_failure_reasons=gate_failure_reasons,
-        cost_audit=cost_audit_result,
         risk_sizing=risk_sizing,
-        grand_master_verdict=gm_verdict,
+        synthesis=synthesis,
         call_log=llm_client.call_log,
         run_mode=run_mode,
         run_shape=run_shape,

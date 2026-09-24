@@ -5,11 +5,11 @@ all; a recorded object is loaded and validated through the same schema a
 live call would have to pass.
 
 `get_structured` is the generic primitive (any Pydantic response model);
-`get_verdict` is a thin SeatVerdict-specific wrapper that preserves the
-NO_READ-on-schema-failure fallback Tier I seats rely on. Tier II-IV
-(debate, Prosecutor, Grand Master) call `get_structured` directly and pick
-their own fallback, since "abstain" doesn't mean the same thing for a
-debate argument as it does for an analyst's vote.
+`get_seat_answer` is the Tier I wrapper -- one call, a lean for each term --
+that turns a failed or malformed call into NO_READ instead of failing the
+run. Tier II-IV (debate, Prosecutor, Grand Master) call `get_structured`
+directly and pick their own fallback, since "couldn't read" doesn't mean
+the same thing for a debate argument as it does for an analyst's lean.
 """
 from __future__ import annotations
 
@@ -32,7 +32,8 @@ from council.config import Settings
 from council.engine import free_models
 from council.engine.model_catalog import FREE_MODELS, get_model
 from council.engine.routing import ResolvedRoute, resolve_route
-from council.seats.base import SeatVerdict, format_memory_context
+from council.seats.base import MultiTermVerdict, SeatAnswer, format_memory_context
+from council.seats.debiasing import TERMS_BRIEF
 
 _FIXTURE_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "seat_verdicts"
 
@@ -289,41 +290,6 @@ _PROVIDER_ADAPTERS = {
 }
 
 
-def _repair_seat_verdict_input(raw: dict) -> dict:
-    """Two SeatVerdict failure modes keep recurring in live use even after
-    telling the model about them via schema descriptions (Task #66's
-    abstain_reason description, Task #67's max_tokens raise + field
-    reorder) -- fixed here in code instead of spending two more real
-    retries hoping the model gets it right this time:
-
-    - vote=NO_READ/NO_CONVICTION with abstain_reason missing or empty. If the model
-      instead put its reasoning in `thesis` -- a common substitution,
-      since that's the field it's used to writing an explanation into --
-      reuse that text rather than lose it; otherwise fall back to a
-      generic placeholder. The model plainly tried to explain itself
-      somewhere in the response; this just uses it in the right field.
-    - thesis over the enforced 120-word cap. The model doesn't count
-      words precisely; truncated to 120 rather than rejected outright.
-
-    Only touches what's actually wrong -- everything else passes through
-    for Pydantic to validate normally, including a genuinely malformed
-    response that this can't repair (e.g. a bad vote/probability type),
-    which still fails and still retries as before."""
-    repaired = dict(raw)
-
-    if repaired.get("vote") in ("NO_READ", "NO_CONVICTION") and not repaired.get("abstain_reason"):
-        fallback = repaired.get("thesis") or "Seat abstained; no explicit reason was provided."
-        repaired["abstain_reason"] = str(fallback)[:500]
-
-    thesis = repaired.get("thesis")
-    if isinstance(thesis, str):
-        words = thesis.split()
-        if len(words) > 120:
-            repaired["thesis"] = " ".join(words[:120])
-
-    return repaired
-
-
 class _Pacer:
     """Evenly spaced call slots per (provider, model). Reserving is
     synchronous -- no await between reading and moving the next free slot --
@@ -346,6 +312,49 @@ def _friendly_duration(seconds: float) -> str:
     if seconds >= 3600:
         return "an hour"
     return f"{max(1, round(seconds / 60))} minutes"
+
+
+def _truncate_words(text: object, limit: int) -> object:
+    if isinstance(text, str):
+        words = text.split()
+        if len(words) > limit:
+            return " ".join(words[:limit])
+    return text
+
+
+def _repair_seat_answer_input(raw: dict) -> dict:
+    """A few answer-shape slips keep recurring in live use even after
+    telling the model about them in the schema descriptions (Task #66's
+    abstain_reason description, Task #67's max_tokens raise + field
+    reorder) -- fixed here in code instead of spending two more real
+    retries hoping the model gets it right this time:
+
+    - Free text over its word cap (thesis 120, each term's rationale 40).
+      The model doesn't count words precisely; truncated, not rejected.
+    - NO_READ with abstain_reason missing. The model usually explained
+      itself in the thesis instead -- reuse that text in the right field.
+    - An abstain_reason left on a READ, or a probability/move left on a
+      dead-even term -- cleared or reset to the neutral values.
+
+    Only touches what's actually wrong -- a genuinely malformed answer
+    (e.g. a bad vote or probability type) still fails validation and still
+    retries as before."""
+    repaired = dict(raw)
+    repaired["thesis"] = _truncate_words(repaired.get("thesis"), 120)
+    if repaired.get("status") == "NO_READ" and not repaired.get("abstain_reason"):
+        repaired["abstain_reason"] = str(repaired.get("thesis") or "No usable data.")[:500]
+    if repaired.get("status") == "READ" and repaired.get("abstain_reason"):
+        repaired["abstain_reason"] = None
+    for term in ("short", "medium", "long"):
+        call = repaired.get(term)
+        if isinstance(call, dict):
+            call = dict(call)
+            call["rationale"] = _truncate_words(call.get("rationale"), 40)
+            if call.get("vote") == "NO_CONVICTION":
+                call["probability"] = 0.5
+                call["expected_move_pct"] = 0.0
+            repaired[term] = call
+    return repaired
 
 
 @dataclass
@@ -751,8 +760,8 @@ class LLMClient:
             # genuinely "the model didn't produce a valid structured answer".
             try:
                 latency_ms = (time.monotonic() - start) * 1000
-                if response_model is SeatVerdict:
-                    raw_input = _repair_seat_verdict_input(raw_input)
+                if response_model is SeatAnswer:
+                    raw_input = _repair_seat_answer_input(raw_input)
                 result = response_model(**raw_input)
             except (ValidationError, StopIteration, KeyError, TypeError) as exc:
                 last_error = exc
@@ -787,7 +796,7 @@ class LLMClient:
             f"{seat_id}: schema validation failed after {max_retries} retries: {last_error}"
         )
 
-    async def get_verdict(
+    async def get_seat_answer(
         self,
         *,
         seat_id: str,
@@ -798,37 +807,30 @@ class LLMClient:
         sample_index: int = 0,
         memories: list | None = None,
         max_retries: int = 2,
-    ) -> SeatVerdict:
-        if memories:
-            user_prompt = user_prompt + format_memory_context(memories)
+    ) -> MultiTermVerdict:
+        """A Tier I seat's read of its data, with a lean for each term. A
+        call that fails or never validates becomes NO_READ on every term --
+        the seat couldn't form a read -- rather than failing the run."""
+        user_prompt = user_prompt + format_memory_context(memories) + TERMS_BRIEF
         try:
-            return await self.get_structured(
+            answer = await self.get_structured(
                 seat_id=seat_id,
                 model=model,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                response_model=SeatVerdict,
+                response_model=SeatAnswer,
                 fixture_name=fixture_name,
                 sample_index=sample_index,
                 max_retries=max_retries,
             )
         except SchemaRetryExhausted as exc:
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
-                thesis=f"Schema validation failed after {max_retries} retries: {exc}"[:500],
-                what_would_change_my_mind="N/A",
-                data_quality="POOR",
+            return MultiTermVerdict.no_read(
+                thesis=f"The answer never came back in the required format: {exc}",
                 abstain_reason="schema_failure",
             )
         except LLMCallFailed as exc:
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
-                thesis=f"LLM call failed: {exc}"[:500],
-                what_would_change_my_mind="N/A",
-                data_quality="POOR",
+            return MultiTermVerdict.no_read(
+                thesis=f"The AI call failed: {exc}",
                 abstain_reason="llm_call_failed",
             )
+        return answer.to_multi_term()

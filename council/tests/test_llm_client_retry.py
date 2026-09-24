@@ -1,7 +1,7 @@
 """Network-level retry/backoff (Phase 6): transient API errors (connection,
 rate limit, 5xx) retry with backoff and can still succeed; non-retryable
 errors (auth, bad request) fail fast with no wasted retries. Both map to
-NO_READ via get_verdict's LLMCallFailed handler -- the network-error
+NO_READ via get_seat_answer's LLMCallFailed handler -- the network-error
 analogue of test_llm_client.py's schema-violation contract."""
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import pytest
 import council.engine.llm_client as llm_client_module
 from council.config import Settings
 from council.engine.llm_client import LLMClient
+from council.tests.seat_answers import seat_answer_payload
 
 _REQUEST = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
 
@@ -21,20 +22,7 @@ _REQUEST = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
 def _valid_tool_use_response():
     tool_use = SimpleNamespace(
         type="tool_use",
-        input={
-            "vote": "BULLISH",
-            "probability": 0.612,
-            "comparison_class": {
-                "definition": "test comparison class",
-                "n_observations": 50,
-                "base_rate": 0.5,
-                "why_this_class": "test",
-            },
-            "expected_move_pct": 3.2,
-            "thesis": "test thesis",
-            "what_would_change_my_mind": "test",
-            "data_quality": "GOOD",
-        },
+        input=seat_answer_payload(),
     )
     usage = SimpleNamespace(input_tokens=100, output_tokens=50)
     return SimpleNamespace(content=[tool_use], usage=usage)
@@ -93,14 +81,14 @@ async def test_retryable_error_succeeds_after_backoff(monkeypatch):
     client = LLMClient(settings)
     client._client = _FlakyThenOkAnthropic(fail_times=2)
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="technician",
         model="claude-sonnet-5",
         system_prompt="sys",
         user_prompt="usr",
         fixture_name="technician",
     )
-    assert verdict.vote == "BULLISH"
+    assert verdict.short.vote == "BULLISH"
     assert client._client.calls == 3
     assert len(client.call_log) == 3
     assert [c.success for c in client.call_log] == [False, False, True]
@@ -113,7 +101,7 @@ async def test_retryable_error_exhausts_to_no_read(monkeypatch):
     client = LLMClient(settings)
     client._client = _AlwaysRateLimitedAnthropic()
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="technician",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -121,8 +109,8 @@ async def test_retryable_error_exhausts_to_no_read(monkeypatch):
         fixture_name="technician",
         max_retries=2,
     )
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "llm_call_failed"
+    assert verdict.short.vote == "NO_READ"
+    assert verdict.short.abstain_reason == "llm_call_failed"
     # initial attempt + 2 retries = 3 attempts, all failed
     assert client._client.calls == 3
     assert len(client.call_log) == 3
@@ -135,7 +123,7 @@ async def test_non_retryable_error_fails_fast_with_no_retries():
     client = LLMClient(settings)
     client._client = _AuthFailsAnthropic()
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="technician",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -143,8 +131,8 @@ async def test_non_retryable_error_fails_fast_with_no_retries():
         fixture_name="technician",
         max_retries=2,
     )
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "llm_call_failed"
+    assert verdict.short.vote == "NO_READ"
+    assert verdict.short.abstain_reason == "llm_call_failed"
     # a 401 is never going to succeed on retry -- must fail on the first attempt
     assert client._client.calls == 1
     assert len(client.call_log) == 1

@@ -26,13 +26,30 @@ FORECASTING DISCIPLINE — applies to every judgment you make.
    usually in the price. Your edge must come from something the market has not
    yet processed, not from something you have just learned.
 
-6. ABSTAIN WHEN YOU SHOULD. Abstaining is scored neutrally. A confident wrong
-   answer is scored badly. If you read your data and it genuinely points neither
-   way at this horizon, vote NO_CONVICTION and say why -- that is a correct answer,
-   not a failure. Vote NO_READ only when your data is missing or unusable and you
-   could not form a read at all.
+6. LEAN, BUT HONESTLY. Your probability is scored against what actually
+   happens: a strong lean that turns out wrong is scored badly, a weak lean
+   (e.g. 0.532) costs little. So when the evidence tilts at all, lean, and let
+   the probability show how much. Vote NO_CONVICTION only when the evidence
+   genuinely cancels out, and NO_READ only when your data is missing or
+   unusable and you could not form a read at all.
 
 7. YOUR TRACK RECORD IS VISIBLE. Your past predictions are scored and your vote
    weight moves with your accuracy. Overconfidence is measured and punished over
    time; you cannot bluff your way to influence.
+"""
+
+# Appended to every Tier I seat's request (LLMClient.get_seat_answer).
+TERMS_BRIEF = """
+
+Give your read over THREE terms at once:
+- short: the next week
+- medium: the next 3 months
+- long: the next year and beyond (you may reason years out; the call is checked after one year)
+
+Your data can point different ways over different terms -- an acquisition can
+weigh on a stock now and help it later -- so judge each term on its own. Your
+data will matter more for some terms than others: still lean on all three, and
+keep the terms your data barely speaks to close to 0.5 rather than skipping
+them. For each term give a vote, a three-decimal probability that the vote is
+right, the expected size of the move, and a one-line rationale.
 """

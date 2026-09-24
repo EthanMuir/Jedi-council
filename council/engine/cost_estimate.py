@@ -12,15 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from council.config import Settings
-from council.engine.horizons import is_competent
 from council.engine.model_catalog import get_model
 from council.engine.routing import resolve_route
 
-# Rough per-call token counts, by call type.
-_TIER_I_TOKENS = {"input": 900, "output": 350}
+# Rough per-call token counts, by call type. A seat's answer covers all
+# three terms at once, so its output runs longer than a single call would.
+_TIER_I_TOKENS = {"input": 1300, "output": 550}
 _ADVOCATE_TOKENS = {"input": 700, "output": 300}
 _PROSECUTOR_TOKENS = {"input": 1200, "output": 350}
-_GRAND_MASTER_TOKENS = {"input": 2000, "output": 500}
+_GRAND_MASTER_TOKENS = {"input": 2600, "output": 650}
 
 
 @dataclass
@@ -36,7 +36,6 @@ class CostLineItem:
 @dataclass
 class CostEstimate:
     ticker: str
-    horizon: str
     is_fixture: bool = False
     line_items: list[CostLineItem] = field(default_factory=list)
 
@@ -67,7 +66,7 @@ def _cost_for(model: str, calls: int, tokens: dict, is_fixture: bool) -> float:
     )
 
 
-def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) -> CostEstimate:
+def estimate_deliberation_cost(ticker: str, settings: Settings) -> CostEstimate:
     # Imported here, not at module level, to avoid a load-time cycle:
     # orchestrator.py doesn't need cost_estimate.py, but pulling in its
     # heavier import graph (data providers, Crypt, ...) just for the seat
@@ -75,11 +74,10 @@ def estimate_deliberation_cost(ticker: str, horizon: str, settings: Settings) ->
     from council.engine.orchestrator import TIER_I_SEATS
 
     is_fixture = settings.resolved_no_llm
-    estimate = CostEstimate(ticker=ticker, horizon=horizon, is_fixture=is_fixture)
-    eligible = [s for s in TIER_I_SEATS if is_competent(s.id, horizon)]
+    estimate = CostEstimate(ticker=ticker, is_fixture=is_fixture)
     n_samples = settings.n_samples_per_seat
 
-    for seat in eligible:
+    for seat in TIER_I_SEATS:
         route = resolve_route(seat.id, settings, default_model=settings.seat_model)
         estimate.line_items.append(
             CostLineItem(

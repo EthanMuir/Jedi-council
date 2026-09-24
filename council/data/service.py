@@ -20,6 +20,7 @@ from council.data.cache import DiskCache
 from council.data.providers.base import MarketDataProvider
 from council.data.schemas import (
     AnalystEstimatesSnapshot,
+    AnalystRatingsSnapshot,
     CongressTrade,
     CongressTradeFeed,
     CrossMarketSnapshot,
@@ -52,6 +53,7 @@ _TTL_SECONDS = {
     "institutional": 21600,
     "macro": 21600,
     "estimates": 21600,
+    "ratings": 21600,
     "transcripts": 86400,
     "filings": 3600,
     "profile": 7 * 86400,  # a company's sector/industry peers rarely change
@@ -522,6 +524,31 @@ class DataService:
         )
         return AnalystEstimatesSnapshot(
             ticker=ticker, as_of=as_of, staleness_seconds=0.0, source=self._providers[0].name, **raw
+        )
+
+    async def get_analyst_ratings(
+        self, ticker: str, as_of: datetime, lookback_days: int = 120
+    ) -> AnalystRatingsSnapshot:
+        cache_key = f"ratings:{ticker}"
+        raw = await self._fetch_with_fallback(
+            "fetch_analyst_ratings", cache_key, _TTL_SECONDS["ratings"], ticker
+        )
+        window_start = (as_of.replace(tzinfo=None) if as_of.tzinfo else as_of) - timedelta(
+            days=lookback_days
+        )
+        changes = [
+            c
+            for c in filter_point_in_time(raw.get("recent_changes", []), as_of, "changed_at")
+            if _parse_ts(c["changed_at"]).replace(tzinfo=None) >= window_start
+        ]
+        latest = _latest_timestamp(changes, "changed_at")
+        staleness = (as_of - latest).total_seconds() if latest else None
+        return AnalystRatingsSnapshot(
+            ticker=ticker,
+            as_of=as_of,
+            staleness_seconds=staleness,
+            source=self._providers[0].name,
+            **{**raw, "recent_changes": changes},
         )
 
     async def get_earnings_transcripts(

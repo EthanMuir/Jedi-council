@@ -7,9 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 from council.data.service import DataService
-from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, MultiTermVerdict, SeatContext
 from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
@@ -33,10 +32,9 @@ class SenateWatcherSeat:
     id = "senate_watcher"
     title = "Reader of the Republic"
     allowed_data = frozenset({"congress"})
-    horizons = competent_horizons("senate_watcher")
 
     async def gather(
-        self, data_service: DataService, ticker: str, as_of: Any, horizon: str
+        self, data_service: DataService, ticker: str, as_of: Any
     ) -> SeatContext:
         feed = await data_service.get_congress_trades(ticker, as_of=as_of)
         return SeatContext(
@@ -45,7 +43,6 @@ class SenateWatcherSeat:
             {"congress": feed},
             ticker=ticker,
             as_of=as_of,
-            horizon=horizon,
         )
 
     async def deliberate(
@@ -56,14 +53,11 @@ class SenateWatcherSeat:
         sample_index: int = 0,
         memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
-    ) -> SeatVerdict:
+    ) -> MultiTermVerdict:
         feed = ctx["congress"]
 
         if not feed.trades and not feed.pending_legislation:
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
+            return MultiTermVerdict.no_read(
                 thesis="No congressional disclosures or relevant legislative activity in view.",
                 what_would_change_my_mind="A new disclosure filing or docket entry.",
                 data_quality="POOR",
@@ -82,14 +76,14 @@ class SenateWatcherSeat:
         legislation = "\n".join(f"- {item}" for item in feed.pending_legislation) or "- none in view"
 
         user_prompt = (
-            f"Congressional disclosures, horizon {ctx.horizon}. Data as of "
+            f"Congressional disclosures. Data as of "
             f"{feed.as_of.isoformat()}.\n\nTrades:\n"
             + ("\n".join(lines) if lines else "- none in lookback window")
             + f"\n\nPending legislation/regulatory dockets:\n{legislation}\n\n"
-            "Weigh disclosure lag and committee relevance, then give your verdict."
+            "Weigh disclosure lag and committee relevance, then give your lean for each term."
         )
 
-        return await llm_client.get_verdict(
+        return await llm_client.get_seat_answer(
             seat_id=self.id,
             model=llm_client.settings.seat_model,
             system_prompt=_SYSTEM_PROMPT,

@@ -33,8 +33,8 @@ class _ExplodingLLMClient:
 
     settings = _Settings()
 
-    async def get_verdict(self, **kwargs):
-        raise AssertionError("get_verdict should not be called when underlying_price <= 0")
+    async def get_seat_answer(self, **kwargs):
+        raise AssertionError("the LLM should not be called when underlying_price <= 0")
 
 
 def _make_contract(strike: float, iv: float | None) -> dict:
@@ -69,7 +69,6 @@ def _make_ctx(underlying_price: float, contracts: list[dict]) -> SeatContext:
         data={"option_chain": chain},
         ticker="NFLX",
         as_of=datetime(2026, 9, 21, 16, 0, 0),
-        horizon="1w",
     )
 
 
@@ -80,8 +79,8 @@ async def test_zero_underlying_price_abstains_without_calling_the_llm():
 
     verdict = await seat.deliberate(ctx, _ExplodingLLMClient())
 
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "no_underlying_price"
+    assert not verdict.read
+    assert verdict.short.abstain_reason == "no_underlying_price"
 
 
 @pytest.mark.asyncio
@@ -93,8 +92,8 @@ async def test_negative_underlying_price_also_abstains():
 
     verdict = await seat.deliberate(ctx, _ExplodingLLMClient())
 
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "no_underlying_price"
+    assert not verdict.read
+    assert verdict.short.abstain_reason == "no_underlying_price"
 
 
 @pytest.mark.asyncio
@@ -113,19 +112,11 @@ async def test_positive_underlying_price_proceeds_to_the_llm(monkeypatch):
 
         settings = _Settings()
 
-        async def get_verdict(self, **kwargs):
+        async def get_seat_answer(self, **kwargs):
             called["user_prompt"] = kwargs["user_prompt"]
-            from council.seats.base import SeatVerdict
+            from council.seats.base import MultiTermVerdict
 
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
-                thesis="fine",
-                what_would_change_my_mind="n/a",
-                data_quality="GOOD",
-                abstain_reason="test",
-            )
+            return MultiTermVerdict.no_read(thesis="fine", abstain_reason="test")
 
     await seat.deliberate(ctx, _RecordingLLMClient())
     assert "ATM strike: 100.0" in called["user_prompt"]

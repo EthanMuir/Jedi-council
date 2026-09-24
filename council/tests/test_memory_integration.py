@@ -25,25 +25,26 @@ def settings(tmp_path):
 
 @pytest.mark.asyncio
 async def test_first_deliberation_has_no_memory_applied(settings):
-    result = await run_deliberation("NVDA", "1w", settings, as_of=datetime(2026, 8, 1, 16, 0, 0))
+    result = await run_deliberation("NVDA", settings, as_of=datetime(2026, 8, 1, 16, 0, 0))
     for sr in result.seat_results:
-        assert sr.verdict.memory_applied == []
+        for term in ("short", "medium", "long"):
+            assert sr.verdicts.term(term).memory_applied == []
 
 
 @pytest.mark.asyncio
 async def test_second_deliberation_applies_a_lesson_from_the_first(settings):
     as_of1 = datetime(2026, 8, 1, 16, 0, 0)
-    await run_deliberation("NVDA", "1w", settings, as_of=as_of1)
+    await run_deliberation("NVDA", settings, as_of=as_of1)
 
     swept = await sweep_unresolved(settings, as_of=datetime(2026, 8, 20))
-    assert len(swept) == 1
+    assert [s.horizon for s in swept] == ["short"]  # only the week-long term has resolved
     assert swept[0].lessons_written > 0
 
     as_of2 = datetime(2026, 8, 22, 16, 0, 0)
-    result2 = await run_deliberation("NVDA", "1w", settings, as_of=as_of2)
+    result2 = await run_deliberation("NVDA", settings, as_of=as_of2)
 
     applied_anywhere = [
-        m for sr in result2.seat_results for m in sr.verdict.memory_applied
+        m for sr in result2.seat_results for m in sr.verdicts.short.memory_applied
     ]
     assert len(applied_anywhere) > 0
 
@@ -56,7 +57,7 @@ async def test_memory_never_leaks_across_tickers_without_generalisation(settings
     from council.memory.store import MemoryStore
 
     as_of1 = datetime(2026, 8, 1, 16, 0, 0)
-    await run_deliberation("NVDA", "1w", settings, as_of=as_of1)
+    await run_deliberation("NVDA", settings, as_of=as_of1)
     await sweep_unresolved(settings, as_of=datetime(2026, 8, 20))
 
     conn = connect(settings.council_db_path)

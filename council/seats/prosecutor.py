@@ -2,8 +2,9 @@
 emerging consensus. Attacks whichever direction the council is converging
 on. Hunts for: correlated evidence counted twice, seats citing the same
 underlying source, price targets outside the plausible distribution, and
-theses that would have been generated regardless of the data. Has veto
-power -- can force the final verdict to NO_CONVICTION."""
+theses that would have been generated regardless of the data. Its veto no
+longer overrides the council: it is shown as a warning next to the terms it
+objects to, so a reader sees the objection without losing the lean."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -16,6 +17,7 @@ from council.engine.schemas import (
     Tier1Summary,
     format_debate_transcript,
 )
+from council.engine.horizons import TERMS
 from council.seats.base import SeatVerdict, is_abstention
 
 # Addendum A7: |implied - stated| beyond this is INCOHERENT_CONFIDENCE.
@@ -25,9 +27,11 @@ INCOHERENCE_WEIGHT_DISCOUNT = 0.30
 
 _SYSTEM_PROMPT = """
 You are the Prosecutor, "The Devil's Advocate" on a market-prediction
-council. You see everything: every Tier I seat's summarised verdict, the
-Bull/Bear debate so far, and the direction the council is currently
-converging toward. Your job is to attack that direction, whichever it is.
+council. The council leans a way on three terms at once -- short (the next
+week), medium (the next 3 months) and long (the next year and beyond). You
+see everything: every Tier I seat's leans, the Bull/Bear debate so far, and
+the direction the council is currently leaning on each term. Your job is to
+attack those leans, whichever way they point.
 
 You are handed three facts that were computed deterministically, not by
 your own judgment -- treat them as established:
@@ -47,11 +51,13 @@ a generic bullish or bearish narrative dressed up with whichever evidence
 was available, not a claim that is actually contingent on what the data
 showed.
 
-You have veto power. Set veto=true only when the case for the converging
-direction is genuinely undermined -- heavy reliance on correlated evidence,
-multiple implausible targets propping up the consensus, or a thesis pattern
-that would not have changed regardless of the evidence. A well-supported
-consensus with one minor flag does not warrant a veto.
+You have veto power: a veto is shown to the reader as a warning beside the
+terms you name in veto_terms (leave it empty to object to all three). Set
+veto=true only when the case for a lean is genuinely undermined -- heavy
+reliance on correlated evidence, multiple implausible targets propping up
+the consensus, or a thesis pattern that would not have changed regardless
+of the evidence. A well-supported lean with one minor flag does not warrant
+a veto. target_direction is the direction you attack hardest.
 """
 
 
@@ -60,7 +66,7 @@ def detect_correlated_evidence(summaries: list[Tier1Summary]) -> list[str]:
     directional Tier I seats is correlated evidence by definition."""
     source_to_seats: dict[str, set[str]] = defaultdict(set)
     for s in summaries:
-        if is_abstention(s.vote):
+        if not s.directional:
             continue
         for source in s.evidence_sources:
             source_to_seats[source].add(s.seat_id)
@@ -118,10 +124,17 @@ def detect_incoherent_decompositions(verdicts: dict[str, SeatVerdict]) -> dict[s
     return results
 
 
+def _format_lean(s: Tier1Summary, term: str) -> str:
+    lean = s.term(term)
+    if is_abstention(lean.vote):
+        return f"{term} {lean.vote}"
+    return f"{term} {lean.vote} p={lean.probability} disp={lean.dispersion}"
+
+
 def _format_tier1(summaries: list[Tier1Summary]) -> str:
     return "\n".join(
-        f"- [{s.seat_id}] {s.vote} (p={s.probability}, data_quality={s.data_quality}, "
-        f"dispersion={s.dispersion})"
+        f"- [{s.seat_id}] data_quality={s.data_quality}: "
+        + ", ".join(_format_lean(s, t) for t in TERMS)
         for s in summaries
     )
 
@@ -134,30 +147,39 @@ class ProsecutorSeat:
         self,
         tier1_summaries: list[Tier1Summary],
         debate_so_far: list[DebateArgument],
-        plausibility_flags: dict[str, str],
+        plausibility_flags: dict[str, dict[str, str]],
         correlated_evidence: list[str],
         incoherent_decompositions: dict[str, CoherenceCheckResult],
-        converging_direction: str,
+        converging: dict[str, str],
         round_n: int,
         llm_client: LLMClient,
         model: str,
     ) -> ProsecutorVerdict | None:
-        implausible = [sid for sid, flag in plausibility_flags.items() if flag == "IMPLAUSIBLE"]
+        """`plausibility_flags` and `converging` are keyed by term;
+        `incoherent_decompositions` covers the medium term, the only one a
+        seat decomposes."""
+        implausible = [
+            f"{sid} ({term})"
+            for term, flags in plausibility_flags.items()
+            for sid, flag in flags.items()
+            if flag == "IMPLAUSIBLE"
+        ]
         incoherent_desc = [
             f"{sid}: stated {r.stated_probability}, decomposition implies {r.implied_probability}"
             for sid, r in incoherent_decompositions.items()
         ]
+        leaning = "; ".join(f"{term}: {converging[term]}" for term in TERMS if term in converging)
         user_prompt = (
-            f"Round {round_n}. Council is converging toward: {converging_direction}.\n\n"
-            f"Tier I verdicts:\n{_format_tier1(tier1_summaries)}\n\n"
+            f"Round {round_n}. The council currently leans -- {leaning}.\n\n"
+            f"Tier I leans:\n{_format_tier1(tier1_summaries)}\n\n"
             f"Debate so far:\n{format_debate_transcript(debate_so_far)}\n\n"
             f"Correlated evidence (computed, not judgment):\n"
             + ("\n".join(f"- {c}" for c in correlated_evidence) or "- none found")
             + f"\n\nSeats with IMPLAUSIBLE price targets: {implausible or 'none'}\n\n"
-            f"Seats with INCOHERENT decomposition (their own sub-probabilities don't "
-            f"combine to their headline number, computed not judgment): "
+            f"Seats with INCOHERENT medium-term decomposition (their own sub-probabilities "
+            f"don't combine to their headline number, computed not judgment): "
             f"{incoherent_desc or 'none'}\n\n"
-            "Attack the converging direction and give your verdict."
+            "Attack the council's leans and give your verdict."
         )
         try:
             return await llm_client.get_structured(

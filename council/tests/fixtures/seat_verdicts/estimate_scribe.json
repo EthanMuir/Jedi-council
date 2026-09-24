@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.634,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A reversal to negative revision momentum, or a surprise miss breaking the beat pattern.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.531,
+    "expected_move_pct": 3.0,
+    "rationale": "Estimates were revised up recently; a small near-term tailwind."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.584,
+    "expected_move_pct": 10.0,
+    "rationale": "Upward revision momentum and a steady beat pattern point to another beat."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.571,
+    "expected_move_pct": 22.0,
+    "rationale": "Consensus keeps rising for next year, supporting the price."
+  },
   "comparison_class": {
     "definition": "Names with positive 30-day EPS revision momentum and a four-quarter history of consistent, non-trivial positive earnings surprises",
     "n_observations": 23,
@@ -8,17 +28,17 @@
     "why_this_class": "closest analogue rewarding revision momentum and a repeated beat pattern over the raw consensus level"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 3.5,
-  "thesis": "EPS estimates were revised up 3.4% over the trailing 30 days -- clear positive momentum -- and the last four quarters all beat by a meaningful margin (2.1% to 7.8%), not a single lucky quarter. Guidance last quarter also came in above the then-consensus. Price-target dispersion is moderate, not extreme, suggesting reasonable analyst agreement rather than a confused consensus.",
   "key_evidence": [
-    {"claim": "30-day EPS revision +3.4%", "source": "estimates_derived", "as_of": "2026-09-18"},
-    {"claim": "Four consecutive positive surprises, 2.1% to 7.8%", "source": "estimates_derived", "as_of": "2026-09-18"}
+    {
+      "claim": "30-day EPS revision +3.4%",
+      "source": "estimates_derived",
+      "as_of": "2026-09-18"
+    },
+    {
+      "claim": "Four consecutive positive surprises, 2.1% to 7.8%",
+      "source": "estimates_derived",
+      "as_of": "2026-09-18"
+    }
   ],
-  "what_would_change_my_mind": "A reversal to negative revision momentum, or a surprise miss breaking the beat pattern.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "EPS estimates were revised up 3.4% over the trailing 30 days -- clear positive momentum -- and the last four quarters all beat by a meaningful margin (2.1% to 7.8%), not a single lucky quarter. Guidance last quarter also came in above the then-consensus. Price-target dispersion is moderate, not extreme, suggesting reasonable analyst agreement rather than a confused consensus."
 }

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+
+from council.engine.horizons import TERM_WINDOWS, TERMS
 
 
 class DataIsolationError(Exception):
@@ -28,7 +30,6 @@ class SeatContext:
         *,
         ticker: str,
         as_of: Any,
-        horizon: str,
     ):
         unknown = set(data) - allowed
         if unknown:
@@ -41,7 +42,6 @@ class SeatContext:
         self._data = data
         self.ticker = ticker
         self.as_of = as_of
-        self.horizon = horizon
 
     def __getitem__(self, key: str) -> Any:
         if key not in self._allowed:
@@ -187,6 +187,9 @@ class SeatVerdict(BaseModel):
         "call is wasted. Be concise: state the read and the strongest reason "
         "for it, not every supporting detail."
     )
+    # Set when this verdict is one term of a seat's three-term answer: why
+    # the seat leans this way over this term specifically.
+    term_rationale: str | None = None
 
     @field_validator("probability")
     @classmethod
@@ -224,13 +227,166 @@ class SeatVerdict(BaseModel):
         return self
 
 
+_TERM_RATIONALE_WORDS = 40
+
+
+class TermCall(BaseModel):
+    """One term of a seat's answer."""
+
+    vote: Literal["BULLISH", "BEARISH", "NO_CONVICTION"] = Field(
+        description="Lean BULLISH or BEARISH whenever the evidence tilts at all, even "
+        "slightly. NO_CONVICTION only when the evidence for this term genuinely cancels out."
+    )
+    probability: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="How likely your vote is right over this term, to exactly three "
+        "decimals. A weak lean sits near 0.5 (e.g. 0.532), a strong one well above "
+        "(e.g. 0.741). Must not be a multiple of 0.05 (0.550, 0.600 ... are rejected). "
+        "Use 0.5 for NO_CONVICTION.",
+    )
+    expected_move_pct: float = Field(
+        description="Expected size of the price move over this term, as a percentage "
+        "(3.5 means +/-3.5%). Use 0.0 for NO_CONVICTION."
+    )
+    rationale: str = Field(
+        description=f"Why you lean this way over this term specifically. "
+        f"{_TERM_RATIONALE_WORDS} words or fewer."
+    )
+
+
+class SeatAnswer(BaseModel):
+    """What a Tier I seat's model fills in: one read of its data, with a
+    lean for each of the three terms. Converted into three ordinary
+    SeatVerdicts (to_multi_term) so voting, scoring and the Crypt keep
+    working per term. Short, always-required fields come first so a
+    truncated answer loses free text, not a required field (see the note on
+    SeatVerdict)."""
+
+    status: Literal["READ", "NO_READ"] = Field(
+        description="READ if you could analyse your data. NO_READ only if your data is "
+        "missing or unusable -- then leave the three terms out."
+    )
+    data_quality: Literal["GOOD", "PARTIAL", "POOR"]
+    abstain_reason: str | None = Field(
+        default=None,
+        description="REQUIRED for NO_READ: what's missing or unusable. Leave null for READ.",
+    )
+    what_would_change_my_mind: str = Field(description="One or two sentences.")
+    short: TermCall | None = Field(default=None, description=f"Short term: {TERM_WINDOWS['short']}.")
+    medium: TermCall | None = Field(default=None, description=f"Medium term: {TERM_WINDOWS['medium']}.")
+    long: TermCall | None = Field(
+        default=None,
+        description=f"Long term: {TERM_WINDOWS['long']}. You may reason years out; the call "
+        "is checked after one year.",
+    )
+    comparison_class: ComparisonClass | None = Field(
+        default=None,
+        description="REQUIRED whenever any term is BULLISH or BEARISH: the reference class "
+        "of similar past situations your leans are anchored to.",
+    )
+    decomposition: list[DecompositionItem] = Field(
+        default_factory=list,
+        description="Optional: sub-claims that combine into your MEDIUM-term probability.",
+    )
+    key_evidence: list[EvidenceItem] = Field(default_factory=list)
+    thesis: str = Field(
+        description="Your overall read across all three terms, 120 words or fewer."
+    )
+
+    @model_validator(mode="after")
+    def _converts_cleanly(self) -> "SeatAnswer":
+        if self.status == "READ" and any(getattr(self, t) is None for t in TERMS):
+            raise ValueError("a READ answer must give a lean for all three terms: short, medium, long")
+        if self.status == "NO_READ" and not self.abstain_reason:
+            raise ValueError("NO_READ requires abstain_reason")
+        try:
+            self.to_multi_term()
+        except ValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        return self
+
+    def to_multi_term(self) -> "MultiTermVerdict":
+        if self.status == "NO_READ":
+            return MultiTermVerdict.no_read(
+                thesis=self.thesis,
+                abstain_reason=self.abstain_reason or "no_read",
+                data_quality=self.data_quality,
+                what_would_change_my_mind=self.what_would_change_my_mind,
+                key_evidence=self.key_evidence,
+            )
+        verdicts = {}
+        for term in TERMS:
+            call: TermCall = getattr(self, term)
+            directional = call.vote != "NO_CONVICTION"
+            verdicts[term] = SeatVerdict(
+                vote=call.vote,
+                probability=call.probability if directional else 0.5,
+                expected_move_pct=call.expected_move_pct if directional else 0.0,
+                comparison_class=self.comparison_class if directional else None,
+                decomposition=self.decomposition if term == "medium" and directional else [],
+                data_quality=self.data_quality,
+                what_would_change_my_mind=self.what_would_change_my_mind,
+                abstain_reason=None if directional else call.rationale,
+                key_evidence=self.key_evidence,
+                thesis=self.thesis,
+                term_rationale=call.rationale,
+            )
+        return MultiTermVerdict(**verdicts)
+
+
+class MultiTermVerdict(BaseModel):
+    """A Tier I seat's answer, as one ordinary SeatVerdict per term."""
+
+    short: SeatVerdict
+    medium: SeatVerdict
+    long: SeatVerdict
+
+    def term(self, term: str) -> SeatVerdict:
+        return getattr(self, term)
+
+    @property
+    def read(self) -> bool:
+        return self.short.vote != "NO_READ"
+
+    @classmethod
+    def no_read(
+        cls,
+        *,
+        thesis: str,
+        abstain_reason: str,
+        data_quality: Literal["GOOD", "PARTIAL", "POOR"] = "POOR",
+        what_would_change_my_mind: str = "N/A",
+        key_evidence: list[EvidenceItem] | None = None,
+    ) -> "MultiTermVerdict":
+        """The seat couldn't form a read (missing data, a failed call) --
+        the same NO_READ for every term."""
+        verdict = SeatVerdict(
+            vote="NO_READ",
+            probability=0.5,
+            expected_move_pct=0.0,
+            thesis=thesis[:500],
+            what_would_change_my_mind=what_would_change_my_mind,
+            data_quality=data_quality,
+            abstain_reason=abstain_reason,
+            key_evidence=key_evidence or [],
+        )
+        return cls(short=verdict, medium=verdict, long=verdict)
+
+    def with_memories(self, memories: list[MemoryLesson]) -> "MultiTermVerdict":
+        if not memories or not self.read:
+            return self
+        return MultiTermVerdict(
+            **{t: self.term(t).model_copy(update={"memory_applied": memories}) for t in TERMS}
+        )
+
+
 class Seat(Protocol):
     id: str
     title: str
     allowed_data: frozenset[str]
-    horizons: frozenset[str]
 
-    async def gather(self, data_service: Any, ticker: str, as_of: Any, horizon: str) -> SeatContext: ...
+    async def gather(self, data_service: Any, ticker: str, as_of: Any) -> SeatContext: ...
 
     async def deliberate(
         self,
@@ -240,4 +396,4 @@ class Seat(Protocol):
         sample_index: int = 0,
         memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
-    ) -> SeatVerdict: ...
+    ) -> MultiTermVerdict: ...

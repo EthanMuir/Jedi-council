@@ -1,12 +1,9 @@
 {
-  "vote": "BULLISH",
-  "confidence": 0.571,
-  "entry": 162.0,
-  "exit": 172.0,
-  "invalidation": 155.0,
-  "stop": 155.0,
-  "expected_move_pct": 4.5,
-  "dissent_summary": "9 of 12 seats voted bullish (technician, fundamentalist, catalyst_seer, flow_cartographer, oracle_options, cross_market, estimate_scribe, transcript_linguist, structure_archivist); none voted bearish; 3 abstained (insider_reader, senate_watcher, macro_sage) citing genuinely thin or stale data rather than a contrary read. This is not manufactured unanimity: the Prosecutor found no correlated evidence behind the agreement, and several bullish seats explicitly hedged their own confidence (technician: 'not a fresh breakout'; oracle_options: 'directional lean is weak'; fundamentalist: 'weak at short horizons by design').",
+  "headline": "Leaning bullish across all three terms, strongest over the next year; the next week is a modest lean, not a call.",
+  "short": "The chart's families lean up and options show no stress, but news and flows say little about a single week. Treat this as a mild tilt, close to a coin flip.",
+  "medium": "Estimate revisions are rising and analysts keep lifting targets, which usually carries into the next quarter. The most broadly supported of the three leans.",
+  "long": "Fundamentals, analyst targets and the macro backdrop all lean up. Valuation is stretched against the sector, which caps how far this lean should be trusted.",
+  "dissent_summary": "Dissent is thin and term-specific: the Insider Reader leans slightly bearish on the medium term (routine insider selling) and the Structure Archivist leans slightly bearish on the long term (dilution risk). Four seats see the next week as dead even, which is why the short-term lean is no stronger than the others. Each leaning seat cites a different source, so the agreement is not an echo of one headline.",
   "correlated_evidence_warning": null,
-  "reasoning": "The weighted vote (horizon-competence and data-quality adjusted) confirms the blind round's bullish lean without a single implausible target against the Reality Anchor. The Bear's strongest points -- staleness, hedged confidence, a lagged 13F -- were real but did not overturn the case; they capped confidence at moderate rather than converting it to a veto. The Prosecutor flagged one data-independent framing in round 1 that was substantially addressed by round 2 and did not veto. Cost Auditor's edge clears the assumed spread. Net: bullish, moderate conviction, not a high-confidence call."
+  "reasoning": "Every term leans bullish, but none strongly: the positions sit a few points above even because several seats lean only slightly and the dead-even seats pull toward the middle. The seats built for longer windows -- fundamentals, estimates, analyst targets -- are the most positive. The Bear's points on valuation and stale 13F data are real and keep the long-term lean moderate. The Prosecutor found no correlated evidence and did not object to any term. The short-term lean rests mostly on the chart and options, near-term evidence that rarely holds much edge over a single week."
 }

@@ -1,0 +1,44 @@
+{
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A cluster of downgrades, or the average target falling below the current price.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.526,
+    "expected_move_pct": 2.5,
+    "rationale": "One upgrade this week and no downgrades."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.577,
+    "expected_move_pct": 10.0,
+    "rationale": "Most analysts rate it a buy, and the average target is well above today's price."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.612,
+    "expected_move_pct": 25.0,
+    "rationale": "Twelve-month targets imply sizeable upside with broad agreement."
+  },
+  "comparison_class": {
+    "definition": "Large caps where most analysts rate buy and the mean target is 20-30% above price",
+    "n_observations": 55,
+    "base_rate": 0.57,
+    "why_this_class": "Consensus-bullish coverage with similar implied upside; such stocks rise over a year a bit more often than not."
+  },
+  "decomposition": [],
+  "key_evidence": [
+    {
+      "claim": "Average 12-month target about 25% above the current price",
+      "source": "analyst_price_targets",
+      "as_of": "2026-09-18"
+    },
+    {
+      "claim": "Most covering analysts rate it buy or strong buy",
+      "source": "recommendations_summary",
+      "as_of": "2026-09-18"
+    }
+  ],
+  "thesis": "Analysts are broadly positive: most rate the stock a buy, the average 12-month target sits about 25% above today's price, and the only recent rating change was an upgrade. Targets are widely spread, so the lean is moderate rather than strong, and strongest for the long term the targets are written for."
+}

@@ -192,6 +192,51 @@ class AnalystEstimatesSnapshot(BaseModel):
     source: str
 
 
+class RatingChange(BaseModel):
+    """One analyst firm changing (or restating) its rating or price target."""
+
+    changed_at: datetime
+    firm: str
+    action: str  # "up", "down", "init", "main" (maintained), "reit" (reiterated)
+    from_grade: str
+    to_grade: str
+    price_target: float | None = None
+    prior_price_target: float | None = None
+
+
+class AnalystRatingsSnapshot(BaseModel):
+    """Wall Street's published price targets and buy/hold/sell ratings.
+    Targets and the current price are the latest snapshot (Yahoo keeps no
+    history of them); rating changes are point-in-time filtered."""
+
+    ticker: str
+    current_price: float | None
+    target_mean: float | None
+    target_median: float | None
+    target_high: float | None
+    target_low: float | None
+    analyst_count: int | None
+    strong_buy: int
+    buy: int
+    hold: int
+    sell: int
+    strong_sell: int
+    # The same split three months earlier, so the seat can see drift.
+    prior_strong_buy: int | None = None
+    prior_buy: int | None = None
+    prior_hold: int | None = None
+    prior_sell: int | None = None
+    prior_strong_sell: int | None = None
+    recent_changes: list[RatingChange]
+    as_of: datetime
+    staleness_seconds: float | None
+    source: str
+
+    @property
+    def rated(self) -> int:
+        return self.strong_buy + self.buy + self.hold + self.sell + self.strong_sell
+
+
 class EarningsTranscriptRecord(BaseModel):
     call_date: date
     fiscal_period: str

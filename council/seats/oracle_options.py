@@ -7,9 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 from council.data.service import DataService
-from council.engine.horizons import competent_horizons
 from council.engine.llm_client import LLMClient
-from council.seats.base import MemoryLesson, SeatContext, SeatVerdict
+from council.seats.base import MemoryLesson, MultiTermVerdict, SeatContext
 from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
@@ -32,10 +31,9 @@ class OracleOptionsSeat:
     id = "oracle_options"
     title = "Reader of Probabilities"
     allowed_data = frozenset({"option_chain"})
-    horizons = competent_horizons("oracle_options")
 
     async def gather(
-        self, data_service: DataService, ticker: str, as_of: Any, horizon: str
+        self, data_service: DataService, ticker: str, as_of: Any
     ) -> SeatContext:
         chain = await data_service.get_option_chain(ticker, as_of=as_of)
         return SeatContext(
@@ -44,7 +42,6 @@ class OracleOptionsSeat:
             {"option_chain": chain},
             ticker=ticker,
             as_of=as_of,
-            horizon=horizon,
         )
 
     async def deliberate(
@@ -55,14 +52,11 @@ class OracleOptionsSeat:
         sample_index: int = 0,
         memories: list[MemoryLesson] | None = None,
         peer_summaries: list[dict] | None = None,
-    ) -> SeatVerdict:
+    ) -> MultiTermVerdict:
         chain = ctx["option_chain"]
 
         if not chain.contracts:
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
+            return MultiTermVerdict.no_read(
                 thesis="No option chain data available.",
                 what_would_change_my_mind="A populated option chain for this ticker.",
                 data_quality="POOR",
@@ -78,10 +72,7 @@ class OracleOptionsSeat:
             # spending a real LLM call on data already known to be
             # unusable, instead of letting the model discover the same
             # thing after the fact.
-            return SeatVerdict(
-                vote="NO_READ",
-                probability=0.5,
-                expected_move_pct=0.0,
+            return MultiTermVerdict.no_read(
                 thesis="Underlying price unavailable, so the ATM contract can't be identified.",
                 what_would_change_my_mind="A resolvable underlying price for this ticker.",
                 data_quality="POOR",
@@ -98,7 +89,7 @@ class OracleOptionsSeat:
         avg_iv = sum(near_month_ivs) / len(near_month_ivs) if near_month_ivs else None
 
         user_prompt = (
-            f"Option chain, horizon {ctx.horizon}. Data as of "
+            f"Option chain. Data as of "
             f"{chain.as_of.isoformat()}, staleness {chain.staleness_seconds:.0f}s.\n\n"
             f"Underlying price: {chain.underlying_price}\n"
             f"Put/call volume ratio: {chain.put_call_ratio}\n"
@@ -107,10 +98,10 @@ class OracleOptionsSeat:
             f"Average near-month implied volatility across strikes: {avg_iv}\n"
             f"Contracts in chain: {len(chain.contracts)}\n\n"
             "Derive the implied expected move from the ATM straddle / IV, note any "
-            "skew, and give your verdict."
+            "skew, and give your lean for each term."
         )
 
-        return await llm_client.get_verdict(
+        return await llm_client.get_seat_answer(
             seat_id=self.id,
             model=llm_client.settings.seat_model,
             system_prompt=_SYSTEM_PROMPT,

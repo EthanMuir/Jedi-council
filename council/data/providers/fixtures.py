@@ -105,6 +105,9 @@ class FixtureProvider:
     async def fetch_analyst_estimates(self, ticker: str) -> dict[str, Any]:
         return self._load(ticker, "estimates")
 
+    async def fetch_analyst_ratings(self, ticker: str) -> dict[str, Any]:
+        return self._load(ticker, "analyst_ratings")
+
     async def fetch_earnings_transcripts(self, ticker: str, limit: int = 4) -> list[dict[str, Any]]:
         calls = self._load(ticker, "transcripts")
         return calls[:limit]

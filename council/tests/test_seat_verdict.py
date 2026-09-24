@@ -121,7 +121,6 @@ def test_seat_context_blocks_ungranted_field_at_construction():
             data={"ohlcv": [], "news": ["leaked headline"]},
             ticker="NVDA",
             as_of="2026-09-18",
-            horizon="1w",
         )
 
 
@@ -132,7 +131,6 @@ def test_seat_context_blocks_read_of_forbidden_field():
         data={"ohlcv": []},
         ticker="NVDA",
         as_of="2026-09-18",
-        horizon="1w",
     )
     with pytest.raises(DataIsolationError):
         ctx["news"]
@@ -147,6 +145,5 @@ def test_seat_context_allows_granted_field():
         data={"ohlcv": [1, 2, 3]},
         ticker="NVDA",
         as_of="2026-09-18",
-        horizon="1w",
     )
     assert ctx["ohlcv"] == [1, 2, 3]

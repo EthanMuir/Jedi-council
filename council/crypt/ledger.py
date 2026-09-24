@@ -59,6 +59,8 @@ def write_prediction(
     total_output_tokens: int | None = None,
     run_mode: str | None = None,
     run_shape: str | None = None,
+    run_id: str | None = None,
+    synthesis_json: str | None = None,
     created_at: datetime | None = None,
 ) -> str:
     created_at = created_at or datetime.utcnow()
@@ -109,6 +111,10 @@ def write_prediction(
         fields["run_mode"] = run_mode
     if run_shape is not None:
         fields["run_shape"] = run_shape
+    if run_id is not None:
+        fields["run_id"] = run_id
+    if synthesis_json is not None:
+        fields["synthesis_json"] = synthesis_json
     row_hash = compute_row_hash(fields, prev_hash)
 
     columns = [k for k in fields] + ["prev_hash", "row_hash"]

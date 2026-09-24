@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.538,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A sharp steepening of the put skew or a spike in front-month IV disproportionate to the back month would shift this seat toward a defensive lean.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.538,
+    "expected_move_pct": 5.2,
+    "rationale": "Call skew and a sub-1 put/call ratio lean positive into next week."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.522,
+    "expected_move_pct": 12.0,
+    "rationale": "Longer-dated skew is flatter -- only a mild positive tilt."
+  },
+  "long": {
+    "vote": "NO_CONVICTION",
+    "probability": 0.5,
+    "expected_move_pct": 0.0,
+    "rationale": "Option markets say little about moves a year out."
+  },
   "comparison_class": {
     "definition": "Single-name option chains with a put/call volume ratio between 0.75 and 0.95 and front-month IV above 35%",
     "n_observations": 58,
@@ -8,17 +28,17 @@
     "why_this_class": "nearest available analogue from the current skew/ratio regime, direction lean treated cautiously per this seat's mandate"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 7.2,
-  "thesis": "The put/call volume ratio of 0.87 is modestly call-skewed but not extreme. Front-month implied volatility near 36-38% implies roughly a 7% one-week expected move via the ATM straddle -- this expected-move figure is this seat's primary contribution and should anchor every other seat's price target. Term structure between the two listed expiries is roughly flat, suggesting no acute near-dated event is being priced beyond the already-known earnings date. Directional lean is weak and should be weighted lightly relative to the expected-move output.",
   "key_evidence": [
-    {"claim": "Put/call volume ratio 0.87", "source": "option_chain_derived", "as_of": "2026-09-18"},
-    {"claim": "ATM implied volatility ~36-38% across listed strikes", "source": "option_chain_derived", "as_of": "2026-09-18"}
+    {
+      "claim": "Put/call volume ratio 0.87",
+      "source": "option_chain_derived",
+      "as_of": "2026-09-18"
+    },
+    {
+      "claim": "ATM implied volatility ~36-38% across listed strikes",
+      "source": "option_chain_derived",
+      "as_of": "2026-09-18"
+    }
   ],
-  "what_would_change_my_mind": "A sharp steepening of the put skew or a spike in front-month IV disproportionate to the back month would shift this seat toward a defensive lean.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "The put/call volume ratio of 0.87 is modestly call-skewed but not extreme. Front-month implied volatility near 36-38% implies roughly a 7% one-week expected move via the ATM straddle -- this expected-move figure is this seat's primary contribution and should anchor every other seat's price target. Term structure between the two listed expiries is roughly flat, suggesting no acute near-dated event is being priced beyond the already-known earnings date. Directional lean is weak and should be weighted lightly relative to the expected-move output."
 }

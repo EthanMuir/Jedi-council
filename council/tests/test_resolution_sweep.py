@@ -1,6 +1,7 @@
 """Integration test: deliberate with a backdated as_of, then sweep -- the
 resolution should be written against real subsequent price action from the
-fixture, and never re-swept once resolved."""
+fixture, and never re-swept once resolved. Each term resolves on its own
+date: a week, three months and a year after the run."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -26,16 +27,19 @@ def settings(tmp_path):
 @pytest.mark.asyncio
 async def test_backdated_prediction_gets_resolved(settings):
     as_of = datetime(2026, 8, 1, 16, 0, 0)
-    result = await run_deliberation("NVDA", "1w", settings, as_of=as_of)
+    result = await run_deliberation("NVDA", settings, as_of=as_of)
 
     swept = await sweep_unresolved(settings, as_of=datetime(2026, 9, 18))
+    # Only the short term's week has passed -- the medium and long terms
+    # stay open until their own windows close.
     assert len(swept) == 1
-    assert swept[0].prediction_id == result.prediction_id
+    assert swept[0].prediction_id == result.terms["short"].prediction_id
+    assert swept[0].horizon == "short"
     assert swept[0].direction_correct is not None
 
     conn = connect(settings.council_db_path)
     row = conn.execute(
-        "SELECT * FROM resolutions WHERE prediction_id = ?", (result.prediction_id,)
+        "SELECT * FROM resolutions WHERE prediction_id = ?", (result.terms["short"].prediction_id,)
     ).fetchone()
     conn.close()
     assert row is not None
@@ -44,15 +48,15 @@ async def test_backdated_prediction_gets_resolved(settings):
 
 @pytest.mark.asyncio
 async def test_future_prediction_is_not_swept(settings):
-    result = await run_deliberation("NVDA", "1w", settings)  # as_of defaults to now
+    result = await run_deliberation("NVDA", settings)  # as_of defaults to now
     swept = await sweep_unresolved(settings, as_of=datetime.utcnow())
-    assert result.prediction_id not in [s.prediction_id for s in swept]
+    assert not {tr.prediction_id for tr in result.terms.values()} & {s.prediction_id for s in swept}
 
 
 @pytest.mark.asyncio
 async def test_sweep_is_idempotent(settings):
     as_of = datetime(2026, 8, 1, 16, 0, 0)
-    result = await run_deliberation("NVDA", "1w", settings, as_of=as_of)
+    await run_deliberation("NVDA", settings, as_of=as_of)
 
     first = await sweep_unresolved(settings, as_of=datetime(2026, 9, 18))
     second = await sweep_unresolved(settings, as_of=datetime(2026, 9, 18))
@@ -65,8 +69,10 @@ async def test_sweep_writes_immediate_reflections_to_memory(settings):
     from council.memory.store import MemoryStore
 
     as_of = datetime(2026, 8, 1, 16, 0, 0)
-    result = await run_deliberation("NVDA", "1w", settings, as_of=as_of)
-    directional_seats = {sr.seat_id for sr in result.seat_results if sr.verdict.vote != "NO_READ"}
+    result = await run_deliberation("NVDA", settings, as_of=as_of)
+    directional_seats = {
+        sr.seat_id for sr in result.seat_results if sr.verdicts.short.vote in ("BULLISH", "BEARISH")
+    }
 
     swept = await sweep_unresolved(settings, as_of=datetime(2026, 9, 18))
     assert swept[0].lessons_written == len(directional_seats)
@@ -89,13 +95,13 @@ async def test_resolutions_table_immutable_after_sweep(settings):
     import sqlite3
 
     as_of = datetime(2026, 8, 1, 16, 0, 0)
-    result = await run_deliberation("NVDA", "1w", settings, as_of=as_of)
+    result = await run_deliberation("NVDA", settings, as_of=as_of)
     await sweep_unresolved(settings, as_of=datetime(2026, 9, 18))
 
     conn = connect(settings.council_db_path)
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
             "UPDATE resolutions SET price_at_resolve = 0 WHERE prediction_id = ?",
-            (result.prediction_id,),
+            (result.terms["short"].prediction_id,),
         )
     conn.close()

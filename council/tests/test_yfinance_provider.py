@@ -330,6 +330,61 @@ async def test_analyst_estimates_survives_missing_tables(monkeypatch):
     assert result["historical_surprises"] == []
 
 
+@pytest.mark.asyncio
+async def test_analyst_ratings_maps_targets_split_and_changes(monkeypatch):
+    fake_ticker = MagicMock()
+    fake_ticker.analyst_price_targets = {
+        "current": 80.0, "high": 120.0, "low": 60.0, "mean": 100.0, "median": 98.0,
+    }
+    fake_ticker.info = {"numberOfAnalystOpinions": 31}
+    fake_ticker.recommendations_summary = pd.DataFrame([
+        {"period": "0m", "strongBuy": 8, "buy": 15, "hold": 6, "sell": 1, "strongSell": 0},
+        {"period": "-1m", "strongBuy": 8, "buy": 14, "hold": 7, "sell": 1, "strongSell": 0},
+        {"period": "-3m", "strongBuy": 6, "buy": 12, "hold": 10, "sell": 2, "strongSell": 1},
+    ])
+    fake_ticker.upgrades_downgrades = pd.DataFrame(
+        {
+            "Firm": ["Older Co", "Newer Co"],
+            "ToGrade": ["Hold", "Buy"],
+            "FromGrade": ["Buy", "Hold"],
+            "Action": ["down", "up"],
+            "currentPriceTarget": [85.0, 110.0],
+            "priorPriceTarget": [95.0, 90.0],
+        },
+        index=pd.DatetimeIndex([pd.Timestamp("2026-06-01"), pd.Timestamp("2026-09-10")], name="GradeDate"),
+    )
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    result = await YFinanceProvider().fetch_analyst_ratings("MRVL")
+
+    assert (result["current_price"], result["target_mean"], result["target_median"]) == (80.0, 100.0, 98.0)
+    assert result["analyst_count"] == 31
+    assert (result["strong_buy"], result["buy"], result["hold"]) == (8, 15, 6)
+    assert (result["prior_strong_buy"], result["prior_hold"], result["prior_strong_sell"]) == (6, 10, 1)
+    assert [c["firm"] for c in result["recent_changes"]] == ["Newer Co", "Older Co"]  # newest first
+    newest = result["recent_changes"][0]
+    assert (newest["action"], newest["from_grade"], newest["to_grade"]) == ("up", "Hold", "Buy")
+    assert (newest["price_target"], newest["prior_price_target"]) == (110.0, 90.0)
+    assert newest["changed_at"].startswith("2026-09-10")
+
+
+@pytest.mark.asyncio
+async def test_analyst_ratings_with_no_coverage_raises_so_the_seat_reads_no_data(monkeypatch):
+    fake_ticker = MagicMock()
+    fake_ticker.analyst_price_targets = {}
+    fake_ticker.info = {}
+    fake_ticker.recommendations_summary = pd.DataFrame()
+    fake_ticker.upgrades_downgrades = pd.DataFrame()
+    fake_module = types.ModuleType("yfinance")
+    fake_module.Ticker = MagicMock(return_value=fake_ticker)
+    monkeypatch.setitem(sys.modules, "yfinance", fake_module)
+
+    with pytest.raises(ValueError, match="No analyst coverage"):
+        await YFinanceProvider().fetch_analyst_ratings("TINY")
+
+
 # fetch_news used to be a permanent `return []` stub -- because
 # YFinanceProvider is tried first in the provider chain and any
 # non-exception result (even an empty list) short-circuits

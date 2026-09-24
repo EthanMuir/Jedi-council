@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.541,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A divergence where the sector ETF and peer basket move in opposite directions.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.541,
+    "expected_move_pct": 3.5,
+    "rationale": "Its sector fund and peers are rising together this week."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.524,
+    "expected_move_pct": 7.0,
+    "rationale": "Sector strength tends to carry for a few months, with fading reliability."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.508,
+    "expected_move_pct": 15.0,
+    "rationale": "Cross-market moves say very little about a year out."
+  },
   "comparison_class": {
     "definition": "Sessions where the sector ETF, peer basket, and overseas session all move in the same direction by a modest amount, without the ticker's own price as input",
     "n_observations": 51,
@@ -8,16 +28,12 @@
     "why_this_class": "nearest analogue for a same-direction, moderate-magnitude cross-market confirmation"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 1.5,
-  "thesis": "The sector ETF, peer basket, and overseas session are all pointed the same direction over the last five sessions, which is the specific pattern this seat's edge depends on -- confirmation from a different market, not the asset's own tape. The magnitude of the move is modest rather than extreme, which keeps confidence moderate rather than high. Index futures and commodity/FX inputs are roughly neutral and add little either way.",
   "key_evidence": [
-    {"claim": "Sector ETF, peer basket, and overseas session move in the same direction over 5 sessions", "source": "cross_market_derived", "as_of": "2026-09-18"}
+    {
+      "claim": "Sector ETF, peer basket, and overseas session move in the same direction over 5 sessions",
+      "source": "cross_market_derived",
+      "as_of": "2026-09-18"
+    }
   ],
-  "what_would_change_my_mind": "A divergence where the sector ETF and peer basket move in opposite directions.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "The sector ETF, peer basket, and overseas session are all pointed the same direction over the last five sessions, which is the specific pattern this seat's edge depends on -- confirmation from a different market, not the asset's own tape. The magnitude of the move is modest rather than extreme, which keeps confidence moderate rather than high. Index futures and commodity/FX inputs are roughly neutral and add little either way."
 }

@@ -1,19 +1,24 @@
 """The Grand Master -- "Master of the Order", Tier IV synthesis. Sees
-everything: every Tier I verdict, the full debate, every Prosecutor
-verdict, the Reality Anchor, and the Cost Auditor's result. Uses the
-stronger model.
+everything: every Tier I lean, the full debate, every Prosecutor verdict,
+the Reality Anchors, and each term's warnings. Uses the stronger model.
+
+It explains the council's three positions -- it never moves them. Each
+position is the weighted average of the seats' leans, computed before the
+Grand Master is called, so a weak lean stays visibly weak however the
+synthesis reads.
 
 Hard rule on synthesis output: it must report the structure of
 disagreement, not just a consensus number. Unanimity among correlated
 agents is a warning sign, not a green light."""
 from __future__ import annotations
 
+from council.engine.aggregation import CouncilPosition
 from council.engine.base_rate import RealityAnchor
-from council.engine.cost_auditor import CostAuditResult
+from council.engine.horizons import TERM_NAMES, TERM_WINDOWS, TERMS
 from council.engine.llm_client import LLMCallFailed, LLMClient, SchemaRetryExhausted
 from council.engine.schemas import (
     DebateArgument,
-    GrandMasterVerdict,
+    GrandMasterSynthesis,
     ProsecutorVerdict,
     Tier1Summary,
     format_debate_transcript,
@@ -23,25 +28,41 @@ from council.engine.schemas import (
 
 _SYSTEM_PROMPT = """
 You are the Grand Master, "Master of the Order" -- the final synthesiser on
-a market-prediction council. You see everything: every Tier I verdict, the
-full Bull/Bear debate, every Prosecutor verdict, the Reality Anchor, and the
-Cost Auditor's result.
+a market-prediction council. The council has already reached a position on
+three terms -- short (the next week), medium (the next 3 months) and long
+(the next year and beyond) -- each the weighted average of every seat's
+lean. You see those positions, every seat's leans, the full Bull/Bear
+debate, every Prosecutor verdict, the Reality Anchors and each term's
+warnings.
 
-Hard rule: you must report the STRUCTURE of disagreement, not just a
-consensus number. Unanimity among seats that all leaned on the same
-correlated evidence is a warning sign, not a green light -- your
-dissent_summary must name who disagreed (or note that agreement may be
-inflated by correlated evidence) rather than just restating the vote tally.
-If correlated evidence was flagged, correlated_evidence_warning must
-describe what it means for confidence, not just echo that it exists.
+Your job is to EXPLAIN the positions to someone deciding what to do, not to
+change them: for each term, say what drives the lean and how much to trust
+it. Be honest about weak leans -- a position barely off the middle is
+close to a coin flip, and saying so is the most useful thing you can do.
+Point out when terms disagree (e.g. bearish this week, bullish over the
+year) and why.
 
-Your vote and confidence should track the weighted council vote already
-computed (given to you), adjusted only for what the debate or Prosecutor
-surfaced that a mechanical vote count couldn't see. You may NOT override a
-Prosecutor veto: if any Prosecutor verdict this round vetoed, your vote
-must be NO_CONVICTION regardless of how confident the underlying seats
-were.
+Hard rule: report the STRUCTURE of disagreement, not just a consensus
+number. Unanimity among seats that all leaned on the same correlated
+evidence is a warning sign, not a green light -- your dissent_summary must
+name who disagreed and on which terms (or note that agreement may be
+inflated by correlated evidence). If correlated evidence was flagged,
+correlated_evidence_warning must describe what it means for trust, not just
+echo that it exists. Where the Prosecutor objected to a term, weigh that
+objection in the term's note.
 """
+
+
+def _format_position(term: str, position: CouncilPosition, warnings: list[str]) -> str:
+    line = (
+        f"- {TERM_NAMES[term]} ({TERM_WINDOWS[term]}): {position.lean_label} -- "
+        f"{position.p_bullish:.1%} chance of rising, "
+        f"{position.consensus_pct:.0f}% of leaning seats agree, "
+        f"{position.seats_counted} seats counted"
+    )
+    if warnings:
+        line += "\n    warnings: " + "; ".join(warnings)
+    return line
 
 
 class GrandMasterSeat:
@@ -54,39 +75,45 @@ class GrandMasterSeat:
         tier1_summaries: list[Tier1Summary],
         debate_transcript: list[DebateArgument],
         prosecutor_verdicts: list[ProsecutorVerdict],
-        weighted_vote_result: tuple[str, float, float],
-        reality_anchor: RealityAnchor,
-        cost_audit_result: CostAuditResult,
+        positions: dict[str, CouncilPosition],
+        warnings: dict[str, list[str]],
+        reality_anchors: dict[str, RealityAnchor],
         correlated_evidence: list[str],
         llm_client: LLMClient,
         model: str,
         user_context: str | None = None,
-    ) -> GrandMasterVerdict | None:
-        vote, confidence, consensus_pct = weighted_vote_result
-        vetoed = any(pv.veto for pv in prosecutor_verdicts)
-
+    ) -> GrandMasterSynthesis | None:
+        anchors = "\n".join(
+            f"- {TERM_NAMES[t]}: the stock usually moves up to "
+            f"{reality_anchors[t].max_plausible_move_pct}% over this term; it rose in "
+            f"{reality_anchors[t].hit_rate_up if reality_anchors[t].hit_rate_up is not None else 'unknown'} "
+            f"of past windows"
+            + (
+                f"; options imply a {reality_anchors[t].options_implied_move_pct}% move"
+                if reality_anchors[t].options_implied_move_pct
+                else ""
+            )
+            for t in TERMS
+        )
         user_prompt = (
             (
                 f"The user asked specifically: \"{user_context}\" -- address it directly in "
-                "your reasoning, but your vote/confidence must still be grounded in the "
-                "evidence below, not just the question's framing.\n\n"
+                "your reasoning, but stay grounded in the evidence below, not the question's "
+                "framing.\n\n"
                 if user_context
                 else ""
             )
-            + f"Weighted council vote (Phase D, pre-synthesis): {vote} "
-            f"(confidence={confidence}, consensus={consensus_pct}%)\n"
-            f"Dissent map: {summarize_dissent(tier1_summaries)}\n\n"
-            f"Tier I verdicts:\n{format_tier1_summaries(tier1_summaries)}\n\n"
+            + "Council positions (already computed -- explain them, don't change them):\n"
+            + "\n".join(_format_position(t, positions[t], warnings.get(t, [])) for t in TERMS)
+            + "\n\nWho leaned which way:\n"
+            + "\n".join(f"- {TERM_NAMES[t]}: {summarize_dissent(tier1_summaries, t)}" for t in TERMS)
+            + f"\n\nTier I leans:\n{format_tier1_summaries(tier1_summaries)}\n\n"
             f"Debate transcript:\n{format_debate_transcript(debate_transcript)}\n\n"
-            f"Prosecutor veto in effect: {vetoed}\n"
             f"Prosecutor findings: "
             f"{[f.description for pv in prosecutor_verdicts for f in pv.findings] or 'none'}\n\n"
-            f"Reality Anchor: max plausible move {reality_anchor.max_plausible_move_pct}%, "
-            f"hit-rate-up {reality_anchor.hit_rate_up}, options-implied move "
-            f"{reality_anchor.options_implied_move_pct}%\n"
-            f"Cost Auditor: edge {cost_audit_result.edge_pct}%, passed={cost_audit_result.passed}\n\n"
+            f"Reality Anchors:\n{anchors}\n\n"
             f"Correlated evidence: {correlated_evidence or 'none'}\n\n"
-            "Write the final synthesis."
+            "Write the synthesis."
         )
         try:
             return await llm_client.get_structured(
@@ -94,7 +121,7 @@ class GrandMasterSeat:
                 model=model,
                 system_prompt=_SYSTEM_PROMPT,
                 user_prompt=user_prompt,
-                response_model=GrandMasterVerdict,
+                response_model=GrandMasterSynthesis,
                 fixture_name="grand_master",
             )
         except (SchemaRetryExhausted, LLMCallFailed):

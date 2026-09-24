@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.617,
+  "status": "READ",
+  "data_quality": "GOOD",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "A close back below the 20-period moving average, or the 50-period moving average rolling over, would invalidate the trend family's vote.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.617,
+    "expected_move_pct": 6.5,
+    "rationale": "Price sits above both moving averages; trend, breakout and volume families agree."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.563,
+    "expected_move_pct": 11.0,
+    "rationale": "The 20/50-day uptrend is intact, but momentum signals usually fade over a quarter."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.521,
+    "expected_move_pct": 24.0,
+    "rationale": "Charts say little a year out; only a mild tilt from the established uptrend."
+  },
   "comparison_class": {
     "definition": "Instrument A: prior instances of a higher-high/higher-low structure holding above the 20-period average with rising volume, this timeframe",
     "n_observations": 34,
@@ -8,21 +28,33 @@
     "why_this_class": "nearest mechanically-defined analogue available from this instrument's own OHLCV history"
   },
   "decomposition": [
-    {"sub_claim": "trend family stays bullish (price > 20MA > 50MA)", "probability": 0.71, "relation": "AND"},
-    {"sub_claim": "breakout family confirms (close > 20-day high)", "probability": 0.52, "relation": "AND"},
-    {"sub_claim": "volume family confirms (above 20-day avg volume on up days)", "probability": 0.66, "relation": "AND"}
+    {
+      "sub_claim": "trend family stays bullish (price > 20MA > 50MA)",
+      "probability": 0.71,
+      "relation": "AND"
+    },
+    {
+      "sub_claim": "breakout family confirms (close > 20-day high)",
+      "probability": 0.52,
+      "relation": "AND"
+    },
+    {
+      "sub_claim": "volume family confirms (above 20-day avg volume on up days)",
+      "probability": 0.66,
+      "relation": "AND"
+    }
   ],
-  "memory_applied": [],
-  "entry": 162.5,
-  "exit": 178.0,
-  "invalidation": 152.0,
-  "expected_move_pct": 6.5,
-  "thesis": "Instrument A closed above both its 20- and 50-period moving averages with the 20 above the 50. The breakout family is unconfirmed (no new 20-day high yet) but the oscillator family is not overbought and the volume family is mildly supportive. ATR-based structure places invalidation below the recent swing low; the exit sits near the prior range high. This is a continuation setup, not a fresh breakout -- confidence is moderate, not high.",
   "key_evidence": [
-    {"claim": "20-period MA above 50-period MA", "source": "ohlcv_derived", "as_of": "2026-09-18"},
-    {"claim": "14-period ATR consistent with recent range", "source": "ohlcv_derived", "as_of": "2026-09-18"}
+    {
+      "claim": "20-period MA above 50-period MA",
+      "source": "ohlcv_derived",
+      "as_of": "2026-09-18"
+    },
+    {
+      "claim": "14-period ATR consistent with recent range",
+      "source": "ohlcv_derived",
+      "as_of": "2026-09-18"
+    }
   ],
-  "what_would_change_my_mind": "A close back below the 20-period moving average, or the 50-period moving average rolling over, would invalidate the trend family's vote.",
-  "data_quality": "GOOD",
-  "abstain_reason": null
+  "thesis": "Instrument A closed above both its 20- and 50-period moving averages with the 20 above the 50. The breakout family is unconfirmed (no new 20-day high yet) but the oscillator family is not overbought and the volume family is mildly supportive. ATR-based structure places invalidation below the recent swing low; the exit sits near the prior range high. This is a continuation setup, not a fresh breakout -- confidence is moderate, not high."
 }

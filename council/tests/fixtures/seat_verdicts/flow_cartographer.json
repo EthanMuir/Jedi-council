@@ -1,6 +1,26 @@
 {
-  "vote": "BULLISH",
-  "probability": 0.527,
+  "status": "READ",
+  "data_quality": "PARTIAL",
+  "abstain_reason": null,
+  "what_would_change_my_mind": "The next 13F showing a reversal to net distribution among top holders.",
+  "short": {
+    "vote": "BULLISH",
+    "probability": 0.507,
+    "expected_move_pct": 2.0,
+    "rationale": "13F data is too stale to say much about the next week."
+  },
+  "medium": {
+    "vote": "BULLISH",
+    "probability": 0.536,
+    "expected_move_pct": 8.0,
+    "rationale": "Net institutional buying last quarter tends to persist for a while."
+  },
+  "long": {
+    "vote": "BULLISH",
+    "probability": 0.553,
+    "expected_move_pct": 20.0,
+    "rationale": "Rising institutional ownership is a slow-moving positive over a year."
+  },
   "comparison_class": {
     "definition": "Names with positive QoQ institutional share change and more top-holder net buyers than net sellers, using the most recent available 13F",
     "n_observations": 44,
@@ -8,16 +28,12 @@
     "why_this_class": "closest analogue for a filed-but-lagged institutional accumulation signal"
   },
   "decomposition": [],
-  "memory_applied": [],
-  "entry": null,
-  "exit": null,
-  "invalidation": null,
-  "expected_move_pct": 2.5,
-  "thesis": "Institutional ownership rose 1.8% quarter over quarter with more top holders adding than trimming, and short interest is low relative to float with a sub-2-day days-to-cover -- no squeeze setup, but no crowded-short overhang either. This data is roughly two and a half weeks past the filing date but the underlying quarter itself is already up to three months old, so confidence is capped by that lag regardless of horizon.",
   "key_evidence": [
-    {"claim": "QoQ institutional share change +1.8%, 312 net buyers vs 201 net sellers among top holders", "source": "institutional_derived", "as_of": "2026-08-31"}
+    {
+      "claim": "QoQ institutional share change +1.8%, 312 net buyers vs 201 net sellers among top holders",
+      "source": "institutional_derived",
+      "as_of": "2026-08-31"
+    }
   ],
-  "what_would_change_my_mind": "The next 13F showing a reversal to net distribution among top holders.",
-  "data_quality": "PARTIAL",
-  "abstain_reason": null
+  "thesis": "Institutional ownership rose 1.8% quarter over quarter with more top holders adding than trimming, and short interest is low relative to float with a sub-2-day days-to-cover -- no squeeze setup, but no crowded-short overhang either. This data is roughly two and a half weeks past the filing date but the underlying quarter itself is already up to three months old, so confidence is capped by that lag regardless of term."
 }

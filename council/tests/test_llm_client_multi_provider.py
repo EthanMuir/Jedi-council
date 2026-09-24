@@ -19,6 +19,7 @@ import pytest
 import council.engine.llm_client as llm_client_module
 from council.config import Settings
 from council.engine.llm_client import LLMClient
+from council.tests.seat_answers import seat_answer_payload
 
 _OPENAI_REQUEST = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
 
@@ -26,22 +27,7 @@ _OPENAI_REQUEST = httpx.Request("POST", "https://api.openai.com/v1/chat/completi
 def _valid_openai_response():
     tool_call = SimpleNamespace(
         function=SimpleNamespace(
-            arguments=json.dumps(
-                {
-                    "vote": "BULLISH",
-                    "probability": 0.612,
-                    "comparison_class": {
-                        "definition": "test comparison class",
-                        "n_observations": 50,
-                        "base_rate": 0.5,
-                        "why_this_class": "test",
-                    },
-                    "expected_move_pct": 3.2,
-                    "thesis": "test thesis",
-                    "what_would_change_my_mind": "test",
-                    "data_quality": "GOOD",
-                }
-            )
+            arguments=json.dumps(seat_answer_payload())
         )
     )
     message = SimpleNamespace(tool_calls=[tool_call])
@@ -51,20 +37,7 @@ def _valid_openai_response():
 
 
 def _valid_gemini_response():
-    payload = {
-        "vote": "BEARISH",
-        "probability": 0.388,
-        "comparison_class": {
-            "definition": "test comparison class",
-            "n_observations": 50,
-            "base_rate": 0.5,
-            "why_this_class": "test",
-        },
-        "expected_move_pct": -2.1,
-        "thesis": "test thesis",
-        "what_would_change_my_mind": "test",
-        "data_quality": "GOOD",
-    }
+    payload = seat_answer_payload("BEARISH", 0.388)
     usage = SimpleNamespace(prompt_token_count=200, candidates_token_count=80)
     return SimpleNamespace(text=json.dumps(payload), usage_metadata=usage)
 
@@ -98,7 +71,7 @@ async def test_openai_success_path_parses_tool_call_and_logs_cost():
     client = LLMClient(settings)
     client._openai_client = _FakeOpenAIClient(lambda n, kwargs: _valid_openai_response())
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="fundamentalist",  # routes to openai/gpt-5 per config/models.yaml
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -106,8 +79,8 @@ async def test_openai_success_path_parses_tool_call_and_logs_cost():
         fixture_name="fundamentalist",
     )
 
-    assert verdict.vote == "BULLISH"
-    assert verdict.probability == 0.612
+    assert verdict.short.vote == "BULLISH"
+    assert verdict.short.probability == 0.612
     assert len(client.call_log) == 1
     record = client.call_log[0]
     assert record.provider == "openai"
@@ -131,7 +104,7 @@ async def test_openai_forces_the_named_tool_choice():
     client._openai_client = _FakeOpenAIClient(lambda n, kwargs: None)
     client._openai_client.chat.completions.create = responder
 
-    await client.get_verdict(
+    await client.get_seat_answer(
         seat_id="fundamentalist",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -155,14 +128,14 @@ async def test_openai_retryable_error_succeeds_after_backoff(monkeypatch):
 
     client._openai_client = _FakeOpenAIClient(responder)
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="fundamentalist",
         model="claude-sonnet-5",
         system_prompt="sys",
         user_prompt="usr",
         fixture_name="fundamentalist",
     )
-    assert verdict.vote == "BULLISH"
+    assert verdict.short.vote == "BULLISH"
     assert client._openai_client.chat.completions.calls == 3
     assert [c.success for c in client.call_log] == [False, False, True]
 
@@ -178,7 +151,7 @@ async def test_openai_non_retryable_error_fails_fast():
 
     client._openai_client = _FakeOpenAIClient(responder)
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="fundamentalist",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -186,8 +159,8 @@ async def test_openai_non_retryable_error_fails_fast():
         fixture_name="fundamentalist",
         max_retries=2,
     )
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "llm_call_failed"
+    assert verdict.short.vote == "NO_READ"
+    assert verdict.short.abstain_reason == "llm_call_failed"
     assert client._openai_client.chat.completions.calls == 1
 
 
@@ -215,7 +188,7 @@ async def test_gemini_success_path_parses_json_and_logs_cost():
     client = LLMClient(settings)
     client._gemini_client = _FakeGeminiClient(lambda n, kwargs: _valid_gemini_response())
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="macro_sage",  # routes to google/gemini-3-pro per config/models.yaml
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -223,8 +196,8 @@ async def test_gemini_success_path_parses_json_and_logs_cost():
         fixture_name="macro_sage",
     )
 
-    assert verdict.vote == "BEARISH"
-    assert verdict.probability == 0.388
+    assert verdict.short.vote == "BEARISH"
+    assert verdict.short.probability == 0.388
     record = client.call_log[0]
     assert record.provider == "google"
     assert record.model == "gemini-3-pro"
@@ -247,7 +220,7 @@ async def test_gemini_passes_response_schema_and_json_mime_type():
     client._gemini_client = _FakeGeminiClient(lambda n, kwargs: None)
     client._gemini_client.aio.models.generate_content = responder
 
-    await client.get_verdict(
+    await client.get_seat_answer(
         seat_id="macro_sage",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -271,14 +244,14 @@ async def test_gemini_retryable_server_error_succeeds_after_backoff(monkeypatch)
 
     client._gemini_client = _FakeGeminiClient(responder)
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="macro_sage",
         model="claude-sonnet-5",
         system_prompt="sys",
         user_prompt="usr",
         fixture_name="macro_sage",
     )
-    assert verdict.vote == "BEARISH"
+    assert verdict.short.vote == "BEARISH"
     assert client._gemini_client.aio.models.calls == 3
     assert [c.success for c in client.call_log] == [False, False, True]
 
@@ -293,7 +266,7 @@ async def test_gemini_non_retryable_client_error_fails_fast():
 
     client._gemini_client = _FakeGeminiClient(responder)
 
-    verdict = await client.get_verdict(
+    verdict = await client.get_seat_answer(
         seat_id="macro_sage",
         model="claude-sonnet-5",
         system_prompt="sys",
@@ -301,6 +274,6 @@ async def test_gemini_non_retryable_client_error_fails_fast():
         fixture_name="macro_sage",
         max_retries=2,
     )
-    assert verdict.vote == "NO_READ"
-    assert verdict.abstain_reason == "llm_call_failed"
+    assert verdict.short.vote == "NO_READ"
+    assert verdict.short.abstain_reason == "llm_call_failed"
     assert client._gemini_client.aio.models.calls == 1

@@ -57,11 +57,12 @@ async def test_full_deliberation_result_is_json_serializable(tmp_path):
         council_db_path=str(tmp_path / "council.db"),
         cache_db_path=str(tmp_path / "cache.db"),
     )
-    result = await run_deliberation("NVDA", "1w", settings, as_of=datetime(2026, 9, 18, 16, 0, 0))
+    result = await run_deliberation("NVDA", settings, as_of=datetime(2026, 9, 18, 16, 0, 0))
 
     payload = to_jsonable(result)
     dumped = json.dumps(payload)  # the real test: must not raise
-    assert '"grand_master_verdict"' in dumped
+    assert '"synthesis"' in dumped
     assert '"seat_results"' in dumped
     # spot-check a nested pydantic-inside-dataclass field actually unwrapped
-    assert payload["seat_results"][0]["verdict"]["vote"] in ("BULLISH", "BEARISH", "NO_READ")
+    assert payload["seat_results"][0]["verdicts"]["short"]["vote"] in ("BULLISH", "BEARISH", "NO_CONVICTION")
+    assert payload["terms"]["long"]["position"]["lean_label"]

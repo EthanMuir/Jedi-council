@@ -10,11 +10,12 @@ MEMORY_LAYERS: dict[str, dict] = {
     },
     "intermediate": {
         "half_life_days": 45,
-        "seats": ["estimate_scribe", "flow_cartographer", "insider_reader", "senate_watcher"],
+        "seats": ["estimate_scribe", "flow_cartographer", "insider_reader", "senate_watcher",
+                  "analyst_ratings"],
     },
     "deep": {
         "half_life_days": 400,
-        "seats": ["fundamentalist", "macro_sage", "structure_archivist", "transcript_linguist"],
+        "seats": ["fundamentalist", "macro_sage", "structure_archivist"],
     },
 }
 
