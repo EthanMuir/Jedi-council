@@ -223,6 +223,34 @@ class YFinanceProvider:
 
     # ---- fundamentals ----------------------------------------------------
 
+    async def fetch_market_profile(self, ticker: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._fetch_market_profile_sync, ticker)
+
+    def _fetch_market_profile_sync(self, ticker: str) -> dict[str, Any]:
+        """Sector/industry keys from Ticker.info, plus the industry's top
+        companies as peers. Reference metadata only -- no price data."""
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+        sector_key, industry_key = info.get("sectorKey"), info.get("industryKey")
+        if not sector_key and not industry_key:
+            raise ValueError(f"Yahoo has no sector/industry for {ticker}")
+        peers: list[str] = []
+        if industry_key:
+            try:
+                top = yf.Industry(industry_key).top_companies
+                if top is not None and not top.empty:
+                    peers = [str(s) for s in top.index if str(s).upper() != ticker.upper()][:5]
+            except Exception:  # noqa: BLE001 -- peers are optional; the sector fund still works
+                peers = []
+        return {
+            "sector_key": sector_key,
+            "sector": info.get("sector"),
+            "industry_key": industry_key,
+            "industry": info.get("industry"),
+            "peers": peers,
+        }
+
     async def fetch_fundamentals(self, ticker: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._fetch_fundamentals_sync, ticker)
 

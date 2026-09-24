@@ -38,6 +38,17 @@ class FixtureProvider:
             self._recorded_through = date.fromisoformat(max(b["trade_date"] for b in bars))
         return timedelta(days=max(0, (end - self._recorded_through).days))
 
+    async def fetch_market_profile(self, ticker: str) -> dict[str, Any]:
+        if ticker.upper() != "NVDA":
+            raise ValueError(f"no recorded profile for {ticker}")
+        return {
+            "sector_key": "technology",
+            "sector": "Technology",
+            "industry_key": "semiconductors",
+            "industry": "Semiconductors",
+            "peers": ["AVGO", "AMD", "QCOM"],
+        }
+
     async def fetch_ohlcv(self, ticker: str, start: date, end: date) -> list[dict[str, Any]]:
         shift = self._replay_shift(end)
         start, end = start - shift, end - shift

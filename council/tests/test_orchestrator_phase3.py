@@ -198,3 +198,33 @@ class TestDirectionalWeight:
 
         assert directional_weight / eligible_weight >= 0.5
         assert len(directional) / len(eligible) < 0.5  # the old headcount gate would have failed
+
+
+@pytest.mark.asyncio
+async def test_unknown_ticker_is_rejected_before_any_seat_runs(settings, monkeypatch):
+    """A ticker with no price data used to fail only after Phase A -- after
+    every seat had gathered data and made its (paid) model calls."""
+    from council.data.service import DataService
+    from council.engine import orchestrator
+    from council.engine.llm_client import LLMClient
+
+    async def no_prices(self, ticker, as_of, lookback_days=180):
+        raise RuntimeError("All providers failed for fetch_ohlcv")
+
+    calls = []
+
+    async def counting_structured(self, **kwargs):
+        calls.append(kwargs)
+        raise AssertionError("no model call may happen for an unknown ticker")
+
+    monkeypatch.setattr(DataService, "get_ohlcv", no_prices)
+    monkeypatch.setattr(LLMClient, "get_structured", counting_structured)
+    events = []
+
+    async def progress(event, payload):
+        events.append(event)
+
+    with pytest.raises(orchestrator.TickerNotFound, match="XYZZ"):
+        await run_deliberation("XYZZ", "1w", settings, as_of=AS_OF, progress=progress)
+    assert calls == []
+    assert "seat_stage" not in events

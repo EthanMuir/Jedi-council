@@ -14,6 +14,7 @@ from council.engine.horizons import is_competent
 from council.engine.orchestrator import (
     TIER_I_SEATS,
     DeliberationResult,
+    TickerNotFound,
     build_data_service,
     run_deliberation,
 )
@@ -316,6 +317,9 @@ def main(argv: list[str] | None = None) -> None:
                     args.ticker.upper(), args.horizon, settings, as_of=as_of, lite=args.lite
                 )
             )
+        except TickerNotFound as exc:
+            print(f"\nTICKER NOT FOUND: {exc}")
+            raise SystemExit(1) from exc
         except RunStopped as exc:
             print(f"\nRUN STOPPED: {exc}")
             if exc.link:

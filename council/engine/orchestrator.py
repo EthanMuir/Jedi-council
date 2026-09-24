@@ -130,6 +130,12 @@ class DeliberationResult:
     run_shape: str = "full"  # "full" | "lite"
 
 
+class TickerNotFound(ValueError):
+    """No recent price data for the ticker -- a typo, a delisted stock, or a
+    symbol that doesn't exist. Raised before any seat runs, so a bad ticker
+    costs nothing."""
+
+
 def _run_mode(settings: Settings, call_log: list) -> str:
     """How the Archives label this run, so cheap free-tier runs never mix
     into (or drag down) the paid council's track record: "sample" when no
@@ -270,6 +276,24 @@ async def run_deliberation(
         await emit("notice", {"message": message})
 
     llm_client = LLMClient(settings, on_notice=notice)
+
+    # Checked first, before any seat gathers data or calls a model: a ticker
+    # with no recent prices can't be predicted, and finding that out after
+    # Phase A used to cost a full run's worth of API calls. Ten days of
+    # lookback so a long weekend or holiday doesn't read as "not found".
+    try:
+        price_series = await data_service.get_ohlcv(ticker, as_of=as_of, lookback_days=10)
+    except RuntimeError:
+        price_series = None
+    if price_series is None or not price_series.bars:
+        raise TickerNotFound(
+            f'Couldn\'t find any recent price data for "{ticker}". Check the ticker '
+            "symbol is right (e.g. NVDA for Nvidia, MCD for McDonald's). If it is, the "
+            "price feed may be briefly down -- try again in a few minutes. Nothing was "
+            "run or charged."
+        )
+    price_at_prediction = price_series.bars[-1].close
+
     semaphore = asyncio.Semaphore(settings.max_concurrent_llm_calls)
     conn = connect(settings.council_db_path)
 
@@ -384,11 +408,6 @@ async def run_deliberation(
         "phase_a_complete",
         {"blind_vote": blind_vote, "blind_probability": blind_probability, "blind_consensus_pct": blind_consensus_pct},
     )
-
-    price_series = await data_service.get_ohlcv(ticker, as_of=as_of, lookback_days=5)
-    if not price_series.bars:
-        raise RuntimeError(f"no price data available for {ticker} as of {as_of.isoformat()}")
-    price_at_prediction = price_series.bars[-1].close
 
     # ---- Phase B: Reality Anchor ------------------------------------------
     anchor_series = await data_service.get_ohlcv(ticker, as_of=as_of, lookback_days=730)

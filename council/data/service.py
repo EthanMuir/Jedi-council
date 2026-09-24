@@ -54,7 +54,28 @@ _TTL_SECONDS = {
     "estimates": 21600,
     "transcripts": 86400,
     "filings": 3600,
+    "profile": 7 * 86400,  # a company's sector/industry peers rarely change
 }
+
+# The SPDR sector fund for each Yahoo sector key -- the "sector ETF" the
+# Cross-Market Navigator compares a stock against.
+SECTOR_ETFS = {
+    "technology": "XLK",
+    "financial-services": "XLF",
+    "healthcare": "XLV",
+    "consumer-cyclical": "XLY",
+    "consumer-defensive": "XLP",
+    "energy": "XLE",
+    "industrials": "XLI",
+    "basic-materials": "XLB",
+    "utilities": "XLU",
+    "real-estate": "XLRE",
+    "communication-services": "XLC",
+}
+# Industries with a closer-fitting fund than their broad sector's.
+INDUSTRY_ETFS = {"semiconductors": "SMH", "semiconductor-equipment-materials": "SMH"}
+_DOLLAR_PROXY = "UUP"
+_OIL_PROXY = "USO"
 
 
 def _naive(dt: datetime) -> datetime:
@@ -430,46 +451,65 @@ class DataService:
             return None
         return round(covariance / variance_b, 3)
 
+    async def get_market_profile(self, ticker: str) -> dict[str, Any]:
+        """The company's sector/industry and a few industry peers -- reference
+        metadata, not price data. {} when no provider knows the ticker."""
+        try:
+            return await self._fetch_with_fallback(
+                "fetch_market_profile", f"profile:{ticker}", _TTL_SECONDS["profile"], ticker
+            )
+        except RuntimeError:
+            return {}
+
     async def get_cross_market_snapshot(
         self,
         ticker: str,
         as_of: datetime,
-        sector_etf: str = "SMH",
-        peer: str = "AMD",
         index_proxy: str = "SPY",
         overseas_proxy: str = "EWJ",
     ) -> CrossMarketSnapshot:
         """Never fetches `ticker`'s own price series -- every field here
         comes from a different instrument, per the Cross-Market Navigator's
-        mandate."""
+        mandate. Which sector fund and peers to compare against comes from
+        the company's own sector/industry, so a restaurant chain is read
+        against consumer-discretionary stocks and restaurant peers, not
+        against chipmakers."""
 
-        async def _return_5d(symbol: str) -> float:
-            series = await self.get_ohlcv(symbol, as_of, lookback_days=15)
+        async def _return_5d(symbol: str) -> float | None:
+            try:
+                series = await self.get_ohlcv(symbol, as_of, lookback_days=15)
+            except RuntimeError:
+                return None
             closes = [b.close for b in series.bars]
             if len(closes) < 6:
-                return 0.0
+                return None
             return round(((closes[-1] / closes[-6]) - 1) * 100, 2)
 
-        sector_return, peer_return, index_return, overseas_return = (
-            await _return_5d(sector_etf),
-            await _return_5d(peer),
-            await _return_5d(index_proxy),
-            await _return_5d(overseas_proxy),
+        profile = await self.get_market_profile(ticker)
+        sector_etf = INDUSTRY_ETFS.get(profile.get("industry_key") or "") or SECTOR_ETFS.get(
+            profile.get("sector_key") or ""
         )
+        peers = [p for p in profile.get("peers", []) if p and p.upper() != ticker.upper()][:3]
+
+        sector_return = await _return_5d(sector_etf) if sector_etf else None
+        peer_returns = [r for r in [await _return_5d(p) for p in peers] if r is not None]
+        peer_return = round(sum(peer_returns) / len(peer_returns), 2) if peer_returns else None
+
         # NOTE: deliberately does NOT call get_macro_snapshot(ticker, ...) here --
         # that computes ticker_beta_to_spx, which fetches the ticker's own OHLCV
         # internally (see _estimate_beta) and would violate this seat's "never the
         # ticker's own price series" mandate even though the beta value itself
-        # would never reach CrossMarketSnapshot. dollar/oil deltas are left at 0.0
-        # pending a real macro time-series (fetch_macro only returns point levels).
+        # would never reach CrossMarketSnapshot. Dollar and oil moves come from
+        # their ETF proxies' own 5-day returns instead.
         return CrossMarketSnapshot(
             sector_etf_symbol=sector_etf,
             sector_etf_return_5d_pct=sector_return,
+            peer_symbols=peers,
             peer_basket_return_5d_pct=peer_return,
-            index_futures_change_pct=index_return,
-            dollar_index_change_pct=0.0,
-            oil_change_pct=0.0,
-            overseas_session_return_pct=overseas_return,
+            index_futures_change_pct=await _return_5d(index_proxy),
+            dollar_index_change_pct=await _return_5d(_DOLLAR_PROXY),
+            oil_change_pct=await _return_5d(_OIL_PROXY),
+            overseas_session_return_pct=await _return_5d(overseas_proxy),
             as_of=as_of,
             staleness_seconds=0.0,
             source=self._providers[0].name,

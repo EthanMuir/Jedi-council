@@ -836,12 +836,12 @@
 
 .run-alert b { color: var(--bone); font-weight: normal; }
 
-.run-alert-stopped {
+.run-alert-stopped, .run-alert-invalid {
   border-left-color: var(--crimson, #d0504f);
   background: rgba(208, 80, 79, 0.08);
 }
 
-.run-alert-stopped b { color: var(--crimson, #d0504f); }
+.run-alert-stopped b, .run-alert-invalid b { color: var(--crimson, #d0504f); }
 .run-alert a { color: var(--amber); }
 
 /* The optional question sits centered under the controls, matching them. */

@@ -227,13 +227,16 @@ class SECFilingFeed(BaseModel):
 
 
 class CrossMarketSnapshot(BaseModel):
-    sector_etf_symbol: str
-    sector_etf_return_5d_pct: float
-    peer_basket_return_5d_pct: float
-    index_futures_change_pct: float
-    dollar_index_change_pct: float
-    oil_change_pct: float
-    overseas_session_return_pct: float
+    # None = unavailable (unknown sector, no peers found, a feed that
+    # failed) -- never a placeholder 0.0, which reads as "flat".
+    sector_etf_symbol: str | None
+    sector_etf_return_5d_pct: float | None
+    peer_symbols: list[str] = []
+    peer_basket_return_5d_pct: float | None
+    index_futures_change_pct: float | None
+    dollar_index_change_pct: float | None
+    oil_change_pct: float | None
+    overseas_session_return_pct: float | None
     as_of: datetime
     staleness_seconds: float | None
     source: str

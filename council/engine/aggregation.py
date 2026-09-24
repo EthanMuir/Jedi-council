@@ -56,7 +56,11 @@ def weighted_vote(
         return "NO_CONVICTION", 0.5, 0.0
 
     avg_p_bullish = weighted_sum / weight_total
-    vote = "BULLISH" if avg_p_bullish >= 0.5 else "BEARISH"
+    if round(avg_p_bullish, 3) == 0.5:
+        # Bullish and bearish seats exactly cancel out -- a dead heat is no
+        # conviction, not a coin flip that always lands BULLISH.
+        return "NO_CONVICTION", 0.5, 0.0
+    vote = "BULLISH" if avg_p_bullish > 0.5 else "BEARISH"
     confidence = avg_p_bullish if vote == "BULLISH" else 1 - avg_p_bullish
     agree = sum(1 for v in directional.values() if v.vote == vote)
     consensus_pct = 100.0 * agree / len(directional)

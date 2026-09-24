@@ -26,7 +26,7 @@ from council.engine import model_settings
 from council.engine.cost_estimate import estimate_deliberation_cost
 from council.engine.llm_client import RunStopped
 from council.engine.model_catalog import ALL_ROLES, FREE_MODELS, RECOMMENDED, models_sorted_by_cost
-from council.engine.orchestrator import TIER_I_SEATS, run_deliberation
+from council.engine.orchestrator import TIER_I_SEATS, TickerNotFound, run_deliberation
 from council.engine.resolution_sweep import sweep_unresolved
 from council.engine.routing import planned_run_mode
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
@@ -106,6 +106,8 @@ async def deliberate_stream(
                 await queue.put(("done", to_jsonable(result)))
             except RunStopped as exc:
                 await queue.put(("stopped", {"message": str(exc), "link": exc.link}))
+            except TickerNotFound as exc:
+                await queue.put(("invalid_ticker", {"message": str(exc)}))
             except Exception as exc:  # noqa: BLE001 -- surface any failure to the client, don't hang it
                 await queue.put(("error", {"message": str(exc)}))
             finally:

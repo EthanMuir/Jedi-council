@@ -58,3 +58,14 @@ async def test_api_and_schema_failures_are_no_read(monkeypatch, failure):
         seat_id="technician", model="m", system_prompt="s", user_prompt="u"
     )
     assert verdict.vote == "NO_READ"
+
+
+def test_an_exact_tie_between_bulls_and_bears_is_no_conviction():
+    # From a real MCD run: one seat BULLISH 0.673, one BEARISH 0.673 -- the
+    # blind vote came out "BULLISH (0.5)".
+    bull = _bullish().model_copy(update={"probability": 0.673})
+    bear = _bullish().model_copy(update={"vote": "BEARISH", "probability": 0.673})
+    assert weighted_vote({"a": bull, "b": bear}) == ("NO_CONVICTION", 0.5, 0.0)
+
+    leaning = weighted_vote({"a": bull, "b": bear.model_copy(update={"probability": 0.612})})
+    assert leaning[0] == "BULLISH"

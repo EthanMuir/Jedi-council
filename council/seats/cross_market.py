@@ -57,15 +57,22 @@ class CrossMarketSeat:
     ) -> SeatVerdict:
         x = ctx["cross_market"]
 
+        def pct(value: float | None) -> str:
+            return "unavailable" if value is None else f"{value:+.2f}%"
+
+        sector = f"Sector ETF ({x.sector_etf_symbol})" if x.sector_etf_symbol else "Sector ETF"
+        peers = f"Peer basket ({', '.join(x.peer_symbols)})" if x.peer_symbols else "Peer basket"
         user_prompt = (
-            f"Cross-market snapshot, horizon {ctx.horizon}. Data as of {x.as_of.isoformat()}.\n\n"
-            f"Sector ETF ({x.sector_etf_symbol}) 5-day return: {x.sector_etf_return_5d_pct:+.2f}%\n"
-            f"Peer basket 5-day return: {x.peer_basket_return_5d_pct:+.2f}%\n"
-            f"Index futures proxy change: {x.index_futures_change_pct:+.2f}%\n"
-            f"Dollar index change: {x.dollar_index_change_pct:+.2f}%\n"
-            f"Oil change: {x.oil_change_pct:+.2f}%\n"
-            f"Overseas session return: {x.overseas_session_return_pct:+.2f}%\n\n"
-            "Reason only from co-movement/divergence across these other markets and give your verdict."
+            f"Cross-market snapshot, horizon {ctx.horizon}. Data as of {x.as_of.isoformat()}. "
+            "All changes are 5-day returns.\n\n"
+            f"{sector}: {pct(x.sector_etf_return_5d_pct)}\n"
+            f"{peers}: {pct(x.peer_basket_return_5d_pct)}\n"
+            f"Index proxy (SPY): {pct(x.index_futures_change_pct)}\n"
+            f"Dollar (UUP): {pct(x.dollar_index_change_pct)}\n"
+            f"Oil (USO): {pct(x.oil_change_pct)}\n"
+            f"Overseas proxy (EWJ): {pct(x.overseas_session_return_pct)}\n\n"
+            "Treat an unavailable input as missing, not as flat. Reason only from "
+            "co-movement/divergence across these other markets and give your verdict."
         )
 
         return await llm_client.get_verdict(

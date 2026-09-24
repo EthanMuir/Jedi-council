@@ -131,6 +131,7 @@ function layoutRing() {
   // chamber.css gives the ring a wider radius for them (.ring-wizard)
   // rather than shrinking the character back down to fit the old spacing.
   ring.classList.toggle('ring-wizard', getSeatChairStyle() === 'wizard');
+  ring.querySelectorAll('.seat-chair').forEach(chair => chair.remove()); // safe to call again
   const n = TIER_I_SEATS.length;
 
   TIER_I_SEATS.forEach((seat, i) => {
@@ -427,9 +428,9 @@ function renderRunAlerts() {
   for (const alert of runAlerts) {
     const div = document.createElement('div');
     div.className = `run-alert run-alert-${alert.kind}`;
-    div.setAttribute('role', alert.kind === 'stopped' ? 'alert' : 'status');
+    div.setAttribute('role', alert.kind === 'notice' ? 'status' : 'alert');
     const label = document.createElement('b');
-    label.textContent = alert.kind === 'stopped' ? 'Run stopped. ' : 'Note: ';
+    label.textContent = { stopped: 'Run stopped. ', invalid: 'Ticker not found. ' }[alert.kind] || 'Note: ';
     div.append(label, alert.message);
     if (alert.kind === 'stopped') {
       div.append(' Nothing from this run was saved to the Crypt.');
@@ -479,6 +480,15 @@ async function convene() {
     await consumeSSE(url, (event, payload) => {
       if (event === 'mode') setStatus(`${lastStatusText} ${payload.message}.`);
       else if (event === 'notice') addRunAlert('notice', payload.message);
+      else if (event === 'invalid_ticker') {
+        addRunAlert('invalid', payload.message);
+        runInfo = null;
+        renderRunInfo();
+        layoutRing(); // back to the idle ring -- nothing ran
+        setHolocronVerdict(null);
+        document.getElementById('holocron-label').innerHTML = 'AWAITING<br/>DELIBERATION';
+        setStatus('');
+      }
       else if (event === 'stopped') {
         addRunAlert('stopped', payload.message, payload.link);
         setStatus(`Run stopped -- ${ticker} @ ${selectedHorizon}`);
