@@ -792,3 +792,12 @@
 
 .run-alert-stopped b { color: var(--crimson, #d0504f); }
 .run-alert a { color: var(--amber); }
+
+/* The optional question sits centered under the controls, matching them. */
+.question-field {
+  max-width: 720px;
+  margin: 16px auto 0;
+  text-align: center;
+}
+
+.question-field input { width: 100%; }
