@@ -28,11 +28,16 @@ _TYPICAL_OUTPUT_TOKENS = 350
 
 @dataclass(frozen=True)
 class ModelInfo:
-    id: str  # the literal string passed as `model=` to the provider's API
-    provider: str  # "anthropic" | "openai" | "google"
+    # The literal string passed as `model=` to the provider's API -- except
+    # for free-tier entries ("free:..."), which name a *choice* resolved to
+    # a concrete model at call time (see free_models.py), since free-tier
+    # model names change too often to hardcode.
+    id: str
+    provider: str  # "anthropic" | "openai" | "google" | "groq"
     display_name: str
     input_price_per_mtok: float
     output_price_per_mtok: float
+    free: bool = False
 
     @property
     def typical_call_cost_usd(self) -> float:
@@ -55,7 +60,15 @@ CATALOG: list[ModelInfo] = [
     ModelInfo("gemini-3-pro", "google", "Gemini 3 Pro", 2.00, 12.00),
     ModelInfo("gemini-3-flash", "google", "Gemini 3 Flash", 1.50, 7.50),
     ModelInfo("gemini-2.5-flash-lite", "google", "Gemini 2.5 Flash-Lite", 0.10, 0.40),
+    # --- Free tiers (free mode) ---
+    ModelInfo("free:gemini", "google", "Gemini Flash-Lite (free tier)", 0.0, 0.0, free=True),
+    ModelInfo("free:groq", "groq", "Groq open models (free tier)", 0.0, 0.0, free=True),
 ]
+
+# The free-tier choice for each provider that has one, in the order free
+# mode prefers them: Gemini does the work, Groq takes over when Gemini's
+# free daily limit runs out (and the other way around).
+FREE_MODELS: dict[str, str] = {"google": "free:gemini", "groq": "free:groq"}
 
 _BY_ID: dict[str, ModelInfo] = {m.id: m for m in CATALOG}
 

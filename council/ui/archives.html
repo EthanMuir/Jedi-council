@@ -11,7 +11,16 @@
 
 <div class="container">
   <h1 style="text-align:center; margin-bottom: 8px;">The Archives</h1>
-  <p class="dim" style="text-align:center; margin-bottom: 24px;">Rank is gated on 20+ resolutions -- a lucky streak cannot mint a Master.</p>
+  <p class="dim" style="text-align:center; margin-bottom: 16px;">Rank is gated on 20+ resolutions -- a lucky streak cannot mint a Master.</p>
+
+  <div class="archives-mode">
+    <div class="toggle-row" id="mode-toggle" role="group" aria-label="Which runs to score">
+      <button class="toggle-option" data-mode="paid">Paid runs</button>
+      <button class="toggle-option" data-mode="free">Free runs</button>
+      <button class="toggle-option" data-mode="">All</button>
+    </div>
+    <div class="dim" id="mode-hint" style="font-size:12px; margin-top:8px;"></div>
+  </div>
 
   <div class="panel table-scroll">
     <table class="archives-table mono" id="archives-table">

@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 
 KEY_NAMES = (
     "anthropic_api_key",
-    "fmp_api_key",
-    "openai_api_key",
     "google_api_key",
+    "groq_api_key",
+    "openai_api_key",
     "fred_api_key",
 )
 

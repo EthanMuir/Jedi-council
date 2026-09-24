@@ -17,7 +17,14 @@ const TIER_I_SEATS = [
 ];
 
 let selectedHorizon = '1w';
+let selectedShape = 'full'; // 'full' | 'lite' -- see SHAPE_HINTS
 let seatDetails = {}; // seat_id -> full seat_result payload, for the holo-panel
+let runAlerts = []; // { kind: 'notice' | 'stopped', message, link }
+
+const SHAPE_HINTS = {
+  full: 'Full: every seat answers 3 times and the debate runs 2 rounds (43 model calls).',
+  lite: 'Lite: every seat answers once and the debate runs 1 round (16 model calls) -- faster and cheaper, a little less thorough.',
+};
 
 // Navigating to another screen and back used to reset the Chamber to a
 // blank "AWAITING DELIBERATION" state every time, discarding whatever had
@@ -42,6 +49,8 @@ function saveChamberState() {
   const state = {
     ticker: document.getElementById('ticker-input')?.value ?? '',
     horizon: selectedHorizon,
+    shape: selectedShape,
+    runAlerts,
     statusText: lastStatusText,
     seatDetails,
     realityAnchor: lastRealityAnchor,
@@ -80,6 +89,10 @@ function restoreChamberState() {
       b.classList.toggle('active', b.dataset.horizon === state.horizon);
     });
   }
+
+  if (state.shape) setShape(state.shape, /* quiet */ true);
+  runAlerts = state.runAlerts || [];
+  renderRunAlerts();
 
   resetRing(); // lays out the idle/deliberating baseline for this horizon first
   for (const payload of Object.values(state.seatDetails || {})) {
@@ -360,12 +373,55 @@ function setStatus(text) {
   document.getElementById('status-line').textContent = text;
 }
 
+function setShape(shape, quiet = false) {
+  selectedShape = shape === 'lite' ? 'lite' : 'full';
+  document.querySelectorAll('#shape-toggle .toggle-option').forEach(b => {
+    b.classList.toggle('active', b.dataset.shape === selectedShape);
+  });
+  document.getElementById('shape-hint').textContent = SHAPE_HINTS[selectedShape];
+  if (!quiet) AudioBlips.blip(660, 0.03);
+}
+
+// Notices (e.g. "Gemini's free limit ran out, switching to Groq") and a
+// stopped run's reason, shown under the status line.
+function renderRunAlerts() {
+  const box = document.getElementById('run-alerts');
+  box.replaceChildren();
+  for (const alert of runAlerts) {
+    const div = document.createElement('div');
+    div.className = `run-alert run-alert-${alert.kind}`;
+    div.setAttribute('role', alert.kind === 'stopped' ? 'alert' : 'status');
+    const label = document.createElement('b');
+    label.textContent = alert.kind === 'stopped' ? 'Run stopped. ' : 'Note: ';
+    div.append(label, alert.message);
+    if (alert.kind === 'stopped') {
+      div.append(' Nothing from this run was saved to the Crypt.');
+    }
+    if (alert.link) {
+      const a = document.createElement('a');
+      a.href = alert.link;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = 'Add credit ↗';
+      div.append(' ', a);
+    }
+    box.appendChild(div);
+  }
+}
+
+function addRunAlert(kind, message, link = null) {
+  runAlerts.push({ kind, message, link });
+  renderRunAlerts();
+}
+
 async function convene() {
   const ticker = document.getElementById('ticker-input').value.trim().toUpperCase();
   if (!ticker) return;
   const btn = document.getElementById('convene-btn');
   btn.disabled = true;
   resetRing();
+  runAlerts = [];
+  renderRunAlerts();
 
   const contextEl = document.getElementById('context-input');
   const context = contextEl ? contextEl.value.trim() : '';
@@ -378,10 +434,17 @@ async function convene() {
 
   let url = `/api/deliberate/stream?ticker=${encodeURIComponent(ticker)}&horizon=${selectedHorizon}`;
   if (context) url += `&context=${encodeURIComponent(context)}`;
+  if (selectedShape === 'lite') url += '&lite=true';
 
   try {
     await consumeSSE(url, (event, payload) => {
-      if (event === 'seat_result') updateSeatChair(payload);
+      if (event === 'mode') setStatus(`${lastStatusText} ${payload.message}.`);
+      else if (event === 'notice') addRunAlert('notice', payload.message);
+      else if (event === 'stopped') {
+        addRunAlert('stopped', payload.message, payload.link);
+        setStatus(`Run stopped -- ${ticker} @ ${selectedHorizon}`);
+      }
+      else if (event === 'seat_result') updateSeatChair(payload);
       else if (event === 'seat_stage') updateSeatProgress(payload);
       else if (event === 'phase_b_reality_anchor') renderRealityAnchor(payload);
       else if (event === 'debate_round') appendDebateRound(payload);
@@ -418,10 +481,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   });
 
+  document.querySelectorAll('#shape-toggle .toggle-option').forEach(btn => {
+    btn.onclick = () => setShape(btn.dataset.shape);
+  });
+  setShape('full', true);
+
   document.getElementById('convene-btn').onclick = convene;
   document.getElementById('holo-backdrop').onclick = (e) => {
     if (e.target.id === 'holo-backdrop') closeHoloPanel();
   };
 
-  restoreChamberState();
+  const restored = restoreChamberState();
+  // Free Mode's limits go further with Lite runs, so that's its default --
+  // unless this session already picked one.
+  if (!restored) {
+    fetchJSON('/api/settings/free-mode')
+      .then(freeMode => { if (freeMode.enabled) setShape('lite', true); })
+      .catch(() => {});
+  }
 });

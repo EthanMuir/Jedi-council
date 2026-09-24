@@ -18,6 +18,7 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from council.config import Settings
+from council.crypt.db import effective_run_mode
 
 
 @dataclass
@@ -42,7 +43,8 @@ class SeatCalibration:
 def _seat_history_rows(conn: sqlite3.Connection, seat_id: str) -> list[sqlite3.Row]:
     return conn.execute(
         """
-        SELECT sv.probability, sv.vote, p.horizon, r.realised_move_pct
+        SELECT sv.probability, sv.vote, p.horizon, r.realised_move_pct,
+               p.run_mode, p.total_cost_usd
         FROM seat_votes sv
         JOIN predictions p ON p.id = sv.prediction_id
         JOIN resolutions r ON r.prediction_id = sv.prediction_id
@@ -83,11 +85,15 @@ def _calibration_bins(
 
 
 def compute_seat_calibration(
-    conn: sqlite3.Connection, seat_id: str, horizon: str | None = None
+    conn: sqlite3.Connection, seat_id: str, horizon: str | None = None, run_mode: str | None = None
 ) -> SeatCalibration:
+    """`run_mode` ("free" / "paid" / "sample") limits the track record to
+    runs of that kind -- free-tier runs are scored apart from paid ones."""
     rows = _seat_history_rows(conn, seat_id)
     if horizon:
         rows = [r for r in rows if r["horizon"] == horizon]
+    if run_mode:
+        rows = [r for r in rows if effective_run_mode(r["run_mode"], r["total_cost_usd"]) == run_mode]
     outcomes = _outcomes(rows)
     n = len(outcomes)
     if n == 0:

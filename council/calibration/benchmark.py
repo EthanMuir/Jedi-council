@@ -7,6 +7,8 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+from council.crypt.db import effective_run_mode
+
 
 @dataclass
 class ArmScore:
@@ -39,14 +41,16 @@ def _score_arm(rows: list[sqlite3.Row], vote_key: str, prob_key: str | None) -> 
     )
 
 
-def compute_benchmark(conn: sqlite3.Connection) -> dict:
+def compute_benchmark(conn: sqlite3.Connection, run_mode: str | None = None) -> dict:
     rows = conn.execute(
         """
         SELECT p.blind_vote, p.blind_probability, p.council_vote, p.council_confidence,
-               p.p_extremized, r.realised_move_pct
+               p.p_extremized, r.realised_move_pct, p.run_mode, p.total_cost_usd
         FROM predictions p JOIN resolutions r ON r.prediction_id = p.id
         """
     ).fetchall()
+    if run_mode:
+        rows = [r for r in rows if effective_run_mode(r["run_mode"], r["total_cost_usd"]) == run_mode]
     n = len(rows)
     if n == 0:
         return {"n_resolutions": 0}

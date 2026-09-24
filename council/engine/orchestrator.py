@@ -25,12 +25,11 @@ from datetime import datetime
 from typing import Awaitable, Callable
 
 from council.calibration.officer import compute_weights
-from council.config import Settings
+from council.config import Settings, as_lite
 from council.crypt.db import connect, get_open_tickers
 from council.crypt.ledger import write_prediction, write_seat_vote
 from council.data.cache import DiskCache
 from council.data.providers.fixtures import FixtureProvider
-from council.data.providers.fmp import FMPProvider
 from council.data.providers.fred import FREDProvider
 from council.data.providers.sec_edgar import SECEdgarProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
@@ -127,12 +126,28 @@ class DeliberationResult:
     risk_sizing: RiskSizing
     grand_master_verdict: GrandMasterVerdict
     call_log: list = field(default_factory=list)
+    run_mode: str = "paid"  # "free" | "paid" | "sample" -- see _run_mode
+    run_shape: str = "full"  # "full" | "lite"
+
+
+def _run_mode(settings: Settings, call_log: list) -> str:
+    """How the Archives label this run, so cheap free-tier runs never mix
+    into (or drag down) the paid council's track record: "sample" when no
+    model was called at all, "free" when every answer came from a free
+    tier, "paid" as soon as any answer cost money."""
+    if settings.resolved_no_llm:
+        return "sample"
+    answered = [c for c in call_log if c.success]
+    if answered and all(c.free_tier for c in answered):
+        return "free"
+    return "paid"
 
 
 # Seats with no implemented data source for their domain (Task #69):
 # congressional trading disclosures and earnings call transcripts have no
-# solid free/official API -- researched directly, not assumed. FMP's plan
-# doesn't cover either and there's no clean free alternative the way SEC
+# solid free/official API -- researched directly, not assumed. (FMP, the
+# only provider that ever carried them, was removed: its free plan never
+# covered either.) There's no clean free alternative the way SEC
 # EDGAR/FRED were for insider trades/macro. Both seats are still called
 # (they're genuinely competent at these horizons) and still get a logged,
 # real abstain_reason every run -- but they will return NO_READ on
@@ -184,10 +199,8 @@ def build_data_service(settings: Settings) -> DataService:
         # YFinance first, not last: it's free with no hard daily cap, and it
         # genuinely covers OHLCV, news, and options.
         providers.append(YFinanceProvider())
-        # SEC EDGAR next, also free and keyless, also ahead of FMP: it's the
-        # authoritative source for insider transactions / SEC filings, and
-        # unlike FMP's free tier it isn't plan-gated away from those two
-        # domains -- no point spending an HTTP round trip on FMP's 403 first.
+        # SEC EDGAR next, also free and keyless: the authoritative source
+        # for insider transactions / SEC filings.
         providers.append(SECEdgarProvider(settings.resolved_sec_edgar_user_agent))
         # FRED next -- the only remaining source for macro data now that
         # Alpha Vantage has been pulled from this chain entirely (Task #77:
@@ -202,8 +215,6 @@ def build_data_service(settings: Settings) -> DataService:
         # fred.stlouisfed.org, no daily cap, 120 req/min.
         if settings.fred_api_key:
             providers.append(FREDProvider(settings.fred_api_key))
-        if settings.fmp_api_key:
-            providers.append(FMPProvider(settings.fmp_api_key))
     return DataService(providers=providers, cache=cache)
 
 
@@ -230,8 +241,15 @@ async def run_deliberation(
     as_of: datetime | None = None,
     progress: Callable[[str, dict], Awaitable[None]] | None = None,
     context: str | None = None,
+    lite: bool = False,
 ) -> DeliberationResult:
-    """`progress`, when given, is awaited as `progress(event, payload)` at
+    """`lite` runs one sample per seat and one debate round (config.LITE_RUN).
+
+    If every provider the run can use hits a daily limit or runs out of
+    credit, RunStopped is raised before the Crypt write -- a half-finished
+    run is never saved or scored.
+
+    `progress`, when given, is awaited as `progress(event, payload)` at
     each phase transition and seat completion -- purely additive, no
     caller that omits it (the CLI, every existing test) observes any
     behaviour change. This is what lets the UI show the deliberation as a
@@ -242,9 +260,16 @@ async def run_deliberation(
         if progress:
             await progress(event, payload)
 
+    if lite:
+        settings = as_lite(settings)
+    run_shape = "lite" if lite else "full"
     as_of = as_of or datetime.utcnow()
     data_service = build_data_service(settings)
-    llm_client = LLMClient(settings)
+
+    async def notice(message: str) -> None:
+        await emit("notice", {"message": message})
+
+    llm_client = LLMClient(settings, on_notice=notice)
     semaphore = asyncio.Semaphore(settings.max_concurrent_llm_calls)
     conn = connect(settings.council_db_path)
 
@@ -347,6 +372,7 @@ async def run_deliberation(
         return seat, ctx, sampled
 
     results: list[tuple] = await asyncio.gather(*(run_seat(seat) for seat in eligible_seats))
+    llm_client.raise_if_stopped()
 
     verdicts_by_id: dict[str, SeatVerdict] = {
         seat.id: sampled.representative for seat, _ctx, sampled in results
@@ -440,6 +466,8 @@ async def run_deliberation(
                 "prosecutor_findings": [f.description for f in pv.findings] if pv else [],
             },
         )
+
+    llm_client.raise_if_stopped()
 
     # ---- Phase D: weighted vote ---------------------------------------------
     phase_d_weights = {}
@@ -574,6 +602,8 @@ async def run_deliberation(
         },
     )
 
+    llm_client.raise_if_stopped()
+
     # ---- Phase G: Crypt write (exactly once) -----------------------------
     snapshot_fields = {
         "ticker": ticker,
@@ -599,6 +629,10 @@ async def run_deliberation(
     total_cost_usd = round(sum(c.cost_usd for c in llm_client.call_log), 6)
     total_input_tokens = sum(c.input_tokens for c in llm_client.call_log)
     total_output_tokens = sum(c.output_tokens for c in llm_client.call_log)
+    run_mode = _run_mode(settings, llm_client.call_log)
+    # What each seat's answer actually came from -- the concrete free-tier
+    # model, or Groq after an overflow, not just what routing intended.
+    model_used = {c.seat_id: (c.model, c.provider) for c in llm_client.call_log if c.success}
 
     try:
         prediction_id = write_prediction(
@@ -630,10 +664,13 @@ async def run_deliberation(
             total_cost_usd=total_cost_usd,
             total_input_tokens=total_input_tokens,
             total_output_tokens=total_output_tokens,
+            run_mode=run_mode,
+            run_shape=run_shape,
             created_at=as_of,
         )
         for seat, _ctx, sampled in results:
             route = resolve_route(seat.id, settings, default_model=settings.seat_model)
+            used_model, used_provider = model_used.get(seat.id, (route.model, route.provider))
             write_seat_vote(
                 conn,
                 prediction_id=prediction_id,
@@ -641,8 +678,8 @@ async def run_deliberation(
                 verdict=sampled.representative,
                 dispersion=sampled.dispersion,
                 weight_applied=phase_d_weights.get(seat.id, 0.0),
-                model_id="fixture" if settings.resolved_no_llm else route.model,
-                provider="none" if settings.resolved_no_llm else route.provider,
+                model_id="fixture" if settings.resolved_no_llm else used_model,
+                provider="none" if settings.resolved_no_llm else used_provider,
             )
     finally:
         conn.close()
@@ -680,4 +717,6 @@ async def run_deliberation(
         risk_sizing=risk_sizing,
         grand_master_verdict=gm_verdict,
         call_log=llm_client.call_log,
+        run_mode=run_mode,
+        run_shape=run_shape,
     )

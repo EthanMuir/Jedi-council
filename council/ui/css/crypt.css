@@ -61,3 +61,15 @@
   color: var(--cyan);
   font-weight: normal;
 }
+
+/* Free / sample / lite runs, labeled so they're never mistaken for a full paid run */
+.run-tag {
+  display: inline-block;
+  font-family: var(--font-header);
+  font-size: 8px;
+  padding: 2px 5px;
+  border: 1px solid #2a3348;
+  color: var(--bone-dim);
+}
+
+.run-tag-free { color: #d9a6ff; border-color: #7d5a99; }

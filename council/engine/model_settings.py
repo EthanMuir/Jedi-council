@@ -5,6 +5,7 @@ that must be freely overwritten) and from DiskCache (TTL-based -- the
 wrong shape for a choice meant to persist until changed again)."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -16,6 +17,11 @@ CREATE TABLE IF NOT EXISTS model_overrides (
     model_id TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS free_mode (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    previous_overrides_json TEXT NOT NULL,
+    enabled_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -24,7 +30,7 @@ def connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(_SCHEMA)
+    conn.executescript(_SCHEMA)
     conn.commit()
     return conn
 
@@ -62,4 +68,41 @@ def set_override(conn: sqlite3.Connection, role: str, model_id: str) -> None:
 def clear_override(conn: sqlite3.Connection, role: str) -> None:
     """Reverts a role back to the catalog's recommended model."""
     conn.execute("DELETE FROM model_overrides WHERE role = ?", (role,))
+    conn.commit()
+
+
+# ---- free mode: one switch that moves every seat to a free-tier model --------
+# Turning it on remembers the per-seat choices it replaces; turning it off
+# puts exactly those back, so a user who had customised their paid setup
+# doesn't lose it by trying free mode.
+
+
+def free_mode_enabled(conn: sqlite3.Connection) -> bool:
+    return conn.execute("SELECT 1 FROM free_mode WHERE id = 1").fetchone() is not None
+
+
+def enable_free_mode(conn: sqlite3.Connection, free_model_id: str) -> None:
+    model = get_model(free_model_id)
+    if model is None or not model.free:
+        raise ValueError(f"{free_model_id!r} is not a free-tier model")
+    if not free_mode_enabled(conn):
+        conn.execute(
+            "INSERT INTO free_mode (id, previous_overrides_json) VALUES (1, ?)",
+            (json.dumps(get_overrides(conn)),),
+        )
+    for role in RECOMMENDED:
+        set_override(conn, role, free_model_id)
+    conn.commit()
+
+
+def disable_free_mode(conn: sqlite3.Connection) -> None:
+    row = conn.execute("SELECT previous_overrides_json FROM free_mode WHERE id = 1").fetchone()
+    if row is None:
+        return
+    previous = json.loads(row["previous_overrides_json"])
+    conn.execute("DELETE FROM model_overrides")
+    for role, model_id in previous.items():
+        if role in RECOMMENDED and get_model(model_id) is not None:
+            set_override(conn, role, model_id)
+    conn.execute("DELETE FROM free_mode WHERE id = 1")
     conn.commit()

@@ -28,6 +28,13 @@
         </div>
       </div>
       <div>
+        <h3>Run</h3>
+        <div class="toggle-row" id="shape-toggle">
+          <button class="toggle-option active" data-shape="full" title="Every seat answers 3 times and the debate runs 2 rounds -- 43 model calls.">Full</button>
+          <button class="toggle-option" data-shape="lite" title="Every seat answers once and the debate runs 1 round -- 16 model calls. Faster, cheaper, a little less thorough.">Lite</button>
+        </div>
+      </div>
+      <div>
         <button class="btn btn-lever" id="convene-btn">Convene the Council</button>
       </div>
     </div>
@@ -36,7 +43,9 @@
       <input type="text" id="context-input" style="width:100%;" placeholder="e.g. Is the recent capex guidance already priced in?" />
       <div class="dim" style="font-size:12px; margin-top:6px;">Only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker.</div>
     </div>
+    <div id="shape-hint" class="dim" style="font-size:12px; margin-top:10px; text-align:center;"></div>
     <div id="status-line" class="dim mono" style="text-align:center; margin-top: 12px; min-height: 18px;"></div>
+    <div id="run-alerts" class="run-alerts"></div>
   </div>
 
   <div class="chamber-ring-wrap panel">

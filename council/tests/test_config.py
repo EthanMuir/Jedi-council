@@ -36,21 +36,41 @@ def test_explicit_bool_env_value_still_respected(monkeypatch):
 # --- Task #77: alpha_vantage_api_key no longer affects fixture auto-detect ---
 
 
+def _no_keys(**overrides) -> Settings:
+    keys = dict(
+        anthropic_api_key="", google_api_key="", groq_api_key="", openai_api_key="",
+        alpha_vantage_api_key="", fred_api_key="",
+    )
+    return Settings(**{**keys, **overrides})
+
+
 def test_alpha_vantage_key_alone_does_not_escape_fixture_auto_detect():
     # AV was pulled from the live provider chain entirely -- its key's
     # presence no longer means a live run is possible, so it must not
     # affect this auto-detect the way it used to.
-    settings = Settings(alpha_vantage_api_key="test-av-key", fmp_api_key="")
+    settings = _no_keys(alpha_vantage_api_key="test-av-key")
     assert settings.resolved_use_data_fixtures is True
 
 
-def test_fmp_key_alone_escapes_fixture_auto_detect():
-    settings = Settings(alpha_vantage_api_key="", fmp_api_key="test-fmp-key")
+def test_no_keys_at_all_means_sample_data_and_sample_answers():
+    settings = _no_keys()
+    assert settings.resolved_use_data_fixtures is True
+    assert settings.resolved_no_llm is True
+
+
+@pytest.mark.parametrize(
+    "key", ["anthropic_api_key", "google_api_key", "groq_api_key", "openai_api_key"]
+)
+def test_any_single_ai_key_means_real_data_and_real_answers(key):
+    # Market data is free (Yahoo + SEC EDGAR) and needs no key of its own,
+    # so one AI key -- paid or free -- is all a real run needs.
+    settings = _no_keys(**{key: "test-key"})
     assert settings.resolved_use_data_fixtures is False
+    assert settings.resolved_no_llm is False
 
 
-def test_no_keys_at_all_defaults_to_fixture_mode():
-    settings = Settings(alpha_vantage_api_key="", fmp_api_key="")
+def test_fred_key_alone_is_not_enough_for_a_real_run():
+    settings = _no_keys(fred_api_key="test-fred-key")
     assert settings.resolved_use_data_fixtures is True
 
 

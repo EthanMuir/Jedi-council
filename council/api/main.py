@@ -20,13 +20,15 @@ from council.api.serialize import to_jsonable
 from council.api.ui_files import UIFiles
 from council.calibration.benchmark import compute_benchmark
 from council.calibration.officer import compute_seat_calibration, rank_for_seat
-from council.config import get_settings
-from council.crypt.db import connect
+from council.config import as_lite, get_settings
+from council.crypt.db import connect, effective_run_mode
 from council.engine import model_settings
 from council.engine.cost_estimate import estimate_deliberation_cost
-from council.engine.model_catalog import ALL_ROLES, RECOMMENDED, models_sorted_by_cost
+from council.engine.llm_client import RunStopped
+from council.engine.model_catalog import ALL_ROLES, FREE_MODELS, RECOMMENDED, models_sorted_by_cost
 from council.engine.orchestrator import TIER_I_SEATS, run_deliberation
 from council.engine.resolution_sweep import sweep_unresolved
+from council.engine.routing import planned_run_mode
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
 from council.seats.grand_master import GrandMasterSeat
 from council.seats.prosecutor import ProsecutorSeat
@@ -51,7 +53,11 @@ _ROLE_TITLES = {
 
 @app.get("/api/deliberate/stream")
 async def deliberate_stream(
-    ticker: str, horizon: str, as_of: str | None = None, context: str | None = None
+    ticker: str,
+    horizon: str,
+    as_of: str | None = None,
+    context: str | None = None,
+    lite: bool = False,
 ):
     if horizon not in ("1d", "1w", "1m", "1y"):
         raise HTTPException(400, f"invalid horizon '{horizon}'")
@@ -69,16 +75,19 @@ async def deliberate_stream(
         # run is about to spend real money -- a real deliberation billed
         # real money once despite the user believing NO_LLM=true made it
         # free, and nothing in the stream said otherwise until the bill did.
+        run_mode = planned_run_mode(settings)
         await queue.put(
             (
                 "mode",
                 {
                     "is_fixture": settings.resolved_no_llm,
-                    "message": (
-                        "FIXTURE -- no Anthropic API calls, $0 cost"
-                        if settings.resolved_no_llm
-                        else "LIVE -- real Anthropic API calls will be made and billed"
-                    ),
+                    "run_mode": run_mode,
+                    "lite": lite,
+                    "message": {
+                        "sample": "SAMPLE -- no AI keys added, sample answers only, $0 cost",
+                        "free": "FREE -- free-tier models only, $0 cost",
+                        "paid": "LIVE -- real API calls will be made and billed",
+                    }[run_mode],
                 },
             )
         )
@@ -92,8 +101,11 @@ async def deliberate_stream(
                     as_of=as_of_dt,
                     progress=progress,
                     context=context,
+                    lite=lite,
                 )
                 await queue.put(("done", to_jsonable(result)))
+            except RunStopped as exc:
+                await queue.put(("stopped", {"message": str(exc), "link": exc.link}))
             except Exception as exc:  # noqa: BLE001 -- surface any failure to the client, don't hang it
                 await queue.put(("error", {"message": str(exc)}))
             finally:
@@ -125,7 +137,9 @@ async def resolve():
 
 
 @app.get("/api/predictions")
-async def list_predictions(ticker: str | None = None, horizon: str | None = None, limit: int = 50):
+async def list_predictions(
+    ticker: str | None = None, horizon: str | None = None, mode: str | None = None, limit: int = 50
+):
     settings = get_settings()
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
@@ -134,6 +148,7 @@ async def list_predictions(ticker: str | None = None, horizon: str | None = None
             "SELECT p.id, p.created_at, p.ticker, p.horizon, p.resolve_at, p.council_vote, "
             "p.council_confidence, p.blind_vote, p.entry, p.exit, p.invalidation, "
             "p.total_cost_usd, p.total_input_tokens, p.total_output_tokens, "
+            "p.run_mode, p.run_shape, "
             "r.direction_correct, r.realised_move_pct, r.resolved_at "
             "FROM predictions p LEFT JOIN resolutions r ON r.prediction_id = p.id WHERE 1=1"
         )
@@ -144,10 +159,24 @@ async def list_predictions(ticker: str | None = None, horizon: str | None = None
         if horizon:
             query += " AND p.horizon = ?"
             params.append(horizon)
+        if mode:
+            # Same rule as crypt.db.effective_run_mode, for rows saved
+            # before runs were labeled.
+            query += (
+                " AND COALESCE(p.run_mode, CASE WHEN p.total_cost_usd > 0 "
+                "THEN 'paid' ELSE 'sample' END) = ?"
+            )
+            params.append(mode)
         query += " ORDER BY p.created_at DESC LIMIT ?"
         params.append(limit)
         rows = conn.execute(query, params).fetchall()
-        return {"predictions": [dict(row) for row in rows]}
+        predictions = []
+        for row in rows:
+            prediction = dict(row)
+            prediction["run_mode"] = effective_run_mode(row["run_mode"], row["total_cost_usd"])
+            prediction["run_shape"] = row["run_shape"] or "full"
+            predictions.append(prediction)
+        return {"predictions": predictions}
     finally:
         conn.close()
 
@@ -179,14 +208,18 @@ async def get_prediction(prediction_id: str):
 
 
 @app.get("/api/archives")
-async def archives():
+async def archives(mode: str | None = None):
+    """`mode` = "paid" / "free" keeps free-tier runs' track record apart
+    from the paid council's; omitted means every run."""
+    if mode not in (None, "paid", "free"):
+        raise HTTPException(400, f"invalid mode '{mode}'")
     settings = get_settings()
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
         seats_summary = []
         for seat in TIER_I_SEATS:
-            calib = compute_seat_calibration(conn, seat.id)
+            calib = compute_seat_calibration(conn, seat.id, run_mode=mode)
             seats_summary.append(
                 {
                     "seat_id": seat.id,
@@ -201,8 +234,8 @@ async def archives():
                     ],
                 }
             )
-        benchmark = compute_benchmark(conn)
-        return {"seats": seats_summary, "benchmark": benchmark}
+        benchmark = compute_benchmark(conn, run_mode=mode)
+        return {"seats": seats_summary, "benchmark": benchmark, "mode": mode}
     finally:
         conn.close()
 
@@ -230,6 +263,7 @@ async def get_model_settings():
             "input_price_per_mtok": m.input_price_per_mtok,
             "output_price_per_mtok": m.output_price_per_mtok,
             "typical_call_cost_usd": m.typical_call_cost_usd,
+            "free": m.free,
         }
         for m in models_sorted_by_cost(descending=True)
     ]
@@ -320,12 +354,64 @@ async def delete_api_key(name: str):
     return {"keys": _api_key_status(get_settings())}
 
 
+class _FreeModeRequest(BaseModel):
+    enabled: bool
+
+
+def _free_mode_status(settings) -> dict:
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        enabled = model_settings.free_mode_enabled(conn)
+    finally:
+        conn.close()
+    return {
+        "enabled": enabled,
+        "gemini_key": bool(settings.google_api_key),
+        "groq_key": bool(settings.groq_api_key),
+        "run_mode": planned_run_mode(settings),
+    }
+
+
+@app.get("/api/settings/free-mode")
+async def get_free_mode():
+    settings = get_settings()
+    settings.ensure_dirs()
+    return _free_mode_status(settings)
+
+
+@app.post("/api/settings/free-mode")
+async def set_free_mode(body: _FreeModeRequest):
+    settings = get_settings()
+    settings.ensure_dirs()
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        if body.enabled:
+            # Gemini first when both are there -- routing overflows to Groq
+            # on its own when Gemini's daily limit runs out.
+            if settings.google_api_key:
+                free_model = FREE_MODELS["google"]
+            elif settings.groq_api_key:
+                free_model = FREE_MODELS["groq"]
+            else:
+                raise HTTPException(
+                    400, "add a free Gemini or Groq key under API Keys first"
+                )
+            model_settings.enable_free_mode(conn, free_model)
+        else:
+            model_settings.disable_free_mode(conn)
+    finally:
+        conn.close()
+    return _free_mode_status(settings)
+
+
 @app.get("/api/settings/cost-estimate")
-async def get_settings_cost_estimate(horizon: str = "1w"):
+async def get_settings_cost_estimate(horizon: str = "1w", lite: bool = False):
     if horizon not in ("1d", "1w", "1m", "1y"):
         raise HTTPException(400, f"invalid horizon '{horizon}'")
     settings = get_settings()
     settings.ensure_dirs()
+    if lite:
+        settings = as_lite(settings)
     # The ticker is a placeholder -- cost depends only on which models are
     # routed to and how many calls each seat/round makes, never on the
     # symbol itself, so any value here estimates identically.
@@ -333,6 +419,8 @@ async def get_settings_cost_estimate(horizon: str = "1w"):
     return {
         "horizon": horizon,
         "is_fixture": estimate.is_fixture,
+        "run_mode": planned_run_mode(settings),
+        "lite": lite,
         "total_cost_usd": estimate.total_cost_usd,
         "total_calls": estimate.total_calls,
         "line_items": [dataclasses.asdict(li) for li in estimate.line_items],

@@ -13,16 +13,16 @@ Five LLM personas reading the same feed are one source wearing five robes.
   cache with TTL, a point-in-time guard (`filter_point_in_time`) that drops
   any record dated after `as_of`, and provider fallback (yfinance and SEC
   EDGAR first -- both free with no key and no hard daily cap -- then FRED,
-  then FMP, or a recorded-fixture provider for offline use). News is the
-  one domain that doesn't stop at the first success: every provider that
-  covers it (yfinance, FMP) is queried and the results unioned, since
-  yfinance's feed is whatever Yahoo currently has cached, not a real
-  windowed query. Covers OHLCV, news/sentiment, options, fundamentals,
+  or a recorded-fixture provider for offline use). News is the one domain
+  that doesn't stop at the first success: every provider that covers it is
+  queried and the results unioned. FMP was removed: its free plan never
+  covered congressional trades or transcripts, and accounts created after
+  Aug 2025 can't use the endpoints it called. Covers OHLCV, news/sentiment, options, fundamentals,
   insider transactions, congressional disclosures, 13F/institutional
   holdings, macro data, cross-market instruments, analyst estimates,
   earnings transcripts, and SEC filings. SEC EDGAR
-  (`council/data/providers/sec_edgar.py`) is the alternative for insider
-  transactions / SEC filings when FMP's plan doesn't cover them -- set
+  (`council/data/providers/sec_edgar.py`) is the source for insider
+  transactions / SEC filings -- set
   `SEC_EDGAR_USER_AGENT` in `.env` to a real contact string (SEC requires
   one on every request). FRED (`council/data/providers/fred.py`) is the
   only source for macro data -- get a free key at fred.stlouisfed.org and
@@ -157,8 +157,7 @@ provider (the routing decision exists; the API call doesn't).
 Known scope cuts (see inline comments): Fundamentals/AnalystEstimates/Macro
 snapshots still don't enforce a filing-lag point-in-time guard the way the
 dated feeds do -- a real gap, deferred again; it matters most for
-historical backtesting, which this system doesn't do yet either. FMP
-provider endpoints are unverified against a live key (none configured).
+historical backtesting, which this system doesn't do yet either.
 Cross-Market Navigator's sector/peer/index/overseas proxies all resolve to
 the same `DEFAULT_ohlcv.json` fixture offline, so their values are
 currently identical -- a fixture-mode artifact, not a code issue. Cost
@@ -181,16 +180,23 @@ python3 -m venv .venv
 cp .env.example .env   # optional -- empty is fine, runs in fixture mode
 ```
 
-With no `ANTHROPIC_API_KEY` set, seat verdicts automatically come from
-`council/tests/fixtures/seat_verdicts/` instead of a real LLM call. Market
-data fixture mode (`council/tests/fixtures/market_data/`, NVDA only, for
-now) is separate and only auto-forces when `FMP_API_KEY` is unset -- with
-no keys at all, market data is still live by default via yfinance and SEC
-EDGAR (both free, no key required); set `USE_DATA_FIXTURES=true`
-explicitly if you want fully offline market data too. Set the keys in
-`.env` to go live -- no code changes needed. Adding `OPENAI_API_KEY` /
-`GOOGLE_API_KEY` similarly activates the seats routed to those providers in
-`config/models.yaml`, with no code changes either.
+With no AI key at all, seat verdicts come from
+`council/tests/fixtures/seat_verdicts/` and market data from
+`council/tests/fixtures/market_data/` (NVDA only). Any one AI key --
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or a free `GOOGLE_API_KEY` /
+`GROQ_API_KEY` -- switches both to live: market data needs no key of its
+own (yfinance and SEC EDGAR are free; `FRED_API_KEY` is free and optional).
+Keys can also be added from Settings -> API Keys instead of `.env`.
+
+**Free Mode** (Settings -> Models & Cost) puts every seat on free-tier
+models: Gemini's newest Flash-Lite model (picked from what the key can
+list), with Groq's open models taking over automatically if Gemini's free
+daily limit runs out mid-run. If every usable provider is out -- or a paid
+account runs out of credit -- the run stops with the reason and nothing is
+written to the Crypt. Free runs are labeled `run_mode=free` and scored
+separately in the Archives. **Lite runs** (the Chamber's Full/Lite switch,
+or `lite=true` on the API) make 16 model calls instead of 43: one sample
+per seat, one debate round.
 
 ## Run it
 
@@ -287,7 +293,7 @@ Once you have a fresh Ubuntu VM and can SSH into it:
 ```bash
 git clone https://github.com/EthanMuir/jedi-council
 cd jedi-council
-cp .env.example .env   # fill in at minimum ANTHROPIC_API_KEY and APP_PASSWORD
+cp .env.example .env   # fill in at minimum APP_PASSWORD; AI keys can go here or in Settings
 bash scripts/setup-oracle-vm.sh
 ```
 

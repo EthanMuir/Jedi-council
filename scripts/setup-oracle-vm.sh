@@ -26,9 +26,9 @@ if [ ! -f "$REPO_DIR/.env" ]; then
   echo ""
   echo "ERROR: $REPO_DIR/.env not found."
   echo "Copy .env.example to .env and fill it in first -- at minimum"
-  echo "ANTHROPIC_API_KEY and APP_PASSWORD (see the README's hosting"
-  echo "section for why APP_PASSWORD matters before this is reachable"
-  echo "from the public internet)."
+  echo "APP_PASSWORD (see the README's hosting section for why it matters"
+  echo "before this is reachable from the public internet). AI keys can go"
+  echo "in .env too, or be added later from Settings -> API Keys."
   exit 1
 fi
 

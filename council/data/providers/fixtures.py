@@ -1,5 +1,5 @@
 """Recorded-fixture provider. Used whenever USE_DATA_FIXTURES resolves true
-(no Alpha Vantage / FMP key configured) so DataService, the point-in-time
+(no AI key configured -- see Settings.resolved_use_data_fixtures) so DataService, the point-in-time
 guard, and the seats can all be exercised end to end offline."""
 from __future__ import annotations
 

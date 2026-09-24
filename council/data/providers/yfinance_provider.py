@@ -22,8 +22,7 @@ field availability varies by ticker and by yfinance version, and this
 couldn't be verified against live Yahoo data from the sandbox that built it
 (network policy blocks it same as it blocks most external hosts). Every
 extraction below is wrapped defensively and falls back to the same
-"unavailable" defaults FMPProvider already uses for fields it can't fill
-either -- a missing number here should degrade the seat's data_quality,
+"unavailable" defaults for fields it can't fill -- a missing number here should degrade the seat's data_quality,
 not crash it."""
 from __future__ import annotations
 
@@ -253,8 +252,8 @@ class YFinanceProvider:
             "pe_ratio": _safe_float(info.get("trailingPE")),
             "ev_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
             "price_to_sales": _safe_float(info.get("priceToSalesTrailing12Months")),
-            # Yahoo doesn't publish a sector-median comparator; FMP's own
-            # provider leaves these null too rather than approximate one.
+            # Yahoo doesn't publish a sector-median comparator; left null
+            # rather than approximated.
             "sector_median_pe": None,
             "sector_median_ev_ebitda": None,
         }
@@ -276,9 +275,8 @@ class YFinanceProvider:
             holders = t.institutional_holders
             if holders is not None and not holders.empty:
                 # Top holders only, not a true market-wide aggregate -- the
-                # closest free approximation available, same spirit as
-                # FMP's own defaults below for fields Yahoo doesn't expose
-                # at all.
+                # closest free approximation available, same spirit as the
+                # defaults below for fields Yahoo doesn't expose at all.
                 total_shares = int(holders["Shares"].sum())
                 if "Date Reported" in holders.columns:
                     most_recent = holders["Date Reported"].max()
@@ -313,8 +311,7 @@ class YFinanceProvider:
             "filed_at": quarter_end,
             "total_institutional_shares": total_shares,
             "pct_of_float_held": pct_of_float,
-            # Not available from Yahoo's free surface -- FMP's own provider
-            # defaults several of these same fields for the same reason.
+            # Not available from Yahoo's free surface -- defaulted.
             "qoq_share_change_pct": 0.0,
             "top_holders_net_buyers": 0,
             "top_holders_net_sellers": 0,

@@ -6,7 +6,7 @@ import argparse
 import asyncio
 from datetime import datetime
 
-from council.config import get_settings
+from council.config import as_lite, get_settings
 from council.crypt.db import connect
 from council.crypt.export import fetch_predictions_for_export, write_csv, write_json
 from council.engine.cost_estimate import CostEstimate, estimate_deliberation_cost
@@ -17,7 +17,9 @@ from council.engine.orchestrator import (
     build_data_service,
     run_deliberation,
 )
+from council.engine.llm_client import RunStopped
 from council.engine.resolution_sweep import sweep_unresolved
+from council.engine.routing import planned_run_mode
 
 
 def _print_result(result: DeliberationResult) -> None:
@@ -124,6 +126,11 @@ def _print_llm_mode(settings) -> None:
     misconfiguration that went unnoticed until the Anthropic bill showed it."""
     if settings.resolved_no_llm:
         print("\nLLM MODE: FIXTURE -- no Anthropic API calls will be made. $0 cost, guaranteed.")
+    elif planned_run_mode(settings) == "free":
+        print(
+            "\nLLM MODE: FREE -- every seat is on a free-tier model (Free Mode). $0 cost;"
+            "\n  the run stops early if the free daily limits run out."
+        )
     else:
         key_state = (
             "a key is configured" if settings.anthropic_api_key
@@ -255,6 +262,11 @@ def main(argv: list[str] | None = None) -> None:
         "for demoing the deliberate -> resolve lifecycle without waiting real time to pass.",
     )
     deliberate.add_argument(
+        "--lite",
+        action="store_true",
+        help="One sample per seat and one debate round: 16 model calls instead of 43.",
+    )
+    deliberate.add_argument(
         "--dry-run-cost",
         action="store_true",
         help="Print an estimated $ cost for this deliberation and exit -- no network calls, "
@@ -292,11 +304,23 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "deliberate":
         _print_llm_mode(settings)
         if args.dry_run_cost:
-            estimate = estimate_deliberation_cost(args.ticker.upper(), args.horizon, settings)
+            estimate_settings = as_lite(settings) if args.lite else settings
+            estimate = estimate_deliberation_cost(args.ticker.upper(), args.horizon, estimate_settings)
             _print_cost_estimate(estimate)
             return
         as_of = datetime.fromisoformat(args.as_of) if args.as_of else None
-        result = asyncio.run(run_deliberation(args.ticker.upper(), args.horizon, settings, as_of=as_of))
+        try:
+            result = asyncio.run(
+                run_deliberation(
+                    args.ticker.upper(), args.horizon, settings, as_of=as_of, lite=args.lite
+                )
+            )
+        except RunStopped as exc:
+            print(f"\nRUN STOPPED: {exc}")
+            if exc.link:
+                print(f"  Add credit: {exc.link}")
+            print("  Nothing from this run was written to the Crypt.")
+            raise SystemExit(1) from exc
         _print_result(result)
     elif args.command == "resolve":
         swept = asyncio.run(sweep_unresolved(settings))

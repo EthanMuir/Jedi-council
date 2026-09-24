@@ -12,9 +12,9 @@ let CURRENT_HORIZON = '1w';
 const KEY_GUIDES = [
   {
     name: 'anthropic_api_key',
-    label: 'Anthropic (Claude)',
-    required: true,
-    purpose: 'Lets the Council think. Without it, every run replays sample answers instead of analyzing anything.',
+    label: 'Anthropic (Claude) -- best quality',
+    group: 'ai',
+    purpose: 'The strongest answers the Council can give. Paid -- a typical run costs well under a dollar.',
     placeholder: 'Paste key (sk-ant-...)',
     cost: 'Pay as you go -- $5 of credit is plenty to start. A Claude.ai subscription does not include this; API credit is bought separately.',
     steps: [
@@ -25,23 +25,37 @@ const KEY_GUIDES = [
     ],
   },
   {
-    name: 'fmp_api_key',
-    label: 'Financial Modeling Prep (stock data)',
-    required: true,
-    purpose: 'Real market data for any stock. Without it, the Council only has built-in sample data for NVDA.',
-    placeholder: 'Paste key here',
-    cost: 'The free plan is enough to get started.',
+    name: 'google_api_key',
+    label: 'Google (Gemini) -- free',
+    group: 'ai',
+    purpose: 'Free AI answers, no card needed. Weaker than Claude -- see Free Mode under Models & Cost for the trade-off.',
+    placeholder: 'Paste key (AIza...)',
+    cost: "Free within Google's daily limits, no card needed. Stay free by not adding billing to the Google project the key belongs to. On the free tier, Google may use what you send to improve its products.",
     steps: [
-      { text: 'Sign up for a free account.', link: 'https://site.financialmodelingprep.com/register', linkText: 'Open sign-up page' },
-      { text: 'Once signed in, open your Dashboard -- your API key is shown there.', link: 'https://site.financialmodelingprep.com/dashboard', linkText: 'Open Dashboard' },
-      { text: 'Copy the key and paste it above.' },
+      { text: 'Open Google AI Studio and sign in with any Google account.', link: 'https://aistudio.google.com/', linkText: 'Open AI Studio' },
+      { text: 'Go to "Get API key" and click "Create API key". If it asks about a project, let it create one for you.', link: 'https://aistudio.google.com/apikey', linkText: 'Open API keys' },
+      { text: 'Copy the key (it starts with AIza) and paste it above.' },
+      { text: 'Then turn on Free Mode under Models & Cost so every seat uses it.' },
+    ],
+  },
+  {
+    name: 'groq_api_key',
+    label: 'Groq -- free backup',
+    group: 'optional',
+    purpose: "More free runs per day: when Gemini's free daily limit runs out mid-run, the Council switches to Groq's free models on its own.",
+    placeholder: 'Paste key (gsk_...)',
+    cost: 'Free within daily limits, no card needed.',
+    steps: [
+      { text: 'Open the Groq Console and sign in (Google, GitHub or email all work).', link: 'https://console.groq.com/', linkText: 'Open Groq Console' },
+      { text: 'Go to API Keys and click "Create API Key". Give it any name, like "council".', link: 'https://console.groq.com/keys', linkText: 'Open API Keys' },
+      { text: 'Copy the key (it starts with gsk_) and paste it above. It is only shown once.' },
     ],
   },
   {
     name: 'openai_api_key',
     label: 'OpenAI (GPT)',
-    required: false,
-    purpose: 'Some seats are set to use OpenAI models. Without this key those seats use Claude instead -- everything still works.',
+    group: 'optional',
+    purpose: 'Some seats are set to use OpenAI models. Without this key those seats use another model you have a key for -- everything still works.',
     placeholder: 'Paste key (sk-...)',
     cost: 'Pay as you go. A ChatGPT subscription does not include this; API credit is bought separately.',
     steps: [
@@ -52,22 +66,9 @@ const KEY_GUIDES = [
     ],
   },
   {
-    name: 'google_api_key',
-    label: 'Google (Gemini)',
-    required: false,
-    purpose: "Some seats are set to use Google's Gemini models. Without this key those seats use Claude instead.",
-    placeholder: 'Paste key (AIza...)',
-    cost: 'Some models can be used free within limits; beyond that it is pay as you go.',
-    steps: [
-      { text: 'Open Google AI Studio and sign in with any Google account.', link: 'https://aistudio.google.com/', linkText: 'Open AI Studio' },
-      { text: 'Go to "Get API key" and click "Create API key".', link: 'https://aistudio.google.com/apikey', linkText: 'Open API keys' },
-      { text: 'Copy the key (it starts with AIza) and paste it above.' },
-    ],
-  },
-  {
     name: 'fred_api_key',
     label: 'FRED (economic data)',
-    required: false,
+    group: 'optional',
     purpose: 'Interest rates, inflation and jobs data for the Keeper of the Outer Rim. Without it, that one seat sits out.',
     placeholder: 'Paste key here',
     cost: 'Free.',
@@ -88,21 +89,27 @@ function keyBadgeText(status) {
 }
 
 function renderKeysSummary() {
-  const hasAi = KEY_STATUS.anthropic_api_key?.is_set;
-  const hasData = KEY_STATUS.fmp_api_key?.is_set;
+  const has = name => KEY_STATUS[name]?.is_set;
+  const hasPaid = has('anthropic_api_key') || has('openai_api_key');
+  const hasFree = has('google_api_key') || has('groq_api_key');
   const el = document.getElementById('keys-summary');
-  if (hasAi && hasData) {
+  el.replaceChildren();
+  if (hasPaid) {
     el.className = 'keys-summary mono ready';
-    el.textContent = "You're all set -- the Council uses real AI and real market data.";
-  } else if (hasAi) {
+    el.textContent = "You're all set -- the Council analyzes any stock with real AI and real market data.";
+  } else if (hasFree && FREE_MODE.enabled) {
+    el.className = 'keys-summary mono ready';
+    el.textContent = "You're all set for free runs -- Free Mode is on.";
+  } else if (hasFree) {
     el.className = 'keys-summary mono partial';
-    el.textContent = 'Real AI is on, but stock data is still sample data (NVDA only). Add a Financial Modeling Prep key below.';
-  } else if (hasData) {
-    el.className = 'keys-summary mono partial';
-    el.textContent = 'Real stock data is on, but answers are still samples. Add an Anthropic key below.';
+    el.append('Almost there -- your free key works. Last step: ');
+    const link = document.createElement('a');
+    link.href = '#models';
+    link.textContent = 'turn on Free Mode';
+    el.append(link, ' so every seat uses it.');
   } else {
     el.className = 'keys-summary mono partial';
-    el.textContent = 'Right now the Council runs on sample data and sample answers. Add the two keys below to analyze any stock for real.';
+    el.textContent = 'Right now the Council only replays sample answers about NVDA. Add either key below to analyze any stock for real -- the Gemini one is free.';
   }
 }
 
@@ -197,6 +204,7 @@ function buildKeyCard(guide) {
       applyKeyStatus(data.keys);
       showKeyMessage(msg, 'Saved. The Council will use this key from the next run on.');
       AudioBlips.blip();
+      loadFreeMode();
       loadCostEstimate();
     } catch (err) {
       showKeyMessage(msg, `That key couldn't be saved: ${friendlyError(err)}`, true);
@@ -211,6 +219,7 @@ function buildKeyCard(guide) {
       applyKeyStatus(data.keys);
       const stillSet = KEY_STATUS[guide.name]?.is_set;
       showKeyMessage(msg, stillSet ? "Removed. Using the key from the server's .env file again." : 'Removed.');
+      loadFreeMode();
       loadCostEstimate();
     } catch (err) {
       showKeyMessage(msg, `Couldn't remove it: ${friendlyError(err)}`, true);
@@ -253,10 +262,10 @@ function applyKeyStatus(keys) {
 }
 
 async function loadKeys() {
-  const required = document.getElementById('keys-required');
+  const aiKeys = document.getElementById('keys-required');
   const optional = document.getElementById('keys-optional');
   for (const guide of KEY_GUIDES) {
-    (guide.required ? required : optional).appendChild(buildKeyCard(guide));
+    (guide.group === 'ai' ? aiKeys : optional).appendChild(buildKeyCard(guide));
   }
   try {
     const data = await fetchJSON('/api/settings/keys');
@@ -388,14 +397,89 @@ async function loadRoles() {
   }
 }
 
+// ---- Free mode ---------------------------------------------------------------
+let FREE_MODE = { enabled: false, gemini_key: false, groq_key: false };
+
+function renderFreeMode() {
+  const btn = document.getElementById('free-mode-toggle');
+  const status = document.getElementById('free-mode-status');
+  const hasFreeKey = FREE_MODE.gemini_key || FREE_MODE.groq_key;
+  document.getElementById('free-mode-panel').classList.toggle('is-on', FREE_MODE.enabled);
+  if (FREE_MODE.enabled) {
+    btn.textContent = 'Turn off Free Mode';
+    btn.disabled = false;
+    const using = FREE_MODE.gemini_key
+      ? (FREE_MODE.groq_key ? 'Gemini, with Groq as backup' : 'Gemini')
+      : 'Groq';
+    status.textContent = `ON -- every seat uses free models (${using}). Turning it off puts back the models you had before.`;
+    status.className = 'mono free-mode-status green';
+  } else {
+    btn.textContent = 'Turn on Free Mode';
+    btn.disabled = !hasFreeKey;
+    status.replaceChildren();
+    status.className = 'mono free-mode-status dim';
+    if (hasFreeKey) {
+      status.textContent = 'OFF -- seats use the models listed below.';
+    } else {
+      status.append('Needs a free Gemini or Groq key first -- ');
+      const link = document.createElement('a');
+      link.href = '#keys';
+      link.textContent = 'add one under API Keys';
+      status.append(link, '.');
+    }
+  }
+  renderKeysSummary();
+}
+
+async function loadFreeMode() {
+  try {
+    FREE_MODE = await fetchJSON('/api/settings/free-mode');
+    renderFreeMode();
+  } catch (e) {
+    /* older server without free mode -- leave the panel in its off state */
+  }
+}
+
+async function toggleFreeMode() {
+  const btn = document.getElementById('free-mode-toggle');
+  btn.disabled = true;
+  try {
+    FREE_MODE = await fetchJSON('/api/settings/free-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: !FREE_MODE.enabled }),
+    });
+    AudioBlips.blip();
+    renderFreeMode();
+    await loadRoles();
+    await loadCostEstimate();
+  } catch (e) {
+    const status = document.getElementById('free-mode-status');
+    status.textContent = `Couldn't change Free Mode: ${friendlyError(e)}`;
+    status.className = 'mono free-mode-status crimson';
+    btn.disabled = false;
+  }
+}
+
+const RUN_MODE_NOTE = {
+  sample: ' -- no AI key yet, so runs replay sample answers and cost $0',
+  free: ' -- all on free tiers, so runs cost $0',
+  paid: '',
+};
+
 async function loadCostEstimate() {
   const summary = document.getElementById('cost-summary');
   const lineitems = document.getElementById('cost-lineitems');
   try {
-    const est = await fetchJSON(`/api/settings/cost-estimate?horizon=${CURRENT_HORIZON}`);
+    const [est, lite] = await Promise.all([
+      fetchJSON(`/api/settings/cost-estimate?horizon=${CURRENT_HORIZON}`),
+      fetchJSON(`/api/settings/cost-estimate?horizon=${CURRENT_HORIZON}&lite=true`),
+    ]);
+    const isZero = est.total_cost_usd === 0;
     summary.innerHTML = `
-      <span class="big-number ${est.is_fixture ? 'fixture' : ''}">${fmtUsd(est.total_cost_usd)}</span>
-      <span class="dim">${est.total_calls} model calls at the ${CURRENT_HORIZON} horizon${est.is_fixture ? ' -- no Anthropic key yet, so runs use sample answers and cost $0' : ''}</span>
+      <span class="big-number ${isZero ? 'fixture' : ''}">${fmtUsd(est.total_cost_usd)}</span>
+      <span class="dim">${est.total_calls} model calls at the ${CURRENT_HORIZON} horizon${RUN_MODE_NOTE[est.run_mode] || ''}.
+        A Lite run (pick it in the Chamber) is ${lite.total_calls} calls${isZero ? '' : `, about ${fmtUsd(lite.total_cost_usd)}`}.</span>
     `;
     lineitems.innerHTML = est.line_items.map(li => `
       <tr>
@@ -512,7 +596,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   setHorizon('1w');
 
+  document.getElementById('free-mode-toggle').onclick = toggleFreeMode;
   loadKeys();
+  loadFreeMode();
   renderCenterpieceGrid();
   renderChairGrid();
   loadRoles();

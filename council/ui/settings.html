@@ -24,12 +24,12 @@
           <p class="section-lede">
             An API key is like a password that lets the Council use a service on
             your account. Paste each one in once and it's saved -- you won't need
-            to do it again.
+            to do it again. Stock market data is free and needs no key.
           </p>
           <div id="keys-summary" class="keys-summary mono" role="status"></div>
         </div>
 
-        <h3 class="key-group-label">Needed for real analysis</h3>
+        <h3 class="key-group-label">Add at least one of these</h3>
         <div id="keys-required" class="key-list"></div>
 
         <h3 class="key-group-label">Optional</h3>
@@ -38,6 +38,28 @@
 
       <!-- ================= MODELS & COST ================= -->
       <section class="page-section" data-section="models" data-title="Models &amp; Cost">
+        <div class="panel free-mode-panel" id="free-mode-panel">
+          <h2 style="margin-top:0;">Free Mode</h2>
+          <p class="section-lede">
+            Runs every seat on free AI models -- Google's Gemini, with Groq taking
+            over if Gemini's free daily limit runs out mid-run. Costs nothing.
+          </p>
+          <div class="free-tradeoff">
+            <div class="free-tradeoff-title">The honest trade-off</div>
+            <ul>
+              <li><b>Weaker answers.</b> Free models miss more nuance than Claude and follow the Council's rules less reliably, so more seats may sit a run out.</li>
+              <li><b>Less independent.</b> Every seat runs on the same kind of model, so their disagreements mean less than on a mixed council.</li>
+              <li><b>Daily limits.</b> Roughly 10 full runs or 30 Lite runs a day on Gemini if Google's current limits hold (Groq adds more), and runs are slower.</li>
+              <li><b>Privacy.</b> On its free tier, Google may use what you send to improve its products.</li>
+              <li><b>Scored separately.</b> Free runs are labeled in the Crypt and kept apart in the Archives, so they never mix with paid results.</li>
+            </ul>
+          </div>
+          <div class="free-mode-row">
+            <button class="btn" id="free-mode-toggle" disabled>Turn on Free Mode</button>
+            <span id="free-mode-status" class="mono free-mode-status dim" role="status"></span>
+          </div>
+        </div>
+
         <div class="panel">
           <h2 style="margin-top:0;">Estimated Cost Per Run</h2>
           <div class="cost-header">
@@ -61,8 +83,8 @@
           <h2 style="margin-top:0;">Model For Each Seat</h2>
           <p class="section-lede">
             Options run most to least expensive; &#9733; marks the recommended one.
-            Seats set to an OpenAI or Google model use Claude instead until you
-            add that key under API Keys.
+            A seat set to a service you have no key for uses one you do have a
+            key for instead.
           </p>
           <div id="model-status" class="mono model-status" role="status"></div>
           <table class="settings-table mono" id="settings-table">

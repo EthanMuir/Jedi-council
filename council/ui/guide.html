@@ -22,7 +22,8 @@
     <h2>Getting Started</h2>
     <p class="section-lede">The Council is a panel of AI analysts that each study one slice of a stock's data, argue it out, and reach a verdict on where the price is headed.</p>
     <ol class="step-list mono start-steps">
-      <li><b>Add your keys.</b> Go to <a href="/settings.html#keys">Settings &rarr; API Keys</a> and add an Anthropic key and a Financial Modeling Prep key. Each comes with step-by-step instructions -- no technical knowledge needed.</li>
+      <li><b>Add a key.</b> Go to <a href="/settings.html#keys">Settings &rarr; API Keys</a> and add either an Anthropic key (best answers, paid) or a free Gemini key. Each comes with step-by-step instructions -- no technical knowledge needed. Stock data is free and needs no key.</li>
+      <li><b>Going free?</b> After adding the Gemini key, turn on <a href="/settings.html#models">Free Mode</a> under Settings &rarr; Models &amp; Cost. Read its trade-offs first: free answers are weaker than Claude's.</li>
       <li><b>Ask about a stock.</b> In the Chamber, type a ticker (like NVDA), pick how far ahead to look, and press <b>Convene the Council</b>.</li>
       <li><b>Watch the Council work.</b> Each seat reads its own data and votes. Tap any seat to see its reasoning.</li>
       <li><b>Read the verdict.</b> The Grand Master's final call appears in the center, with its reasoning below. Every run is saved in the Crypt.</li>
@@ -66,14 +67,22 @@
     <ol class="step-list mono">
       <li>Type a stock ticker, e.g. <b>NVDA</b>.</li>
       <li>Pick a horizon: Next Day / Next Week / Next Month / Next Year. Not every seat is competent at every horizon -- see <a href="#horizons">Seats by Horizon</a> -- so fewer seats take part at 1d than at 1y.</li>
+      <li>Pick <b>Full</b> or <b>Lite</b>. Full has every seat answer three times and runs two debate rounds (43 model calls); Lite has each seat answer once with one debate round (16 calls) -- faster and cheaper, a little less thorough. Lite is the default in Free Mode, since free daily limits go about 2.5&times; further.</li>
       <li>Optionally, ask a question (e.g. "Is the recent capex guidance already priced in?"). It only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker and votes independently.</li>
       <li>Press <b>Convene the Council</b>. Each seat's bar fills as it gathers its data and works through its samples, then settles into its vote color. Click or tap any seat to read its full reasoning.</li>
       <li>Once every seat has reported: the Reality Anchor appears, then the Bull/Bear debate with the Prosecutor's rulings, then the audit gates and position size, and finally the Grand Master's verdict fills the centerpiece. The whole run is saved to the Crypt automatically.</li>
     </ol>
     <p class="guide-callout mono">
-      <b>No keys added yet?</b> The Council still runs, but on built-in sample
-      market data (NVDA only) and sample answers. Add your keys in
+      <b>No keys added yet?</b> The Council still runs, but only replays
+      built-in sample answers about NVDA. Add a key in
       <a href="/settings.html#keys">Settings &rarr; API Keys</a> to analyze any stock for real.
+    </p>
+    <p class="guide-callout mono">
+      <b>Out of free runs or credit?</b> In Free Mode, when Gemini's daily limit
+      runs out mid-run the Council switches to Groq on its own (if you've added
+      a Groq key) and tells you. If nothing is left -- or a paid account runs
+      out of credit -- the run stops, says when the limit resets or links to
+      where to add credit, and nothing from that run is saved.
     </p>
   </div>
 
@@ -81,7 +90,7 @@
     <h3 class="cyan">The Crypt</h3>
     <ol class="step-list mono">
       <li>Every deliberation ever run lives here, permanently -- the ledger is append-only and hash-chained, so nothing can be edited or quietly deleted after the fact.</li>
-      <li>Filter by ticker and/or horizon, then click <b>Update the Crypt</b> to sweep any prediction whose resolution window has passed and score it against what actually happened.</li>
+      <li>Free Mode runs are tagged <b>FREE</b> and Lite runs <b>LITE</b>. Filter by ticker, horizon and/or run type, then click <b>Update the Crypt</b> to sweep any prediction whose resolution window has passed and score it against what actually happened.</li>
       <li>Click a card to see every seat's individual vote alongside the Grand Master's final verdict for that prediction.</li>
       <li>The scoreboard compares the Council's blind vote, final (weighted) vote, and extremized vote against two baselines: buy-and-hold and always-bullish.</li>
     </ol>
@@ -91,6 +100,7 @@
     <h3 class="cyan">The Archives</h3>
     <ol class="step-list mono">
       <li>Once real resolutions accumulate in the Crypt, this shows each seat's actual track record: hit rate, Brier score, log loss, and a calibration curve (predicted probability vs. how often that was actually right).</li>
+      <li>Paid and Free Mode runs are scored separately -- pick <b>Paid runs</b>, <b>Free runs</b> or <b>All</b> at the top -- so cheaper free-model runs never drag down, or prop up, the paid Council's record.</li>
       <li>Rank (Youngling &rarr; Grand Master) requires at least 20 resolved predictions before it can move at all -- a lucky streak cannot mint a Grand Master, and a seat's Crypt-derived weight in future votes only starts shifting once it clears that same floor.</li>
     </ol>
   </div>
@@ -98,8 +108,8 @@
   <div class="panel screen-panel">
     <h3 class="cyan">Settings</h3>
     <ol class="step-list mono">
-      <li><b>API Keys</b> -- connect the Council to the AI and market-data services it uses. Each key comes with step-by-step instructions for getting it.</li>
-      <li><b>Models &amp; Cost</b> -- choose the AI model each seat runs on and see the estimated cost of one run at each horizon. Saved on the server, so it applies to every deliberation on this copy of the Council.</li>
+      <li><b>API Keys</b> -- connect the Council to the AI services it uses. Each key comes with step-by-step instructions for getting it.</li>
+      <li><b>Models &amp; Cost</b> -- turn Free Mode on or off, choose the AI model each seat runs on, and see the estimated cost of a Full or Lite run at each horizon. Saved on the server, so it applies to every deliberation on this copy of the Council.</li>
       <li><b>Appearance</b> -- pick the centerpiece and the seat-chair style (including the pixel-art Seat Wizards). Purely visual, saved to your browser only.</li>
     </ol>
   </div>

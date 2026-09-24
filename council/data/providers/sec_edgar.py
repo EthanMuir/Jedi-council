@@ -1,5 +1,4 @@
-"""SEC EDGAR adapter -- official, free, no API key, for the two domains the
-user's FMP plan 403s on: insider transactions (Form 4) and SEC filings
+"""SEC EDGAR adapter -- official, free, no API key, for insider transactions (Form 4) and SEC filings
 (8-K/10-Q/10-K/S-1/S-3/13D/13G). Built on two schemas that are unusually
 stable and officially documented, unlike yfinance's scraped surface:
 
@@ -32,7 +31,6 @@ from typing import Any
 
 import httpx
 
-from council.data.providers.fmp import _classify_insider_txn
 from council.data.rate_limit import TokenBucket
 
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
@@ -265,3 +263,16 @@ class SECEdgarProvider:
             for txn in parsed:
                 out.append({"filed_at": filed_at, **txn})
         return out
+
+
+def _classify_insider_txn(code: str) -> str:
+    """Form 4 transaction codes (P = open-market purchase, S = sale, M/A =
+    option exercise / grant) mapped onto InsiderTransaction's categories."""
+    code = code.upper()
+    if code.startswith("P"):
+        return "OPEN_MARKET_BUY"
+    if code.startswith("S"):
+        return "OPEN_MARKET_SELL"
+    if code.startswith("M") or code.startswith("A"):
+        return "OPTION_EXERCISE"
+    return "OTHER"

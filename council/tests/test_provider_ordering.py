@@ -1,9 +1,7 @@
-"""YFinance and SEC EDGAR must both be tried before FRED / FMP. YFinance
-covers OHLCV/news/options, SEC EDGAR covers insider transactions/SEC
-filings -- together that's every domain FMP's free plan 403s on. Both need
-no key at all; FRED needs a free one but stays far under its own
-120-req/min cap even so. Trying the free/unlimited providers first means
-FMP's scarce plan coverage is spent only on what nothing else can serve.
+"""YFinance and SEC EDGAR must both be tried before FRED. YFinance covers
+OHLCV/news/options/fundamentals, SEC EDGAR covers insider transactions/SEC
+filings. Both need no key at all; FRED needs a free one but stays far
+under its own 120-req/min cap even so.
 
 Alpha Vantage (Task #77) is never added to the live chain regardless of
 alpha_vantage_api_key -- its free tier's 25-requests/day cap made it
@@ -13,31 +11,25 @@ fallback nothing ever reaches."""
 from __future__ import annotations
 
 from council.config import Settings
-from council.data.providers.fmp import FMPProvider
 from council.data.providers.fred import FREDProvider
 from council.data.providers.sec_edgar import SECEdgarProvider
 from council.data.providers.yfinance_provider import YFinanceProvider
 from council.engine.orchestrator import build_data_service
 
 
-def test_free_providers_tried_before_fred_and_fmp():
-    settings = Settings(
-        use_data_fixtures=False,
-        fmp_api_key="test-fmp-key",
-        fred_api_key="test-fred-key",
-    )
+def test_free_providers_tried_before_fred():
+    settings = Settings(use_data_fixtures=False, fred_api_key="test-fred-key")
     service = build_data_service(settings)
     provider_types = [type(p) for p in service._providers]
 
     assert provider_types[0] is YFinanceProvider
     for free_provider in (YFinanceProvider, SECEdgarProvider):
         assert free_provider in provider_types
-        for paid_provider in (FREDProvider, FMPProvider):
-            assert provider_types.index(free_provider) < provider_types.index(paid_provider)
+        assert provider_types.index(free_provider) < provider_types.index(FREDProvider)
 
 
 def test_only_yfinance_and_sec_edgar_when_no_keys_configured():
-    settings = Settings(use_data_fixtures=False, fmp_api_key="", fred_api_key="")
+    settings = Settings(use_data_fixtures=False, fred_api_key="")
     service = build_data_service(settings)
     assert [type(p) for p in service._providers] == [YFinanceProvider, SECEdgarProvider]
 

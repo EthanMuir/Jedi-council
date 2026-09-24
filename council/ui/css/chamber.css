@@ -769,3 +769,26 @@
 @media (max-width: 440px) {
   .chamber-ring { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ---- run notices / stopped runs (free-tier overflow, out of credit) ---- */
+.run-alerts:empty { display: none; }
+.run-alerts { margin-top: 12px; display: grid; gap: 8px; }
+
+.run-alert {
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bone-dim);
+  border-left: 2px solid var(--cyan-dim);
+  background: rgba(79, 195, 232, 0.05);
+}
+
+.run-alert b { color: var(--bone); font-weight: normal; }
+
+.run-alert-stopped {
+  border-left-color: var(--crimson, #d0504f);
+  background: rgba(208, 80, 79, 0.08);
+}
+
+.run-alert-stopped b { color: var(--crimson, #d0504f); }
+.run-alert a { color: var(--amber); }

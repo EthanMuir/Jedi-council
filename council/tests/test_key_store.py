@@ -33,11 +33,13 @@ def test_saved_key_overrides_env_and_removal_falls_back(tmp_path):
 
 
 def test_a_saved_key_turns_off_sample_mode(tmp_path):
-    settings = Settings(settings_db_path=str(tmp_path / "settings.db"), anthropic_api_key="", fmp_api_key="")
+    settings = Settings(
+        settings_db_path=str(tmp_path / "settings.db"),
+        anthropic_api_key="", google_api_key="", groq_api_key="", openai_api_key="",
+    )
     assert settings.resolved_no_llm and settings.resolved_use_data_fixtures
 
-    key_store.save_key(settings.settings_db_path, "anthropic_api_key", "sk-ant-abc123")
-    key_store.save_key(settings.settings_db_path, "fmp_api_key", "fmpkey123")
+    key_store.save_key(settings.settings_db_path, "google_api_key", "AIza-free-key")
     effective = key_store.apply_saved_keys(settings)
 
     assert not effective.resolved_no_llm
@@ -112,5 +114,6 @@ def test_removing_a_saved_key_reverts_to_env_or_unset(client):
 
 def test_keys_endpoint_rejects_bad_input(client):
     assert client.post("/api/settings/keys", json={"name": "app_password", "value": "x1234567"}).status_code == 400
-    assert client.post("/api/settings/keys", json={"name": "fmp_api_key", "value": "has a space"}).status_code == 400
+    assert client.post("/api/settings/keys", json={"name": "fmp_api_key", "value": "gone1234"}).status_code == 400
+    assert client.post("/api/settings/keys", json={"name": "groq_api_key", "value": "has a space"}).status_code == 400
     assert client.delete("/api/settings/keys/app_password").status_code == 400

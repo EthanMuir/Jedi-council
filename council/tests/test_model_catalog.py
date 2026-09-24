@@ -25,8 +25,16 @@ def test_get_model_returns_none_for_unknown_id():
     assert get_model("not-a-real-model") is None
 
 
-def test_catalog_covers_all_three_providers():
-    assert {m.provider for m in CATALOG} == {"anthropic", "openai", "google"}
+def test_catalog_covers_every_provider():
+    assert {m.provider for m in CATALOG} == {"anthropic", "openai", "google", "groq"}
+
+
+def test_free_entries_cost_nothing_and_each_free_provider_has_one():
+    from council.engine.model_catalog import FREE_MODELS
+
+    free = [m for m in CATALOG if m.free]
+    assert all(m.input_price_per_mtok == m.output_price_per_mtok == 0 for m in free)
+    assert {m.provider: m.id for m in free} == FREE_MODELS
 
 
 def test_no_duplicate_model_ids():

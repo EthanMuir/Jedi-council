@@ -2,6 +2,16 @@
 // and the scoreboard (council vs buy-and-hold vs always-bullish).
 
 let activeHorizonFilter = '';
+let activeModeFilter = '';
+
+// A small label on each card for anything other than a full paid run.
+function runTagsHtml(pred) {
+  const tags = [];
+  if (pred.run_mode === 'free') tags.push('<span class="run-tag run-tag-free">FREE</span>');
+  if (pred.run_mode === 'sample') tags.push('<span class="run-tag">SAMPLE</span>');
+  if (pred.run_shape === 'lite') tags.push('<span class="run-tag">LITE</span>');
+  return tags.length ? `<div class="meta-line">${tags.join(' ')}</div>` : '';
+}
 
 function renderScoreboard(benchmark) {
   const el = document.getElementById('scoreboard');
@@ -51,6 +61,7 @@ function renderGrid(predictions) {
       <div class="ticker-line ${voteClass(voteLabel)}">${pred.ticker} &middot; ${pred.horizon}</div>
       <div class="meta-line">vote: <b class="${voteClass(voteLabel)}">${voteLabel}</b></div>
       <div class="meta-line dim">created: ${pred.created_at.slice(0, 16).replace('T', ' ')}</div>
+      ${runTagsHtml(pred)}
       ${pred.realised_move_pct !== null && pred.realised_move_pct !== undefined
         ? `<div class="meta-line">realised: ${fmtPct(pred.realised_move_pct)}</div>`
         : '<div class="meta-line dim">unresolved</div>'}
@@ -97,10 +108,11 @@ async function refresh() {
   const params = new URLSearchParams();
   if (ticker) params.set('ticker', ticker);
   if (activeHorizonFilter) params.set('horizon', activeHorizonFilter);
+  if (activeModeFilter) params.set('mode', activeModeFilter);
 
   const [predictionsResp, archivesResp] = await Promise.all([
     fetchJSON(`/api/predictions?${params.toString()}`),
-    fetchJSON('/api/archives'),
+    fetchJSON(activeModeFilter ? `/api/archives?mode=${activeModeFilter}` : '/api/archives'),
   ]);
   renderGrid(predictionsResp.predictions);
   renderScoreboard(archivesResp.benchmark);
@@ -135,6 +147,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('#filter-horizon .toggle-option').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       activeHorizonFilter = btn.dataset.horizon;
+      refresh();
+    };
+  });
+  document.querySelectorAll('#filter-mode .toggle-option').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#filter-mode .toggle-option').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeModeFilter = btn.dataset.mode;
       refresh();
     };
   });

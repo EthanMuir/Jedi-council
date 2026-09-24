@@ -23,7 +23,17 @@ _PREDICTIONS_COLUMN_MIGRATIONS = [
     ("total_cost_usd", "REAL"),
     ("total_input_tokens", "INTEGER"),
     ("total_output_tokens", "INTEGER"),
+    ("run_mode", "TEXT"),  # "free" | "paid" | "sample"
+    ("run_shape", "TEXT"),  # "full" | "lite"
 ]
+
+
+def effective_run_mode(run_mode: str | None, total_cost_usd: float | None) -> str:
+    """Runs saved before run_mode existed were either sample runs (nothing
+    billed) or paid ones -- free mode didn't exist yet."""
+    if run_mode:
+        return run_mode
+    return "paid" if total_cost_usd else "sample"
 
 
 def _migrate_predictions_table(conn: sqlite3.Connection) -> None:

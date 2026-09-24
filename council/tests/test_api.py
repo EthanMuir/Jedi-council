@@ -59,7 +59,8 @@ def test_deliberate_stream_emits_mode_first_and_it_is_fixture(client):
     first_data = next(l for l in lines if l.startswith("data: ")).removeprefix("data: ")
     payload = json.loads(first_data)
     assert payload["is_fixture"] is True
-    assert "FIXTURE" in payload["message"]
+    assert payload["run_mode"] == "sample"
+    assert "$0" in payload["message"]
 
 
 def test_deliberate_stream_rejects_invalid_horizon(client):
@@ -128,10 +129,11 @@ def test_get_model_settings_shape(client):
     assert response.status_code == 200
     body = response.json()
 
-    assert len(body["catalog"]) == 9
+    assert len(body["catalog"]) == 11
     costs = [m["typical_call_cost_usd"] for m in body["catalog"]]
     assert costs == sorted(costs, reverse=True)  # most to least expensive
-    assert {m["provider"] for m in body["catalog"]} == {"anthropic", "openai", "google"}
+    assert {m["provider"] for m in body["catalog"]} == {"anthropic", "openai", "google", "groq"}
+    assert [m["id"] for m in body["catalog"] if m["free"]] == ["free:gemini", "free:groq"]
 
     assert len(body["roles"]) == 16
     technician = next(r for r in body["roles"] if r["role"] == "technician")

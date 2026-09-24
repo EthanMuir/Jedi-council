@@ -57,6 +57,8 @@ def write_prediction(
     total_cost_usd: float | None = None,
     total_input_tokens: int | None = None,
     total_output_tokens: int | None = None,
+    run_mode: str | None = None,
+    run_shape: str | None = None,
     created_at: datetime | None = None,
 ) -> str:
     created_at = created_at or datetime.utcnow()
@@ -101,6 +103,12 @@ def write_prediction(
         "total_output_tokens": total_output_tokens,
         "discussion_enabled": 0,
     }
+    # Only hashed when given, so a row written without them hashes exactly
+    # as it did before these columns existed.
+    if run_mode is not None:
+        fields["run_mode"] = run_mode
+    if run_shape is not None:
+        fields["run_shape"] = run_shape
     row_hash = compute_row_hash(fields, prev_hash)
 
     columns = [k for k in fields] + ["prev_hash", "row_hash"]

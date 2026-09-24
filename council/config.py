@@ -23,13 +23,16 @@ class Settings(BaseSettings):
     # only so a premium key could be wired back in later; setting this now
     # does nothing.
     alpha_vantage_api_key: str = ""
-    fmp_api_key: str = ""
     # Free (https://fred.stlouisfed.org/docs/api/api_key.html), 120
     # req/min with no hard daily cap -- now the only source for macro data
     # in this chain; without it macro_sage has no live source at all.
     fred_api_key: str = ""
     openai_api_key: str = ""
     google_api_key: str = ""
+    # Free (console.groq.com, no card) -- open-weight models on Groq's free
+    # tier, used as free mode's backup when Gemini's free daily limit runs
+    # out. Called through the OpenAI SDK pointed at Groq's endpoint.
+    groq_api_key: str = ""
 
     # SEC EDGAR needs no key, but every request must carry a real contact
     # per SEC's fair-access policy -- blank (as .env.example ships it) falls
@@ -110,23 +113,29 @@ class Settings(BaseSettings):
     memory_cap_per_seat: int = 200
 
     @property
+    def has_any_ai_key(self) -> bool:
+        return any(
+            (self.anthropic_api_key, self.google_api_key, self.groq_api_key, self.openai_api_key)
+        )
+
+    @property
     def resolved_no_llm(self) -> bool:
-        """Fixture mode is forced whenever no Anthropic key is configured,
-        unless explicitly overridden."""
+        """Sample answers are forced only when no AI key at all is
+        configured (any one provider is enough -- routing sends every seat
+        to a provider that has a key), unless explicitly overridden."""
         if self.no_llm is not None:
             return self.no_llm
-        return not bool(self.anthropic_api_key)
+        return not self.has_any_ai_key
 
     @property
     def resolved_use_data_fixtures(self) -> bool:
-        """alpha_vantage_api_key dropped from this check (Task #77): it's no
-        longer wired into the live chain at all (see its own comment above),
-        so its presence/absence no longer says anything about whether a live
-        run is possible -- yfinance and SEC EDGAR are free, keyless, and
-        already wired in regardless of any key here."""
+        """Live market data needs no key of its own -- Yahoo Finance and SEC
+        EDGAR are free and keyless, FRED's key is optional. The recorded
+        NVDA sample data is used only alongside sample answers (no AI key
+        at all), since those canned answers were written against it."""
         if self.use_data_fixtures is not None:
             return self.use_data_fixtures
-        return not bool(self.fmp_api_key)
+        return not self.has_any_ai_key
 
     @property
     def resolved_sec_edgar_user_agent(self) -> str:
@@ -156,6 +165,17 @@ class Settings(BaseSettings):
     def ensure_dirs(self) -> None:
         for path in (self.council_db_path, self.cache_db_path, self.settings_db_path):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+
+
+# A lite run: one sample per seat instead of three, one debate round
+# instead of two -- 16 model calls instead of 43. Cheaper on paid
+# keys, and stretches free-tier daily limits about 2.5x further, at the
+# cost of the dispersion signal multiple samples give.
+LITE_RUN = {"n_samples_per_seat": 1, "debate_rounds": 1}
+
+
+def as_lite(settings: Settings) -> Settings:
+    return settings.model_copy(update=LITE_RUN)
 
 
 def get_settings() -> Settings:
