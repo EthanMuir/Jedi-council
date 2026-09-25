@@ -19,15 +19,17 @@ def conn(tmp_path):
     c.close()
 
 
-def _insert_resolved_prediction(conn, seat_id, seat_vote, seat_probability, realised_move_pct, horizon="1w"):
+def _insert_resolved_prediction(
+    conn, seat_id, seat_vote, seat_probability, realised_move_pct, horizon="short", run_mode="paid"
+):
     pred_id = str(uuid.uuid4())
     now = datetime.utcnow()
     conn.execute(
         "INSERT INTO predictions (id, created_at, ticker, horizon, resolve_at, "
         "price_at_prediction, data_snapshot_hash, model_versions_json, blind_vote, "
-        "blind_probability, blind_consensus_pct, discussion_enabled, prev_hash, row_hash) "
-        "VALUES (?, ?, 'NVDA', ?, ?, 100.0, 'x', '{}', 'BULLISH', 0.6, 100.0, 0, 'x', ?)",
-        (pred_id, now.isoformat(), horizon, (now + timedelta(days=1)).isoformat(), pred_id),
+        "blind_probability, blind_consensus_pct, discussion_enabled, run_mode, prev_hash, row_hash) "
+        "VALUES (?, ?, 'NVDA', ?, ?, 100.0, 'x', '{}', 'BULLISH', 0.6, 100.0, 0, ?, 'x', ?)",
+        (pred_id, now.isoformat(), horizon, (now + timedelta(days=1)).isoformat(), run_mode, pred_id),
     )
     conn.execute(
         "INSERT INTO seat_votes (prediction_id, seat_id, vote, probability, verdict_json, created_at) "
@@ -119,3 +121,24 @@ def test_never_excludes_seat_below_resolution_floor_regardless_of_cohort_size(co
 
     weights = compute_weights(conn, [f"good_{i}" for i in range(8)] + ["unproven_bad"], settings)
     assert weights["unproven_bad"] == 1.0  # below floor, never touched
+
+
+def test_sample_runs_never_train_the_weights(conn):
+    """Sample runs replay canned answers -- a seat can't earn (or lose)
+    weight from them, however many there are."""
+    settings = Settings(calibration_min_resolutions=20)
+    for _ in range(30):
+        _insert_resolved_prediction(conn, "technician", "BULLISH", 0.9, realised_move_pct=-3.0, run_mode="sample")
+    assert compute_weights(conn, ["technician"], settings) == {"technician": 1.0}
+    # Still visible in the track record, where the Crypt labels them SAMPLE.
+    assert compute_seat_calibration(conn, "technician").n_resolutions == 30
+
+
+def test_real_runs_still_move_the_weights_alongside_sample_ones(conn):
+    settings = Settings(calibration_min_resolutions=20)
+    for _ in range(25):
+        _insert_resolved_prediction(conn, "technician", "BULLISH", 0.7, realised_move_pct=2.0, run_mode="free")
+    for _ in range(25):
+        _insert_resolved_prediction(conn, "technician", "BULLISH", 0.9, realised_move_pct=-3.0, run_mode="sample")
+    calib = compute_seat_calibration(conn, "technician", exclude_sample=True)
+    assert calib.n_resolutions == 25 and calib.hit_rate == 1.0

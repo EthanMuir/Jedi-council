@@ -85,15 +85,23 @@ def _calibration_bins(
 
 
 def compute_seat_calibration(
-    conn: sqlite3.Connection, seat_id: str, horizon: str | None = None, run_mode: str | None = None
+    conn: sqlite3.Connection,
+    seat_id: str,
+    horizon: str | None = None,
+    run_mode: str | None = None,
+    exclude_sample: bool = False,
 ) -> SeatCalibration:
     """`run_mode` ("free" / "paid" / "sample") limits the track record to
-    runs of that kind -- free-tier runs are scored apart from paid ones."""
+    runs of that kind -- free-tier runs are scored apart from paid ones.
+    `exclude_sample` drops sample runs (canned answers replayed with no AI
+    key), which are not real predictions."""
     rows = _seat_history_rows(conn, seat_id)
     if horizon:
         rows = [r for r in rows if r["horizon"] == horizon]
     if run_mode:
         rows = [r for r in rows if effective_run_mode(r["run_mode"], r["total_cost_usd"]) == run_mode]
+    if exclude_sample:
+        rows = [r for r in rows if effective_run_mode(r["run_mode"], r["total_cost_usd"]) != "sample"]
     outcomes = _outcomes(rows)
     n = len(outcomes)
     if n == 0:
@@ -123,8 +131,14 @@ def compute_weights(
     """Addendum A4 Stage 1 (percentile selection) + weighting. Never
     excludes a seat with fewer than `calibration_min_resolutions`
     resolutions -- deleting your best seat before it has proven itself is
-    exactly the failure mode this floor exists to prevent."""
-    calibrations = {sid: compute_seat_calibration(conn, sid, horizon) for sid in seat_ids}
+    exactly the failure mode this floor exists to prevent.
+
+    Sample runs never count: they replay the same canned answers every
+    time, so scoring them would train the weights on fixed text, not on
+    how well a seat actually reads a stock."""
+    calibrations = {
+        sid: compute_seat_calibration(conn, sid, horizon, exclude_sample=True) for sid in seat_ids
+    }
     weights = {sid: 1.0 for sid in seat_ids}
 
     qualifying = {
