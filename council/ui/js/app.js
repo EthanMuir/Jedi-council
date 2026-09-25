@@ -294,6 +294,29 @@ async function refreshNavBadge(active = location.pathname) {
   } catch (e) { /* the nav still works without it */ }
 }
 
+// ---- tables on phones -------------------------------------------------------------
+
+// On phones each table row is shown as a card (see clean.css): every cell
+// gets its column's heading as a label. Runs whenever table rows change.
+function labelTables() {
+  for (const table of document.querySelectorAll('table.data')) {
+    const heads = [...table.querySelectorAll('thead th')].map(th => th.textContent.replace(/[↑↓▲▼]/g, '').trim());
+    for (const tr of table.querySelectorAll('tbody tr')) {
+      let col = 0;
+      for (const td of tr.children) {
+        td.dataset.label = heads[col] || '';
+        col += td.colSpan || 1;
+      }
+    }
+  }
+}
+let labelQueued = false;
+new MutationObserver(() => {
+  if (labelQueued) return;
+  labelQueued = true;
+  requestAnimationFrame(() => { labelQueued = false; labelTables(); });
+}).observe(document.documentElement, { childList: true, subtree: true });
+
 // ---- helpers -------------------------------------------------------------------
 
 function escapeHtml(value) {

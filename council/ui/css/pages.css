@@ -38,8 +38,9 @@ table.data.compact td.num { white-space: nowrap; padding-left: 12px; }
 .page-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 @media (max-width: 760px) {
   .sectioned { grid-template-columns: 1fr; gap: 16px; }
-  .section-menu { position: static; display: flex; overflow-x: auto; gap: 4px; padding-bottom: 2px; }
-  .section-menu a { white-space: nowrap; }
+  /* Tabs wrap onto a second line rather than running off the screen. */
+  .section-menu { position: static; display: flex; flex-wrap: wrap; gap: 4px; }
+  .section-menu a { white-space: nowrap; padding: 7px 11px; }
 }
 
 .pane-head { display: grid; gap: 10px; }
