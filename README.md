@@ -1,4 +1,4 @@
-# Jedi-council -- The High Council
+# Ticker Council
 
 A data-isolated multi-agent market prediction system. See
 `JEDI_COUNCIL_SPEC.md` and `JEDI_COUNCIL_ADDENDUM_A.md` for the full design
@@ -335,6 +335,14 @@ Two things Oracle-specific that the script can't do for you:
   Afterwards, set `COOKIE_SECURE=true` in `.env` and restart the service
   so the session cookie can't leak over plain HTTP, and open ports 80/443
   in the Security List instead of (or alongside) 8000.
+
+  Moving to a new domain later (e.g. from a DuckDNS address to your own):
+  point the new domain's A record (and `www`) at the VM, then run
+
+      bash scripts/set-domain.sh tickercouncil.com ethanscouncil.duckdns.org
+
+  It serves the app at the new domain, sends `www` there, and redirects
+  the old address so existing links keep working.
 
 Finally, schedule `council resolve` to run daily so predictions actually
 get scored -- a cron entry, run via `crontab -e`:

@@ -138,7 +138,7 @@ _LOGIN_PAGE_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sign in · High Council</title>
+<title>Sign in · Ticker Council</title>
 <style>
   :root {
     color-scheme: light;
@@ -180,7 +180,7 @@ _LOGIN_PAGE_HTML = """<!doctype html>
 </head>
 <body>
 <div class="panel">
-  <h1>High <span>Council</span></h1>
+  <h1>Ticker <span>Council</span></h1>
   <p>Enter the password to continue.</p>
   <form id="login-form">
     <input type="password" id="password" placeholder="Password" aria-label="Password" autofocus autocomplete="current-password" />

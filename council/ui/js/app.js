@@ -259,7 +259,7 @@ function renderNav(active) {
   const loggedIn = document.cookie.includes('council_logged_in=');
   nav.innerHTML = `
     <div class="topnav-inner">
-      <a class="brand" href="/index.html">High <span>Council</span></a>
+      <a class="brand" href="/index.html">Ticker <span>Council</span></a>
       <button class="btn btn-small btn-quiet nav-menu-btn" aria-expanded="false" aria-controls="navlinks">Menu</button>
       <nav class="navlinks" id="navlinks" aria-label="Pages">
         ${NAV.map(l => `<a href="${l.href}"${l.href === active ? ' class="active" aria-current="page"' : ''}>${l.label}</a>`).join('')}
