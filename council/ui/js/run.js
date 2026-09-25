@@ -464,8 +464,20 @@ function termBar(term) {
   return { final, p, dots };
 }
 
+// The little status above the positions, as on the welcome page: a pulsing
+// "Council in session" while the seats work, "Verdict reached" once done.
+function renderSession() {
+  const el = document.getElementById('session');
+  const status = state?.status;
+  const live = status === 'running' || status === 'detached';
+  el.hidden = !(live || status === 'done');
+  el.classList.toggle('done', status === 'done');
+  document.getElementById('session-text').textContent = live ? 'Council in session…' : 'Verdict reached';
+}
+
 function renderPositions() {
   const s = state;
+  renderSession();
   const body = document.getElementById('positions-body');
   body.innerHTML = TERMS.map(term => {
     const { final, p, dots } = termBar(term);
@@ -500,7 +512,8 @@ function renderPositions() {
         <div class="pos-term"><b>${TERM_LABEL[term]}</b><span>${{ short: 'Scored in 7 days', medium: 'Scored in 3 months', long: 'Scored in a year' }[term]}</span></div>
         <div class="pos-bar">${leanBarHtml(p, { dots })}</div>
         <div class="pos-value">${value}</div>
-        ${noteText || warnings || extra || target || scored ? `<div class="pos-extra">${scored}${noteText ? `<p class="pos-note">${aiText(noteText)}</p>` : ''}${target}${extra}${warnings}</div>` : ''}
+        ${noteText || warnings || extra || scored ? `<div class="pos-extra">${scored}${noteText ? `<p class="pos-note">${aiText(noteText)}</p>` : ''}${extra}${warnings}</div>` : ''}
+        ${target ? `<div class="pos-target">${target}</div>` : ''}
       </div>`;
   }).join('');
   document.getElementById('positions-sub').textContent = isExpert()

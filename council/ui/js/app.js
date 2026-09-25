@@ -424,24 +424,33 @@ function priceTargetHtml(target, { realised = null, compact = false, note = true
   const min = Math.min(...points) - pad;
   const max = Math.max(...points) + pad;
   const at = v => (((v - min) / (max - min)) * 100).toFixed(2);
-  const endedRow = ended ? `<dt>Ended at</dt><dd class="num">${fmtPrice(ended.price, true)} <span class="${ended.inRange ? 'up' : 'down'}">${ended.inRange ? '✓ in range' : `✗ ${ended.side} range`}</span></dd>` : '';
+  const range = `${fmtPrice(target.low, false, target.target)}–${fmtPrice(target.high, false, target.target)}`;
+  const endedText = ended
+    ? `<span class="${ended.inRange ? 'up' : 'down'}">Ended ${fmtPrice(ended.price, false, target.target)} ${ended.inRange ? '✓' : '✗'}</span>`
+    : `<span class="faint">${target.chance_pct}% chance ${range}</span>`;
+  // Collapsed to one line; opens for the range, today's price and how it's worked out.
   return `
-    <div class="target">
-      <dl class="target-rows">
-        <dt>Price target</dt><dd><b class="num">about ${fmtPrice(target.target)}</b></dd>
-        <dt>${target.chance_pct}% chance</dt><dd class="num">${fmtPrice(target.low, false, target.target)} – ${fmtPrice(target.high, false, target.target)}</dd>
-        <dt>Today</dt><dd class="num">${fmtPrice(target.price_now, true)}</dd>
-        ${endedRow}
-      </dl>
-      <div class="target-track" aria-hidden="true">
-        <span class="target-band" style="left:${at(target.low)}%;width:${(at(target.high) - at(target.low)).toFixed(2)}%"></span>
-        <span class="target-now" style="left:${at(target.price_now)}%" title="Today"></span>
-        <span class="target-mid" style="left:${at(target.target)}%" title="Price target"></span>
-        ${ended ? `<span class="target-end ${ended.inRange ? 'up' : 'down'}" style="left:${at(ended.price)}%" title="Ended"></span>` : ''}
+    <details class="target">
+      <summary>
+        <span>Price target <b class="num">about ${fmtPrice(target.target)}</b></span>
+        ${endedText}
+      </summary>
+      <div class="target-body">
+        <dl class="target-rows">
+          <dt>${target.chance_pct}% chance</dt><dd class="num">${fmtPrice(target.low, false, target.target)} – ${fmtPrice(target.high, false, target.target)}</dd>
+          <dt>Today</dt><dd class="num">${fmtPrice(target.price_now, true)}</dd>
+          ${ended ? `<dt>Ended at</dt><dd class="num">${fmtPrice(ended.price, true)} <span class="${ended.inRange ? 'up' : 'down'}">${ended.inRange ? '✓ in range' : `✗ ${ended.side} range`}</span></dd>` : ''}
+        </dl>
+        <div class="target-track" aria-hidden="true">
+          <span class="target-band" style="left:${at(target.low)}%;width:${(at(target.high) - at(target.low)).toFixed(2)}%"></span>
+          <span class="target-now" style="left:${at(target.price_now)}%" title="Today"></span>
+          <span class="target-mid" style="left:${at(target.target)}%" title="Price target"></span>
+          ${ended ? `<span class="target-end ${ended.inRange ? 'up' : 'down'}" style="left:${at(ended.price)}%" title="Ended"></span>` : ''}
+        </div>
+        <div class="target-key faint" aria-hidden="true"><span><i class="k-now"></i>Today</span><span><i class="k-mid"></i>Target</span><span><i class="k-band"></i>Range</span>${ended ? '<span><i class="k-end"></i>Ended</span>' : ''}</div>
+        ${note ? `<p class="target-note faint">${targetChanceNote(target)}</p>` : ''}
       </div>
-      <div class="target-key faint" aria-hidden="true"><span><i class="k-now"></i>Today</span><span><i class="k-mid"></i>Target</span><span><i class="k-band"></i>Range</span>${ended ? '<span><i class="k-end"></i>Ended</span>' : ''}</div>
-      ${note ? `<p class="target-note faint">${targetChanceNote(target)}</p>` : ''}
-    </div>`;
+    </details>`;
 }
 
 // Settings and the Guide show one section at a time, picked from a side

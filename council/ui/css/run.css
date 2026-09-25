@@ -69,6 +69,15 @@
   .hero-run { padding: 12px 20px; }
 }
 
+/* ---------- "Council in session" / "Verdict reached" ---------- */
+.session { display: inline-flex; align-items: center; gap: 8px; margin: 18px 20px -4px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.session-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: session-pulse 1.2s ease-in-out infinite; }
+.session.done { color: var(--up); }
+.session.done .session-dot { animation: none; background: var(--up); }
+@keyframes session-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .session-dot { animation: none; } }
+@media (max-width: 640px) { .session { margin: 16px 16px -4px; } }
+
 /* ---------- run header ---------- */
 .run { display: grid; gap: 18px; }
 .run-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
@@ -103,6 +112,8 @@
 .pos-value .small { font-size: 13px; font-weight: 500; }
 .pos-value .tiny { font-size: 12px; color: var(--faint); }
 .pos-extra { grid-column: 2 / -1; display: grid; gap: 8px; }
+/* Same width as the bar above it. */
+.pos-target { grid-column: 2 / 3; }
 .pos-note { font-size: 14px; color: var(--muted); max-width: 72ch; line-height: 1.55; }
 .pos-warn { font-size: 13px; color: var(--warn); background: var(--warn-soft); border-radius: 8px; padding: 7px 11px; display: flex; gap: 8px; }
 .pos-warn::before { content: "!"; font-weight: 700; flex: none; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-grid; place-items: center; font-size: 11px; line-height: 1; margin-top: 1px; }
@@ -111,6 +122,7 @@
   .pos { grid-template-columns: 1fr auto; padding: 16px; gap: 10px 14px; }
   .pos-bar { grid-column: 1 / -1; order: 3; }
   .pos-extra { grid-column: 1 / -1; order: 4; }
+  .pos-target { grid-column: 1 / -1; order: 5; }
 }
 
 /* ---------- seat grid ---------- */
