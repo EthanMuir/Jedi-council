@@ -256,7 +256,7 @@ function renderNav(active) {
   nav.className = 'topnav';
   nav.innerHTML = `
     <div class="topnav-inner">
-      <a class="brand" href="/index.html">Ticker <span>Council</span></a>
+      <a class="brand" href="/index.html"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M2.6 20.4C2.4 14.6 7 10.6 12.6 10.6c4.4 0 7.9 2.3 8.2 5.6.2 2.6-1.8 4.2-4.8 4.4l-9.4.2c-1.6 0-3.2.5-4 1.6z"/><path fill="none" stroke-width="2.7" d="M18.2 13.4c1.5-2.6 2.7-5.3 3.1-8.3"/><circle stroke="none" cx="22" cy="4.4" r="2.3"/><path stroke="none" d="M23.6 3.5l3 1.1-3 .9z"/><path fill="none" stroke-width="1.8" d="M10.8 20.4l-1 9.2M14.6 20.4l1.6 9.2"/></g></svg>Ticker <span>Council</span></a>
       <button class="btn btn-small btn-quiet nav-menu-btn" aria-expanded="false" aria-controls="navlinks">Menu</button>
       <nav class="navlinks" id="navlinks" aria-label="Pages">
         ${NAV.map(l => `<a href="${l.href}"${l.href === active ? ' class="active" aria-current="page"' : ''}>${l.label}</a>`).join('')}

@@ -390,3 +390,10 @@ def test_weights_draft_then_publish_from_the_admin_page(site):
     overview = owner_client.get("/api/admin/weights").json()
     assert overview["live"]["paid"]["id"] == release_id and overview["live"]["free"] is None
     assert owner_client.get("/api/archives?mode=paid").json()["release"]["id"] == release_id
+
+
+def test_the_tab_icon_loads_before_signing_in(site):
+    _, settings = site
+    resp = _new_client(settings).get("/favicon.svg")
+    assert resp.status_code == 200 and "<svg" in resp.text
+    assert 'rel="icon"' in _new_client(settings).get("/welcome").text

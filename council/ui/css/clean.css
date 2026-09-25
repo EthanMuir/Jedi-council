@@ -156,6 +156,8 @@ p { margin: 0; }
 .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; color: var(--ink); white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand span { color: var(--accent); }
+.brand { display: inline-flex; align-items: center; gap: 7px; }
+.brand .logo { width: 24px; height: 24px; color: var(--accent); flex: none; margin-top: -3px; }
 .navlinks { display: flex; gap: 4px; align-items: center; flex: 1; }
 .navlinks a { color: var(--muted); font-size: 14px; font-weight: 500; padding: 6px 10px; border-radius: 8px; white-space: nowrap; }
 .navlinks a:hover { color: var(--ink); background: var(--surface-3); text-decoration: none; }

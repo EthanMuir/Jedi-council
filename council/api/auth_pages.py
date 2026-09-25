@@ -32,7 +32,8 @@ _STYLE = """
     box-shadow: 0 10px 40px rgba(20, 24, 32, 0.08); padding: 30px 26px; width: 100%; max-width: 380px;
   }
   .panel.wide { max-width: 640px; }
-  .brand { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 18px; color: var(--ink); text-decoration: none; display: inline-block; }
+  .brand { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 18px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
+  .brand .logo { width: 22px; height: 22px; color: var(--accent); margin-top: -3px; }
   .brand span { color: var(--accent); }
   h1 { font-size: 21px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
   h2 { font-size: 16px; margin: 20px 0 6px; }
@@ -100,6 +101,9 @@ _SCRIPT = """
   }
 """
 
+_EMU = '<svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M2.6 20.4C2.4 14.6 7 10.6 12.6 10.6c4.4 0 7.9 2.3 8.2 5.6.2 2.6-1.8 4.2-4.8 4.4l-9.4.2c-1.6 0-3.2.5-4 1.6z"/><path fill="none" stroke-width="2.7" d="M18.2 13.4c1.5-2.6 2.7-5.3 3.1-8.3"/><circle stroke="none" cx="22" cy="4.4" r="2.3"/><path stroke="none" d="M23.6 3.5l3 1.1-3 .9z"/><path fill="none" stroke-width="1.8" d="M10.8 20.4l-1 9.2M14.6 20.4l1.6 9.2"/></g></svg>'
+_FAVICON = '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />'
+
 _GOOGLE_ICON = (
     '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">'
     '<path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/>'
@@ -115,13 +119,14 @@ def _page(title: str, body: str, script: str = "", wide: bool = False) -> str:
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+{_FAVICON}
 <title>{escape(title)} · Ticker Council</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" />
 <style>{_STYLE}</style>
 </head>
 <body>
 <main class="panel{' wide' if wide else ''}">
-  <a class="brand" href="/welcome">Ticker <span>Council</span></a>
+  <a class="brand" href="/welcome">{_EMU}Ticker <span>Council</span></a>
   {body}
 </main>
 <script>{_SCRIPT}{script}</script>
@@ -342,7 +347,8 @@ _LANDING_STYLE = """
   .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; }
   header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(16px); backdrop-filter: saturate(180%) blur(16px); border-bottom: 1px solid var(--line); }
   header.top .wrap { display: flex; align-items: center; gap: 16px; height: 58px; }
-  .brand { font-weight: 700; font-size: 16px; color: var(--ink); letter-spacing: -.01em; }
+  .brand { font-weight: 700; font-size: 16px; color: var(--ink); letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 7px; }
+  .brand .logo { width: 24px; height: 24px; color: var(--accent); margin-top: -3px; }
   .brand span { color: var(--accent); }
   .brand:hover { text-decoration: none; }
   .top-links { margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -460,6 +466,7 @@ def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+{_FAVICON}
 <title>Ticker Council · Twelve AI analysts, one honest read on any stock</title>
 <meta name="description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and tell you which way it leans over the next week, 3 months and year, and how sure they are." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -469,7 +476,7 @@ def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <a class="brand" href="/welcome">Ticker <span>Council</span></a>
+  <a class="brand" href="/welcome">{_EMU}Ticker <span>Council</span></a>
   <nav class="top-links" aria-label="Account">{top}</nav>
 </div></header>
 

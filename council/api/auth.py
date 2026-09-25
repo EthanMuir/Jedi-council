@@ -43,7 +43,7 @@ OAUTH_COOKIE = "council_oauth"
 SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * accounts.SESSION_DAYS
 
 _PUBLIC_PAGES = {"/welcome", "/login", "/signup", "/setup", "/pending", "/forgot", "/reset", "/privacy",
-                 "/logout", "/auth/google", "/auth/google/callback"}
+                 "/logout", "/auth/google", "/auth/google/callback", "/favicon.svg"}
 # Signed-out visitors to the front door see the landing page, not sign-in.
 _FRONT_DOOR = {"/", "/index.html"}
 _PUBLIC_API = {"/api/auth/login", "/api/auth/signup", "/api/auth/setup", "/api/auth/forgot",
@@ -531,7 +531,7 @@ async def _auth_gate(request: Request, call_next):
 
     conn = _conn()
     try:
-        if accounts.count_users(conn) == 0 and path not in ("/setup", "/api/auth/setup", "/privacy"):
+        if accounts.count_users(conn) == 0 and path not in ("/setup", "/api/auth/setup", "/privacy", "/favicon.svg"):
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "the owner's account needs setting up first"}, status_code=401)
             return RedirectResponse("/setup", status_code=307)
