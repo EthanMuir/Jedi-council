@@ -92,9 +92,15 @@
   color: var(--bone-dim);
 }
 
+/* The pixel font gives every character a full em of width, so the status
+   line is kept short and small, and wraps rather than spilling out of the
+   chair if a label is ever longer than the chair is wide. */
 .seat-chair .seat-vote {
   font-family: var(--font-header);
-  font-size: 9px;
+  font-size: 7px;
+  line-height: 1.6;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* ---- seat progress bar --------------------------------------------------

@@ -190,7 +190,7 @@ function resetRing() {
       fill.style.width = '0%';
     }
     chair.className = `${chairClassBase()} state-deliberating`;
-    chair.querySelector('.seat-vote').textContent = 'deliberating...';
+    chair.querySelector('.seat-vote').textContent = 'deliberating…';
     chair.querySelector('.seat-vote').className = 'seat-vote cyan';
     redrawWizardChair(seat.id, 'deliberating');
   }
@@ -239,8 +239,8 @@ function showSeatWaiting(payload) {
   const queued = payload.stage === 'queued';
   const label = () => {
     const left = Math.max(0, Math.round((resumeAt - Date.now()) / 1000));
-    if (left <= 0) return 'deliberating...';
-    return queued ? `queued for ${payload.provider} · ${left}s` : `waiting on ${payload.provider} limit · ${left}s`;
+    if (left <= 0) return 'deliberating…';
+    return queued ? `queued · ${left}s` : `rate limit · ${left}s`;
   };
   if (!chair) {
     // Debate / Prosecutor / Grand Master have no chair on the ring.
@@ -250,6 +250,10 @@ function showSeatWaiting(payload) {
     return;
   }
   const voteEl = chair.querySelector('.seat-vote');
+  // The chair only has room for a short label; the full reason is on hover.
+  voteEl.title = queued
+    ? `Queued for ${payload.provider} (free tier pace)`
+    : `Waiting on ${payload.provider}'s rate limit`;
   clearWait(payload.seat_id);
   voteEl.className = queued ? 'seat-vote dim' : 'seat-vote yellow';
   voteEl.textContent = label();
@@ -272,7 +276,7 @@ function updateSeatProgress(payload) {
     clearWait(payload.seat_id);
     const voteEl = document.querySelector(`#chair-${payload.seat_id} .seat-vote`);
     if (voteEl) {
-      voteEl.textContent = 'deliberating...';
+      voteEl.textContent = 'deliberating…';
       voteEl.className = 'seat-vote cyan';
     }
   }
@@ -300,6 +304,7 @@ function updateSeatChair(payload, silent = false) {
   const chair = document.getElementById(`chair-${payload.seat_id}`);
   if (!chair) return;
   const voteEl = chair.querySelector('.seat-vote');
+  voteEl.removeAttribute('title'); // a leftover rate-limit explanation
   const fill = document.getElementById(`fill-${payload.seat_id}`);
 
   // The chair's colour is the seat's overall lean: its three terms,
