@@ -26,7 +26,7 @@
       <li><b>Going free?</b> After adding the Gemini key, turn on <a href="/settings.html#models">Free Mode</a> under Settings &rarr; Models &amp; Cost. Read its trade-offs first: free answers are weaker than Claude's.</li>
       <li><b>Ask about a stock.</b> In the Chamber, type a ticker (like NVDA) and press <b>Convene the Council</b>. Every run covers all three terms at once.</li>
       <li><b>Watch the Council work.</b> Each seat reads its own data and leans a way on each term. Tap any seat to see its reasoning.</li>
-      <li><b>Read the result.</b> Three bars -- short, medium and long term -- show where the Council leans and how strongly, with any warnings beside them. The Grand Master explains each one. Every run is saved in the Crypt.</li>
+      <li><b>Read the result.</b> Three bars -- short, medium and long term -- show where the Council leans and how strongly, with any warnings under them. The Grand Master explains each one. Every run is saved in the Crypt.</li>
     </ol>
   </div>
     </section>
@@ -87,7 +87,7 @@
       to a coin flip, and is drawn that way on purpose.
     </p>
     <p class="dim" style="font-size:13px; margin-bottom:0;">
-      Amber notes beside a bar are warnings, never overrides: too few seats could
+      Amber notes under a bar are warnings, never overrides: too few seats could
       read their data, most seats expect a bigger move than the stock usually
       makes, the expected move doesn't clear trading costs, or the Prosecutor
       objected to that term's case.
@@ -283,7 +283,7 @@
       <div class="seat-card-title">The Devil's Advocate</div>
       <div class="seat-card-id mono">prosecutor</div>
       <div class="seat-card-field"><b>Sees:</b> everything -- every seat's leans, the debate so far, and which way the council currently leans on each term.</div>
-      <div class="seat-card-field"><b>Does:</b> attacks those leans, whichever way they point. Hunts for evidence cited by multiple seats (counted once, not once per seat), expected moves outside the plausible range, and theses that don't actually depend on the data shown. Its veto appears as a warning beside the terms it objects to.</div>
+      <div class="seat-card-field"><b>Does:</b> attacks those leans, whichever way they point. Hunts for evidence cited by multiple seats (counted once, not once per seat), expected moves outside the plausible range, and theses that don't actually depend on the data shown. Its veto appears as a warning under the bars of the terms it objects to.</div>
     </div>
   </div>
 
@@ -306,7 +306,7 @@
       <div class="seat-card-title">Keeper of the Toll</div>
       <div class="seat-card-id mono">cost_auditor</div>
       <div class="seat-card-field"><b>Computes:</b> spread as a percentage of expected move, round-trip cost, break-even move.</div>
-      <div class="seat-card-field"><b>Does:</b> if a term's expected move is smaller than the cost of trading it, that term gets a warning beside its bar.</div>
+      <div class="seat-card-field"><b>Does:</b> if a term's expected move is smaller than the cost of trading it, that term gets a warning under its bar.</div>
     </div>
     <div class="panel-inset seat-card">
       <div class="seat-card-title">Keeper of the Shields</div>

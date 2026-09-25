@@ -503,9 +503,9 @@ input[type="password"]:focus {
 .compact .term-bar-name, .compact .term-bar-lean { font-size: 8px; }
 .compact .term-bar-head { margin-bottom: 4px; }
 
-.term-bar-body { display: flex; gap: 18px; align-items: flex-start; }
-.term-bar { flex: 1 1 auto; min-width: 0; }
-.term-bar-warnings { flex: 0 0 260px; display: grid; gap: 6px; }
+/* Warnings sit under the bar, full width, so every bar keeps the same
+   length and its 50/50 line lines up with the others. */
+.term-bar-warnings { margin-top: 10px; display: grid; gap: 6px; }
 
 .term-bar-track {
   position: relative;
@@ -581,10 +581,6 @@ input[type="password"]:focus {
 
 .term-bar-note { margin-top: 10px; font-size: 13px; line-height: 1.55; color: var(--bone); }
 
-@media (max-width: 760px) {
-  .term-bar-body { flex-direction: column; align-items: stretch; gap: 8px; }
-  .term-bar-warnings { flex: 1 1 auto; width: 100%; }
-}
 
 /* ---- pop-up panel: the Chamber's seats and synthesis, the Crypt's runs ---- */
 .holo-modal-backdrop {

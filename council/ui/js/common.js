@@ -90,7 +90,7 @@ function barPos(pBullish) {
 
 // One term's bar: the council's position as a marker, a tick for every
 // seat's lean (taller = counts for more on this term), and the term's
-// warnings beside it. `term` is a key of TERMS; `data` is one entry of the
+// warnings under it. `term` is a key of TERMS; `data` is one entry of the
 // phase_f_synthesis event's `terms` (or the same shape rebuilt from the
 // Crypt). opts.compact drops the ticks, warnings and note.
 function termBarHtml(term, data, opts = {}) {
@@ -139,8 +139,8 @@ function termBarHtml(term, data, opts = {}) {
           <div class="term-bar-scale"><span>&#9664; Bearish</span><span>50/50</span><span>Bullish &#9654;</span></div>
           <div class="term-bar-foot">${foot}</div>
         </div>
-        ${warnings ? `<div class="term-bar-warnings">${warnings}</div>` : ''}
       </div>
+      ${warnings ? `<div class="term-bar-warnings">${warnings}</div>` : ''}
       ${!opts.compact && data.note ? `<div class="term-bar-note">${escapeHtml(data.note)}</div>` : ''}
     </div>
   `;

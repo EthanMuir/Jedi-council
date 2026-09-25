@@ -6,14 +6,14 @@
   overflow: hidden;
 }
 
-/* Which run the ring shows (top right) and, once it's finished, the
+/* Which run the ring shows (top left) and, once it's finished, the
    verdict call-out (bottom right). Corners of the ring panel on wide
    screens; stacked above/below the seat grid on phones. */
 .ring-meta {
   position: absolute;
   top: 18px;
-  right: 22px;
-  text-align: right;
+  left: 22px;
+  text-align: left;
   z-index: 2;
 }
 

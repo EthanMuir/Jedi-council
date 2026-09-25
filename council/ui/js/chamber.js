@@ -647,7 +647,7 @@ async function convene() {
       else if (event === 'phase_f_synthesis') renderGrandMaster(payload);
       else if (event === 'phase_g_crypt_write') setStatus('Written to the Crypt.');
       else if (event === 'error') setStatus(`ERROR: ${payload.message}`);
-      // The ring itself now shows the finished run (ticker top right,
+      // The ring itself now shows the finished run (ticker top left,
       // "The Council has spoken" bottom right), so the status line clears.
       else if (event === 'done') setStatus('');
       saveChamberState();
