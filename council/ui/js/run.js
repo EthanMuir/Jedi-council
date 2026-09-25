@@ -241,6 +241,7 @@ function newRun() {
   history.replaceState(null, '', '/index.html');
   closeDrawer();
   document.getElementById('run').hidden = true;
+  resetHero();
   document.getElementById('composer').hidden = false;
   const input = document.getElementById('ticker-input');
   input.value = '';
@@ -255,7 +256,14 @@ function newRun() {
 
 function showRun() {
   document.getElementById('composer').hidden = true;
-  document.getElementById('run').hidden = false;
+  const run = document.getElementById('run');
+  run.hidden = false;
+  if (launched) {
+    launched = false;
+    run.classList.remove('entering');
+    void run.offsetWidth;
+    run.classList.add('entering');
+  }
   buildSeatGrid();
   renderAll();
   window.scrollTo({ top: 0 });
@@ -1064,27 +1072,60 @@ function renderSections() {
 
 const POPULAR = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN'];
 
-// The twelve seats as dots on an ellipse around the box, idling out of step.
-function buildHeroRing() {
-  const ring = document.getElementById('hero-ring');
-  if (!ring) return;
-  ring.innerHTML = SEATS.map((seat, i) => {
-    const a = (i / SEATS.length) * Math.PI * 2 - Math.PI / 2;
-    const x = 50 + 48 * Math.cos(a);
-    const y = 50 + 44 * Math.sin(a);
-    return `<span class="hero-seat" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;animation-delay:${(i * 0.4).toFixed(1)}s"></span>`;
+// The chamber: the twelve seats in an arc over the title. Tapping one says
+// what it reads.
+const SEAT_INITIALS = {
+  technician: 'PC', fundamentalist: 'FI', analyst_ratings: 'AT', estimate_scribe: 'EE',
+  insider_reader: 'IT', senate_watcher: 'CT', catalyst_seer: 'NW', structure_archivist: 'SF',
+  flow_cartographer: 'IH', oracle_options: 'OM', macro_sage: 'EC', cross_market: 'RM',
+};
+
+function buildChamber() {
+  const box = document.getElementById('chamber-seats');
+  if (!box) return;
+  const last = SEATS.length - 1;
+  box.innerHTML = SEATS.map((seat, i) => {
+    // An arc from 190° to 350°: the end seats sit clear of the screen
+    // edges and above the title.
+    const a = Math.PI * (190 + (i / last) * 160) / 180;
+    const x = 50 + 42 * Math.cos(a);
+    const y = 82 + 74 * Math.sin(a);
+    return `<button class="chamber-seat" type="button" data-seat="${seat.id}" aria-pressed="false"
+      style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" aria-label="${escapeHtml(seat.name)}">${SEAT_INITIALS[seat.id] || ''}</button>`;
   }).join('');
+  box.querySelectorAll('.chamber-seat').forEach(btn => {
+    btn.onclick = () => {
+      const on = btn.getAttribute('aria-pressed') !== 'true';
+      box.querySelectorAll('.chamber-seat').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      const note = document.getElementById('chamber-note');
+      if (!on) { note.textContent = 'Tap a seat to see what it reads.'; return; }
+      btn.setAttribute('aria-pressed', 'true');
+      const seat = SEAT_BY_ID[btn.dataset.seat];
+      note.innerHTML = `<b>${escapeHtml(seat.name)}</b> reads ${escapeHtml(seat.reads.toLowerCase())}.`;
+    };
+  });
 }
 
-// Pressing Run: the seats light up one by one, then the run screen opens.
+// Pressing Run: each seat lights up in turn, the chamber lifts away, and
+// showRun() brings the run screen up in its place.
+let launched = false;
 async function launchHero() {
   const hero = document.getElementById('composer');
   if (hero.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  hero.querySelectorAll('.hero-seat').forEach((dot, i) => { dot.style.animationDelay = `${i * 40}ms`; });
-  hero.classList.add('launch');
-  await new Promise(r => setTimeout(r, 720));
-  hero.classList.remove('launch');
-  buildHeroRing();
+  const seats = [...hero.querySelectorAll('.chamber-seat')];
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  for (const seat of seats) { seat.classList.add('lit'); await wait(45); }
+  await wait(160);
+  hero.classList.add('leaving');
+  await wait(330);
+  launched = true;
+}
+
+function resetHero() {
+  const hero = document.getElementById('composer');
+  hero.classList.remove('leaving');
+  hero.querySelectorAll('.chamber-seat').forEach(b => { b.classList.remove('lit'); b.setAttribute('aria-pressed', 'false'); });
+  document.getElementById('chamber-note').textContent = 'Tap a seat to see what it reads.';
 }
 
 // "Your recent" tickers to tap, or popular ones before there are any.
@@ -1165,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('#shape-seg button').forEach(b => { b.onclick = () => setShape(b.dataset.shape, paint); });
   document.getElementById('run-form').addEventListener('submit', startRun);
   document.getElementById('question-toggle').onclick = toggleQuestion;
-  buildHeroRing();
+  buildChamber();
   loadHeroPicks();
   loadHeroRecord();
   document.getElementById('new-run-btn').onclick = newRun;

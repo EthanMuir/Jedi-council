@@ -7,18 +7,35 @@
   min-height: calc(100svh - 150px); display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; justify-items: center;
   gap: 18px; padding: 24px 0 32px; text-align: center; overflow: clip;
 }
-.hero-head { display: grid; gap: 10px; width: 100%; max-width: 34rem; }
-.hero-head h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.025em; line-height: 1.08; }
-.hero-head p { color: var(--muted); font-size: 16px; line-height: 1.5; }
+/* The chamber: twelve seats in an arc with the title inside it. */
+/* Seats and title scale with the chamber's own width (cqw), so the arc keeps
+   its proportions from a small phone to a desktop. */
+.chamber { position: relative; width: min(460px, 100%); aspect-ratio: 2 / 1.08; container-type: inline-size; }
+.chamber-seats { position: absolute; inset: 0; }
+.chamber-seat {
+  --size: clamp(28px, 10cqw, 44px);
+  position: absolute; width: var(--size); height: var(--size); transform: translate(-50%, -50%);
+  display: grid; place-items: center; padding: 0; border-radius: 50%; cursor: pointer;
+  font: 600 clamp(10px, 3cqw, 13px)/1 var(--mono); color: var(--accent);
+  background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-sm);
+  transition: background .2s ease, color .2s ease, border-color .2s ease, transform .2s ease;
+}
+.chamber-seat:hover, .chamber-seat[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.chamber-seat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chamber-title { position: absolute; left: 0; right: 0; bottom: 0; display: grid; gap: 6px; justify-items: center; }
+.chamber-title h1 { font-size: clamp(21px, 7.6cqw, 32px); letter-spacing: -0.02em; line-height: 1.1; }
+.chamber-title p { color: var(--muted); font-size: clamp(12px, 3.6cqw, 15px); }
+.chamber-note { font-size: 13px; color: var(--faint); max-width: 30rem; min-height: 1.5em; }
+.chamber-note b { color: var(--ink); font-weight: 600; }
 .hero-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; justify-items: center; width: min(560px, 100%); }
-.hero-core { position: relative; width: 100%; padding: 38px 30px; }
+.hero-core { position: relative; width: 100%; }
 .hero-box {
-  position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 8px;
+  position: relative; display: flex; align-items: center; gap: 8px; padding: 8px;
   background: var(--surface); border-radius: 18px;
-  box-shadow: 0 0 0 1px var(--line), 0 10px 30px rgba(20, 30, 60, .10);
+  box-shadow: 0 0 0 1px var(--line-strong), 0 6px 20px rgba(20, 30, 60, .07);
   transition: box-shadow .2s ease;
 }
-.hero-box:focus-within { box-shadow: 0 0 0 2px var(--accent), 0 12px 36px color-mix(in srgb, var(--accent) 22%, transparent); }
+.hero-box:focus-within { box-shadow: 0 0 0 2px var(--accent), 0 8px 26px color-mix(in srgb, var(--accent) 18%, transparent); }
 .hero-input {
   flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink);
   font-family: var(--mono); font-size: 22px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
@@ -26,18 +43,6 @@
 }
 .hero-input::placeholder { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-size: 17px; color: var(--faint); }
 .hero-run { padding: 13px 26px; font-size: 16px; border-radius: 12px; }
-/* A soft accent halo that breathes slowly. */
-.hero-glow {
-  position: absolute; z-index: 0; inset: 18% 14%; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 34%, transparent), transparent);
-  filter: blur(24px); opacity: .7; animation: hero-breathe 6s ease-in-out infinite;
-}
-/* The twelve seats, one dot each, on an ellipse around the box (placed by run.js). */
-.hero-ring { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
-.hero-seat {
-  position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%;
-  background: var(--accent); opacity: .28; animation: hero-seat 4.8s ease-in-out infinite;
-}
 .hero-options { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
 .hero-question { width: 100%; text-align: left; }
 .shape-hint { font-size: 13px; width: 100%; max-width: 34rem; }
@@ -51,20 +56,18 @@
 .hero-pick:hover, .hero-pick:focus-visible { box-shadow: 0 0 0 1px var(--accent); color: var(--accent); outline: none; }
 .hero-record { font-size: 14px; color: var(--muted); }
 .hero-record b { color: var(--ink); }
-/* Pressing Run: the seats light up one by one and the halo swells. */
-.hero.launch .hero-seat { animation: hero-seat-on .5s ease-out forwards; background: var(--up); }
-.hero.launch .hero-glow { animation: hero-swell .6s ease-out forwards; }
-@keyframes hero-breathe { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: .85; transform: scale(1.04); } }
-@keyframes hero-seat { 0%, 100% { opacity: .22; transform: scale(.9); } 50% { opacity: .6; transform: scale(1.15); } }
-@keyframes hero-seat-on { from { opacity: .3; transform: scale(1); } to { opacity: 1; transform: scale(1.5); box-shadow: 0 0 12px var(--up); } }
-@keyframes hero-swell { to { opacity: 1; transform: scale(1.25); } }
+/* Pressing Run: the seats light up one by one, then the chamber lifts away
+   and the run screen rises into its place (run.js launchHero). */
+.chamber-seat.lit { background: var(--up); border-color: var(--up); color: #fff; transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 0 14px color-mix(in srgb, var(--up) 55%, transparent); }
+.hero.leaving { animation: hero-leave .34s ease-in forwards; }
+.run.entering { animation: run-enter .42s ease-out; }
+@keyframes hero-leave { to { opacity: 0; transform: translateY(-28px) scale(.98); } }
+@keyframes run-enter { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .hero-glow, .hero-seat, .hero.launch .hero-seat, .hero.launch .hero-glow { animation: none; }
-  .hero-seat { opacity: .4; }
+  .chamber-seat, .hero.leaving, .run.entering { transition: none; animation: none; }
 }
 @media (max-width: 640px) {
   .hero { min-height: calc(100svh - 120px); padding-top: 8px; }
-  .hero-core { padding: 30px 14px; }
   .hero-input { font-size: 19px; padding: 8px 8px; }
   .hero-run { padding: 12px 20px; }
 }

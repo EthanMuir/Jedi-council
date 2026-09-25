@@ -20,16 +20,17 @@
 <body>
 
 <main class="page">
-  <!-- Start a run: centred, with the twelve seats in a ring around the box -->
+  <!-- Start a run: the twelve seats in an arc (the chamber), the ticker box under it -->
   <section class="hero" id="composer" aria-labelledby="composer-title">
-    <div class="hero-head">
-      <h1 id="composer-title">Ask the Council about a stock</h1>
-      <p>Twelve AI analysts debate it and give one verdict for the next week, the next 3 months and the next year.</p>
+    <div class="chamber" id="chamber">
+      <div class="chamber-seats" id="chamber-seats"></div>
+      <div class="chamber-title">
+        <h1 id="composer-title">Ask the Council</h1>
+        <p id="chamber-sub">12 analysts are seated and ready</p>
+      </div>
     </div>
     <form class="hero-form" id="run-form" autocomplete="off">
       <div class="hero-core">
-        <div class="hero-glow" aria-hidden="true"></div>
-        <div class="hero-ring" id="hero-ring" aria-hidden="true"></div>
         <div class="hero-box">
           <label class="visually-hidden" for="ticker-input">Ticker</label>
           <input class="hero-input" id="ticker-input" placeholder="e.g. NVDA" maxlength="8" spellcheck="false" autocapitalize="characters" enterkeyhint="go" required />
@@ -48,6 +49,7 @@
         <input class="input" id="context-input" placeholder="e.g. Is the new product launch already priced in?" />
       </div>
     </form>
+    <p class="chamber-note" id="chamber-note" aria-live="polite">Tap a seat to see what it reads.</p>
     <p class="faint shape-hint" id="shape-hint"></p>
     <div class="hero-picks" id="hero-picks" hidden></div>
     <p class="hero-record" id="hero-record" hidden></p>
