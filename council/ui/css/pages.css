@@ -95,3 +95,7 @@ table.data.compact td.num { white-space: nowrap; padding-left: 12px; }
 .report-msg { font-size: 14px; color: var(--muted); }
 .report-msg.ok { color: var(--up); }
 .report-msg.error { color: var(--down); }
+
+/* A checkbox with a label and a note beside it (Settings -> Account -> Emails) */
+.check-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; font-size: 14px; cursor: pointer; }
+.check-row input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); }

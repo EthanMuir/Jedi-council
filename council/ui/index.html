@@ -20,6 +20,9 @@
 <body>
 
 <main class="page">
+  <!-- First sign-in: Getting started checklist (js/welcome.js) -->
+  <section class="card onboard-card" id="onboard" aria-label="Getting started" hidden></section>
+
   <!-- Start a run -->
   <section class="card composer" id="composer" aria-labelledby="composer-title">
     <div class="composer-head">
@@ -84,6 +87,8 @@
       <div id="positions-body"></div>
     </div>
 
+    <div class="card price-card" id="price-card" hidden></div>
+
     <div class="card changes-card" id="changes" hidden></div>
 
     <div class="card seats-card">
@@ -129,7 +134,12 @@
   <div class="drawer-body" id="drawer-body"></div>
 </aside>
 
+<!-- First sign-in: welcome slides (js/welcome.js) -->
+<div class="tour-backdrop" id="tour-backdrop" hidden></div>
+<div class="tour" id="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" hidden></div>
+
 <script src="/js/app.js"></script>
 <script src="/js/run.js"></script>
+<script src="/js/welcome.js"></script>
 </body>
 </html>

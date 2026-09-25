@@ -8,18 +8,19 @@ import asyncio
 import dataclasses
 import json
 import logging
-from datetime import datetime
+import sqlite3
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from council import key_store
 from council.api.admin import install_admin
-from council.api.auth import install_auth
+from council.api.auth import count_visit, install_auth
 from council.api.reports import install_reports
-from council import shares
+from council import emailer, notify, onboarding, shares
 from council.api import share_page
 from council.api.run_views import compare_runs, load_run, previous_run_id
 from council.api.serialize import to_jsonable
@@ -34,7 +35,7 @@ from council.engine.cost_estimate import estimate_deliberation_cost
 from council.engine.horizons import COMPETENCE_MATRIX, TERMS
 from council.engine.llm_client import RunStopped
 from council.engine.model_catalog import ALL_ROLES, FREE_MODELS, RECOMMENDED, models_sorted_by_cost
-from council.engine.orchestrator import TIER_I_SEATS, TickerNotFound, run_deliberation
+from council.engine.orchestrator import TIER_I_SEATS, TickerNotFound, build_data_service, run_deliberation
 from council.engine.resolution_sweep import sweep_unresolved
 from council.engine.routing import planned_run_mode
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
@@ -183,12 +184,95 @@ async def deliberate_stream(
     )
 
 
+@app.get("/health")
+async def health():
+    """For an uptime monitor (README: Uptime alerts): 200 when the app is up
+    and both databases open, 503 otherwise. Public, and says nothing more."""
+    settings = get_settings()
+    try:
+        settings.ensure_dirs()
+        for path in (settings.council_db_path, settings.settings_db_path):
+            conn = sqlite3.connect(path, timeout=5)
+            try:
+                conn.execute("SELECT 1").fetchone()
+            finally:
+                conn.close()
+    except (sqlite3.Error, OSError):
+        return JSONResponse({"ok": False}, status_code=503)
+    return {"ok": True}
+
+
 @app.post("/api/resolve")
 async def resolve():
     settings = get_settings()
     settings.ensure_dirs()
     swept = await sweep_unresolved(settings)
-    return {"swept": to_jsonable(swept)}
+    emailed = await notify.email_scored_calls(settings, swept)
+    return {"swept": to_jsonable(swept), "emailed": emailed}
+
+
+def _has_ai_key(settings: Settings) -> bool:
+    """Any AI key this person can use: saved in Settings, or (the owner's) in .env."""
+    return any((settings.anthropic_api_key, settings.openai_api_key, settings.google_api_key, settings.groq_api_key))
+
+
+def _has_run(request: Request) -> bool:
+    settings = _settings(request)
+    settings.ensure_dirs()
+    conn = connect(settings.council_db_path)
+    try:
+        mine, params = owner_filter(_account(request), "user_id")
+        return conn.execute(f"SELECT 1 FROM predictions WHERE {mine} LIMIT 1", params).fetchone() is not None
+    finally:
+        conn.close()
+
+
+@app.get("/api/onboarding")
+async def get_onboarding(request: Request):
+    """The welcome tour and Getting started checklist (#125): what's done."""
+    state = onboarding.get(get_settings().settings_db_path, _account(request))
+    return {
+        **state,
+        "steps": {
+            "key": _has_ai_key(_settings(request)),
+            "run": _has_run(request),
+            "seat": state["seat_opened"],
+            "home": state["home_screen"],
+        },
+    }
+
+
+class _OnboardingRequest(BaseModel):
+    tour_done: bool | None = None
+    checklist_hidden: bool | None = None
+    seat_opened: bool | None = None
+    home_screen: bool | None = None
+
+
+@app.post("/api/onboarding")
+async def set_onboarding(body: _OnboardingRequest, request: Request):
+    changes = {k: v for k, v in body.model_dump().items() if v is not None}
+    onboarding.update(get_settings().settings_db_path, _account(request), changes)
+    return await get_onboarding(request)
+
+
+@app.get("/api/settings/notifications")
+async def get_notifications(request: Request):
+    settings = get_settings()
+    return {
+        "scored_calls": notify.wants_scored_emails(settings.settings_db_path, _account(request)),
+        "email_enabled": emailer.email_configured(settings) and settings.resolved_auth_enabled,
+    }
+
+
+class _NotificationsRequest(BaseModel):
+    scored_calls: bool
+
+
+@app.post("/api/settings/notifications")
+async def set_notifications(body: _NotificationsRequest, request: Request):
+    notify.set_scored_emails(get_settings().settings_db_path, _account(request), body.scored_calls)
+    return {"scored_calls": body.scored_calls}
 
 
 _PREDICTION_COLUMNS = (
@@ -343,6 +427,41 @@ async def run_changes(run_id: str, request: Request):
         conn.close()
 
 
+@app.get("/api/runs/{run_id}/prices")
+async def run_prices(run_id: str, request: Request):
+    """Closing prices around a run for its price chart: about four months
+    before it, and everything since (up to a year on). Empty bars when the
+    price feed has nothing, and the page just leaves the chart out."""
+    settings = _settings(request)
+    settings.ensure_dirs()
+    conn = connect(settings.council_db_path)
+    try:
+        run = load_run(conn, run_id)
+    finally:
+        conn.close()
+    if not run or not _can_see(request, run["user_id"]):
+        raise HTTPException(404, "run not found")
+    run_at = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00")).replace(tzinfo=None)
+    end = min(datetime.utcnow(), run_at + timedelta(days=380))
+    first = next(iter(run["terms"].values()))["prediction"]
+    resolves = {t: body["prediction"]["resolve_at"] for t, body in run["terms"].items()}
+    bars: list[dict] = []
+    try:
+        series = await build_data_service(settings).get_ohlcv(
+            run["ticker"], as_of=end, lookback_days=(end - run_at).days + 125
+        )
+        bars = [{"d": str(b.trade_date)[:10], "c": round(b.close, 4)} for b in series.bars]
+    except Exception:  # noqa: BLE001 -- no chart is better than a broken page
+        bars = []
+    return {
+        "ticker": run["ticker"],
+        "run_date": run_at.date().isoformat(),
+        "price_at_run": first.get("price_at_prediction"),
+        "resolves": resolves,
+        "bars": bars,
+    }
+
+
 def _share_url(request: Request, token: str) -> str:
     base = get_settings().public_url.rstrip("/") or str(request.base_url).rstrip("/")
     return f"{base}/s/{token}"
@@ -399,6 +518,7 @@ async def shared_run_page(token: str, request: Request):
     signed_in = getattr(request.state, "user", None) is not None
     if run is None:
         return HTMLResponse(share_page.missing_page(), status_code=404)
+    count_visit(request, "share")
     base = settings.public_url.rstrip("/") or str(request.base_url).rstrip("/")
     return HTMLResponse(share_page.render(run, base_url=base, url=f"{base}/s/{token}", signed_in=signed_in))
 

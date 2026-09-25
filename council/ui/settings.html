@@ -119,6 +119,14 @@
           <h2>Account</h2>
           <p class="muted" id="account-info">Loading…</p>
         </div>
+        <div class="card card-pad stack" id="emails-card" hidden>
+          <h2>Emails</h2>
+          <label class="check-row" for="scored-toggle">
+            <input type="checkbox" id="scored-toggle" />
+            <span><b>Email me when a call is scored</b><br /><span class="faint">One email when your runs' calls reach their end date, saying which were right and what the price did.</span></span>
+          </label>
+          <p class="key-msg" id="emails-msg" role="status"></p>
+        </div>
         <div class="card card-pad stack" id="password-card" hidden>
           <h2 id="password-title">Change password</h2>
           <form class="stack" id="password-form" autocomplete="on">

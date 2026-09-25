@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from council import accounts, emailer
+from council import accounts, emailer, site_stats
 from council.api import auth
 from council.calibration import releases
 from council.calibration.benchmark import compute_benchmark
@@ -319,6 +319,28 @@ async def publish_release(release_id: int, request: Request):
         return {"ok": True}
     finally:
         rconn.close()
+
+
+@router.get("/site-stats")
+async def site_stats_overview(request: Request, days: int = 30):
+    """Visitors to the landing page, sign-up form and shared results, and
+    sign-ups, for the last `days` days."""
+    _require_admin(request)
+    days = max(7, min(days, 365))
+    stats = site_stats.summary(get_settings().settings_db_path, days)
+    conn = auth._conn()
+    try:
+        people = [u for u in accounts.list_users(conn) if not u.is_owner]
+    finally:
+        conn.close()
+    recent = [u for u in people if (u.created_at or "")[:10] >= stats["since"]]
+    signups_by_day: dict[str, int] = defaultdict(int)
+    for u in recent:
+        signups_by_day[u.created_at[:10]] += 1
+    for d in stats["daily"]:
+        d["signups"] = signups_by_day.get(d["day"], 0)
+    stats["signups"] = {"total": len(recent), "approved": sum(1 for u in recent if u.status == "active")}
+    return stats
 
 
 def install_admin(app) -> None:

@@ -348,6 +348,11 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "resolve":
         swept = asyncio.run(sweep_unresolved(settings))
         _print_sweep_results(settings, swept)
+        from council.notify import email_scored_calls
+
+        emailed = asyncio.run(email_scored_calls(settings, swept))
+        if emailed:
+            print(f"Emailed {emailed} {'person' if emailed == 1 else 'people'} about their scored calls.")
     elif args.command == "export":
         conn = connect(settings.council_db_path)
         try:

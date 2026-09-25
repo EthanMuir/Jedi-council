@@ -274,6 +274,10 @@ def reset_page(valid: bool) -> str:
     return _page("Reset password", body, script)
 
 
+def notice_page(title: str, message: str) -> str:
+    return _page(title, f'<h1>{escape(title)}</h1><p>{escape(message)}</p><a class="btn" href="/">Open Ticker Council</a>')
+
+
 def message_page(title: str, message: str) -> str:
     return _page(title, f'<h1>{escape(title)}</h1><p>{escape(message)}</p><a class="btn" href="/login">Back to sign in</a>')
 
@@ -301,6 +305,8 @@ def privacy_page() -> str:
   </ul>
   <h2>Shared links</h2>
   <p>If you share a result, anyone with its link can see that one run: the call, the summary and how each seat leaned. Never your name, email or other runs. You can stop sharing at any time and the link stops working.</p>
+  <h2>Visitor counts</h2>
+  <p>The site counts how many people open the landing page, the sign-up form and shared results, and which sites sent them, so the owner can see if anyone's finding it. There are no cookies and no outside tracking services. Your IP address isn't stored: visits are counted with a code that changes every day, so nobody can be followed from one day to the next.</p>
   <h2>Backups</h2>
   <p>The databases are backed up nightly so nothing is lost if the server fails. Backups never include the key that unlocks saved API keys.</p>
   <h2>Emails</h2>

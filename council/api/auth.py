@@ -19,6 +19,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 import urllib.parse
@@ -30,7 +31,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from council import accounts, emailer, key_store, reports, secrets_box
+from council import accounts, emailer, key_store, notify, reports, secrets_box, site_stats
 from council.api import auth_pages
 from council.config import get_settings
 from council.engine import model_settings
@@ -44,12 +45,13 @@ SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * accounts.SESSION_DAYS
 
 _PUBLIC_PAGES = {"/welcome", "/login", "/signup", "/setup", "/pending", "/forgot", "/reset", "/privacy",
                  "/terms", "/logout", "/auth/google", "/auth/google/callback", "/favicon.svg",
-                 "/manifest.webmanifest"}
+                 "/manifest.webmanifest", "/health", "/unsubscribe"}
 # App icons (for Add to Home Screen) and shared verdicts (/s/<token>) are
 # open to anyone -- a share link is its own permission.
 _PUBLIC_PREFIXES = ("/icons/", "/s/")
 # Still reachable before the owner's account exists.
-_BEFORE_SETUP = {"/setup", "/api/auth/setup", "/privacy", "/terms", "/favicon.svg", "/manifest.webmanifest"}
+_BEFORE_SETUP = {"/setup", "/api/auth/setup", "/privacy", "/terms", "/favicon.svg", "/manifest.webmanifest",
+                 "/health"}
 # Signed-out visitors to the front door see the landing page, not sign-in.
 _FRONT_DOOR = {"/", "/index.html"}
 _PUBLIC_API = {"/api/auth/login", "/api/auth/signup", "/api/auth/setup", "/api/auth/forgot",
@@ -145,6 +147,7 @@ async def _notify_owner_of_signup(request: Request, conn, user: accounts.User) -
 # ---- routes -----------------------------------------------------------------------------
 
 router = APIRouter()
+log = logging.getLogger("council.auth")
 
 
 class _LoginRequest(BaseModel):
@@ -178,8 +181,26 @@ def _auth_off() -> bool:
     return not get_settings().resolved_auth_enabled
 
 
+def count_visit(request: Request, event: str) -> None:
+    """The admin page's visitor counter (council/site_stats.py). Never lets
+    a counting problem break the page."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = forwarded.split(",")[0].strip() or (request.client.host if request.client else "")
+    try:
+        site_stats.record(
+            get_settings().settings_db_path, event, ip=ip,
+            user_agent=request.headers.get("user-agent", ""),
+            referer=request.headers.get("referer", ""),
+            own_host=request.url.hostname or "",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("couldn't count a visit: %s", exc)
+
+
 @router.get("/welcome", response_class=HTMLResponse)
 async def welcome_page(request: Request):
+    if getattr(request.state, "user", None) is None:
+        count_visit(request, "landing")
     base = get_settings().public_url.rstrip("/") or str(request.base_url).rstrip("/")
     return auth_pages.landing_page(
         google_enabled(), signed_in=getattr(request.state, "user", None) is not None, base_url=base
@@ -193,7 +214,8 @@ async def login_page(notice: str | None = None):
 
 
 @router.get("/signup", response_class=HTMLResponse)
-async def signup_page():
+async def signup_page(request: Request):
+    count_visit(request, "signup_form")
     return auth_pages.signup_page(google_enabled())
 
 
@@ -231,6 +253,20 @@ async def reset_page(token: str = ""):
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page():
     return auth_pages.privacy_page()
+
+
+@router.get("/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe(u: int = -1, t: str = ""):
+    """The link at the bottom of every 'your call was scored' email."""
+    settings = get_settings()
+    if u < 0 or not notify.check_unsubscribe_token(settings, u, t):
+        return HTMLResponse(auth_pages.notice_page(
+            "Link not recognised", "This unsubscribe link isn't valid. You can turn these emails off "
+            "in Settings -> Account instead."), status_code=400)
+    notify.set_scored_emails(settings.settings_db_path, u, False)
+    return auth_pages.notice_page(
+        "Emails turned off", "You won't get 'your call was scored' emails any more. "
+        "You can turn them back on in Settings -> Account.")
 
 
 @router.get("/terms", response_class=HTMLResponse)

@@ -228,6 +228,7 @@ function newRun() {
   document.getElementById('share-btn').hidden = true;
   document.getElementById('share-card').hidden = true;
   document.getElementById('changes').hidden = true;
+  document.getElementById('price-card').hidden = true;
   if (listening) listening.abort();
   listening = null;
   Object.keys(waitTicks).forEach(stopWait);
@@ -348,6 +349,7 @@ function renderAll() {
   renderSections();
   renderShare();
   renderChanges();
+  renderPriceChart();
   loadRunExtras();
   if (openSeatId) renderDrawer(openSeatId);
 }
@@ -557,6 +559,7 @@ function loadRunExtras() {
   const base = `/api/runs/${encodeURIComponent(id)}`;
   fetchJSON(`${base}/share`).then(r => { state.share = r; renderShare(); }).catch(() => {});
   fetchJSON(`${base}/changes`).then(r => { state.changes = r; renderChanges(); }).catch(() => {});
+  fetchJSON(`${base}/prices`).then(r => { state.prices = r; renderPriceChart(); }).catch(() => {});
 }
 
 function toggleShare() {
@@ -631,6 +634,93 @@ function renderShare() {
     document.getElementById('share-stop').onclick = () => setShared(false);
   }
   document.getElementById('share-close').onclick = toggleShare;
+}
+
+// The stock's closing price around the run: grey before it, green or red
+// after it depending on where it has gone since, with the run marked.
+function renderPriceChart() {
+  const card = document.getElementById('price-card');
+  const data = state?.prices;
+  const bars = data?.bars || [];
+  if (bars.length < 5) { card.hidden = true; return; }
+  card.hidden = false;
+  const W = 640, H = 210, L = 10, R = 58, T = 16, B = 26;
+  const closes = bars.map(b => b.c);
+  let lo = Math.min(...closes), hi = Math.max(...closes);
+  const pad = (hi - lo) * 0.08 || hi * 0.02;
+  lo -= pad; hi += pad;
+  const x = i => L + (i / (bars.length - 1)) * (W - L - R);
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  // The run's bar: the last trading day on or before the run date.
+  let runIdx = -1;
+  bars.forEach((b, i) => { if (b.d <= data.run_date) runIdx = i; });
+  const runPrice = runIdx >= 0 ? bars[runIdx].c : null;
+  const last = bars[bars.length - 1];
+  const after = runIdx >= 0 && runIdx < bars.length - 1;
+  const change = after && runPrice ? (last.c / runPrice - 1) * 100 : null;
+  const dir = change === null ? 'even' : change > 0 ? 'up' : change < 0 ? 'down' : 'even';
+  const path = (from, to) => bars.slice(from, to + 1).map((b, k) => `${k ? 'L' : 'M'}${x(from + k).toFixed(1)},${y(b.c).toFixed(1)}`).join('');
+  const before = runIdx >= 0 ? path(0, runIdx) : path(0, bars.length - 1);
+  const afterPath = after ? path(runIdx, bars.length - 1) : '';
+  const area = after ? `${afterPath}L${x(bars.length - 1).toFixed(1)},${H - B}L${x(runIdx).toFixed(1)},${H - B}Z` : '';
+  const ticks = [hi - pad, (hi + lo) / 2, lo + pad];
+  const money = v => v >= 1000 ? `$${Math.round(v).toLocaleString()}` : `$${v.toFixed(2)}`;
+  const shortDate = d => new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const scored = TERMS.map(t => [t, (data.resolves?.[t] || '').slice(0, 10)])
+    .filter(([, d]) => d && d <= last.d && runIdx >= 0 && d > data.run_date)
+    .map(([t, d]) => {
+      let i = bars.findIndex(b => b.d >= d);
+      if (i < 0) i = bars.length - 1;
+      return `<line x1="${x(i)}" x2="${x(i)}" y1="${H - B}" y2="${H - B + 5}" stroke="var(--faint)" />
+        <text x="${x(i)}" y="${H - 4}" text-anchor="middle" class="pc-axis">${TERM_SHORT[t]} scored</text>`;
+    }).join('');
+  const headline = change === null
+    ? `<span class="faint">The four months before this run. The line carries on here as time passes.</span>`
+    : `${money(runPrice)} at the run <span class="faint">→</span> ${money(last.c)} on ${shortDate(last.d)} <b class="${dir}">${change > 0 ? '+' : ''}${change.toFixed(1)}%</b>`;
+  card.innerHTML = `
+    <div class="card-head"><h2>Price</h2><small>${escapeHtml(data.ticker)} closing price</small></div>
+    <p class="pc-line">${headline}</p>
+    <div class="pc-wrap">
+      <svg class="pc" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(data.ticker)} closing price from ${shortDate(bars[0].d)} to ${shortDate(last.d)}${change === null ? '' : `, ${change > 0 ? 'up' : 'down'} ${Math.abs(change).toFixed(1)}% since the run`}">
+        ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid" />
+          <text x="${W - R + 8}" y="${y(v) + 4}" class="pc-axis">${money(v)}</text>`).join('')}
+        ${area ? `<path d="${area}" class="pc-area ${dir}" />` : ''}
+        <path d="${before}" class="pc-before" />
+        ${afterPath ? `<path d="${afterPath}" class="pc-after ${dir}" />` : ''}
+        ${runPrice !== null && after ? `<line x1="${x(runIdx)}" x2="${W - R}" y1="${y(runPrice)}" y2="${y(runPrice)}" class="pc-ref" />` : ''}
+        ${runIdx >= 0 ? `<line x1="${x(runIdx)}" x2="${x(runIdx)}" y1="${T}" y2="${H - B}" class="pc-run" />
+          <circle cx="${x(runIdx)}" cy="${y(runPrice)}" r="4.5" class="pc-dot" />
+          <text x="${x(runIdx)}" y="${T - 4}" text-anchor="middle" class="pc-label">Run</text>` : ''}
+        <text x="${L}" y="${H - 4}" class="pc-axis">${shortDate(bars[0].d)}</text>
+        ${scored}
+        <text x="${W - R}" y="${H - 4}" text-anchor="end" class="pc-axis">${shortDate(last.d)}</text>
+        <g class="pc-hover" hidden><line class="pc-cross" y1="${T}" y2="${H - B}" /><circle r="4" class="pc-hdot" /></g>
+        <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" class="pc-hit" />
+      </svg>
+      <div class="pc-tip" hidden></div>
+    </div>`;
+  const svg = card.querySelector('svg');
+  const hover = svg.querySelector('.pc-hover');
+  const tip = card.querySelector('.pc-tip');
+  const move = ev => {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const i = Math.max(0, Math.min(bars.length - 1, Math.round((loc.x - L) / (W - L - R) * (bars.length - 1))));
+    const b = bars[i];
+    hover.hidden = false;
+    hover.querySelector('line').setAttribute('x1', x(i)); hover.querySelector('line').setAttribute('x2', x(i));
+    hover.querySelector('circle').setAttribute('cx', x(i)); hover.querySelector('circle').setAttribute('cy', y(b.c));
+    const vsRun = runPrice && i > runIdx ? ` <span class="${b.c >= runPrice ? 'up' : 'down'}">${b.c >= runPrice ? '+' : ''}${((b.c / runPrice - 1) * 100).toFixed(1)}%</span>` : '';
+    tip.innerHTML = `<b>${money(b.c)}</b>${vsRun}<br><span class="faint">${shortDate(b.d)}${i === runIdx ? ' · run' : ''}</span>`;
+    tip.hidden = false;
+    const box = card.querySelector('.pc-wrap').getBoundingClientRect();
+    const px = (x(i) / W) * box.width;
+    tip.style.left = `${Math.min(Math.max(0, px - tip.offsetWidth / 2), box.width - tip.offsetWidth)}px`;
+  };
+  const hit = svg.querySelector('.pc-hit');
+  hit.addEventListener('pointermove', move);
+  hit.addEventListener('pointerdown', move);
+  hit.addEventListener('pointerleave', () => { hover.hidden = true; tip.hidden = true; });
 }
 
 function renderChanges() {
@@ -743,6 +833,7 @@ let drawerReturnFocus = null;
 
 function openDrawer(id, from) {
   openSeatId = id;
+  document.dispatchEvent(new CustomEvent('seatopened', { detail: id }));
   drawerReturnFocus = from || document.activeElement;
   renderDrawer(id);
   const drawer = document.getElementById('drawer');

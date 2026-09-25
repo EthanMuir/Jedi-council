@@ -374,12 +374,17 @@ Two things Oracle-specific that the script can't do for you:
   It serves the app at the new domain, sends `www` there, and redirects
   the old address so existing links keep working.
 
-Finally, schedule `council resolve` to run daily so predictions actually
-get scored -- a cron entry, run via `crontab -e`:
+Finally, have finished runs scored every day (and people emailed about
+their scored calls, if email is set up):
 
+```bash
+bash scripts/setup-scoring.sh
 ```
-0 6 * * * cd /path/to/jedi-council && .venv/bin/python -m council resolve >> /tmp/council-resolve.log 2>&1
-```
+
+It installs a daily timer (around 21:45 UTC, after the US market closes)
+running `python -m council resolve`, and removes any older cron entry for it.
+People can turn the emails off in Settings -> Account or from the link in
+each email.
 
 ## Backups
 
@@ -414,3 +419,16 @@ key, e.g. in a password manager: `cat data/secret.key`. To restore, stop the
 service, unpack a backup into `data/`, put the key back, and start it again.
 Without the key everything still works, but people have to re-enter their
 API keys.
+
+## Uptime alerts
+
+`/health` answers `{"ok": true}` when the app is up and both databases open
+(and a 503 otherwise), so a free monitor can tell you when the site goes
+down before your users do. With [UptimeRobot](https://uptimerobot.com) (free):
+
+1. Sign up, then **+ New monitor**.
+2. Type **HTTP(s)**, URL `https://yourdomain/health`, interval 5 minutes.
+3. Under alert contacts, tick your email (and add the UptimeRobot phone app
+   for push alerts if you like). Save.
+
+It emails you when the check fails and again when the site is back.

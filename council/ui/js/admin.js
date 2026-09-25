@@ -175,6 +175,32 @@ function rate(v) {
   return v === null || v === undefined ? '–' : `${Math.round(v * 100)}%`;
 }
 
+async function loadVisitors() {
+  try {
+    const v = await fetchJSON('/api/admin/site-stats?days=30');
+    const t = v.totals;
+    const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '–');
+    const stat = (big, label, sub = '') => `<div class="stat"><div class="stat-big num">${big}</div><div class="stat-label">${label}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div>`;
+    document.getElementById('visitor-tiles').innerHTML = [
+      stat(t.landing.visitors, 'Saw the landing page', `${t.landing.views} page views`),
+      stat(t.signup_form.visitors, 'Opened the sign-up form', `${pct(t.signup_form.visitors, t.landing.visitors)} of visitors`),
+      stat(v.signups.total, 'Signed up', `${pct(v.signups.total, t.landing.visitors)} of visitors · ${v.signups.approved} approved`),
+      stat(t.share.views, 'Shared-result views', 'people opening shared links'),
+    ].join('');
+    const max = Math.max(1, ...v.daily.map(d => d.landing_visitors));
+    document.getElementById('visitor-chart').innerHTML = `
+      <div class="day-bars">${v.daily.map(d => `<span class="day-bar" style="height:${Math.max(d.landing_visitors ? 4 : 1, (d.landing_visitors / max) * 100)}%" title="${d.day}: ${d.landing_visitors} visitors, ${d.signups} sign-ups"></span>`).join('')}</div>
+      <div class="day-axis"><span>${fmtDate(v.daily[0].day)}</span><span>peak ${max} visitors a day</span><span>today</span></div>`;
+    const refMax = Math.max(1, ...v.referrers.map(r => r.visitors));
+    document.getElementById('referrers').innerHTML = v.referrers.length
+      ? `<h3 class="sub-head">Where visitors came from</h3>` + v.referrers.map(r => `
+        <div class="ticker-bar"><b>${escapeHtml(r.domain)}</b><span class="ticker-track"><span style="width:${(r.visitors / refMax) * 100}%"></span></span><span class="num">${r.visitors}</span></div>`).join('')
+      : '<p class="faint" style="font-size:13px">No visits from other sites yet. Links shared on X, Reddit and so on show up here.</p>';
+  } catch (e) {
+    document.getElementById('visitor-tiles').innerHTML = `<p class="down">Couldn't load visitors: ${escapeHtml(friendlyError(e))}</p>`;
+  }
+}
+
 async function loadAnalytics() {
   try {
     const a = await fetchJSON('/api/admin/analytics');
@@ -402,6 +428,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('report-list').addEventListener('click', onReportAction);
   loadReports();
   loadPeople().then(loadRuns);
+  loadVisitors();
   loadAnalytics();
   loadWeights();
 });

@@ -385,6 +385,32 @@ function renderAccount(me) {
   document.getElementById('password-title').textContent = u.has_password ? 'Change password' : 'Add a password';
 }
 
+async function loadNotifications() {
+  const card = document.getElementById('emails-card');
+  try {
+    const n = await fetchJSON('/api/settings/notifications');
+    if (!n.email_enabled) { card.hidden = true; return; }
+    card.hidden = false;
+    const box = document.getElementById('scored-toggle');
+    box.checked = n.scored_calls;
+    box.onchange = async () => {
+      const msg = document.getElementById('emails-msg');
+      try {
+        await fetchJSON('/api/settings/notifications', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scored_calls: box.checked }),
+        });
+        msg.textContent = box.checked ? 'On.' : 'Off. You won\'t get these emails.';
+        msg.className = 'key-msg up';
+      } catch (err) {
+        box.checked = !box.checked;
+        msg.textContent = friendlyError(err);
+        msg.className = 'key-msg down';
+      }
+    };
+  } catch (e) { card.hidden = true; }
+}
+
 async function savePassword(e) {
   e.preventDefault();
   const msg = document.getElementById('password-msg');
@@ -420,4 +446,5 @@ document.addEventListener('DOMContentLoaded', () => {
   loadFreeMode();
   loadCostEstimate();
   loadRoles();
+  loadNotifications();
 });

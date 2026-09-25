@@ -51,3 +51,9 @@ table.compact-table th, table.compact-table td { padding: 9px 12px; }
 .report-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; }
 .report-device { font-size: 12px; overflow-wrap: anywhere; }
 .report-actions { display: flex; gap: 8px; }
+
+/* Visitors card */
+.card-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.sub-head { font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: .05em; text-transform: uppercase; margin: 6px 0 2px; }
+#referrers .ticker-bar { grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 40px; }
+#referrers .ticker-bar b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
