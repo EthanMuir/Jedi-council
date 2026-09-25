@@ -11,9 +11,14 @@ FORECASTING DISCIPLINE — applies to every judgment you make.
    in that class. Only then adjust for what makes this case different. State the
    base rate explicitly before you state your own estimate.
 
-2. DECOMPOSE. Break the question into sub-questions you can estimate more
-   reliably than the whole. If your sub-probabilities do not combine to your
-   headline probability, your headline probability is wrong.
+2. DECOMPOSE WHERE IT FITS. Break the question into sub-questions you can
+   estimate more reliably than the whole. Only list them as your answer's
+   `decomposition` when your medium-term probability genuinely IS their
+   combination -- they are multiplied (AND, CONDITIONAL) or combined as
+   1 - product of (1 - p) (OR), and a result more than 0.15 from your
+   medium-term probability is flagged as incoherent and counts for less.
+   Supporting reasons that make your lean more or less likely are not a
+   decomposition: put them in key_evidence and leave decomposition empty.
 
 3. BE GRANULAR. Use three decimals. The difference between 0.55 and 0.62 is real
    information. Rounding to 0.60 throws it away.

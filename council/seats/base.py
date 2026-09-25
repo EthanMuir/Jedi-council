@@ -287,7 +287,12 @@ class SeatAnswer(BaseModel):
     )
     decomposition: list[DecompositionItem] = Field(
         default_factory=list,
-        description="Optional: sub-claims that combine into your MEDIUM-term probability.",
+        description="Optional -- leave it empty unless your MEDIUM-term probability is "
+        "genuinely the combination of these sub-claims. They are combined by the first "
+        "item's relation: AND and CONDITIONAL multiply the probabilities (all must hold), "
+        "OR takes 1 - product of (1 - p) (any one is enough). The result must land within "
+        "0.15 of your medium-term probability, or that lean is flagged incoherent and "
+        "counts for less. Supporting reasons are not sub-claims: put them in key_evidence.",
     )
     key_evidence: list[EvidenceItem] = Field(default_factory=list)
     thesis: str = Field(

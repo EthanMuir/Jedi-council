@@ -85,3 +85,17 @@ def test_detect_incoherent_decompositions_filters_correctly():
     verdicts = {"seat_a": coherent, "seat_b": incoherent}
     flagged = detect_incoherent_decompositions(verdicts)
     assert set(flagged.keys()) == {"seat_b"}
+
+
+def test_seats_are_told_exactly_how_their_decomposition_is_combined():
+    """A live run flagged most seats incoherent: they listed supporting
+    reasons as sub-claims, which the check then multiplied together. The
+    rule the check applies has to be the rule the seats are given."""
+    from council.seats.base import SeatAnswer
+    from council.seats.debiasing import DEBIASING_PREAMBLE
+
+    described = SeatAnswer.model_json_schema()["properties"]["decomposition"]["description"]
+    for rule in ("multiply", "1 - product of (1 - p)", "0.15", "leave it empty"):
+        assert rule in described
+    assert "key_evidence" in DEBIASING_PREAMBLE
+    assert "leave decomposition empty" in DEBIASING_PREAMBLE

@@ -42,8 +42,11 @@ your own judgment -- treat them as established:
    Reality Anchor (the base-rate/options-implied plausible range).
 3. Any Tier I seat whose own stated decomposition sub-probabilities do not
    combine (by AND/OR/CONDITIONAL arithmetic) to within 0.15 of its
-   headline probability -- INCOHERENT_CONFIDENCE, a seat whose reasoning
-   doesn't actually support the number it gave.
+   medium-term probability -- INCOHERENT_CONFIDENCE, a seat whose
+   reasoning doesn't actually support the number it gave. Those seats'
+   medium-term weight is already cut for it, so incoherence alone is not
+   grounds for a veto: object only if the lean still rests on them after
+   that discount.
 
 On top of those facts, use your own judgment to hunt for theses that would
 have been generated regardless of the specific data in front of the seat --
