@@ -254,9 +254,6 @@ const NAV = [
 function renderNav(active) {
   const nav = document.createElement('header');
   nav.className = 'topnav';
-  // council_logged_in is a readable flag cookie set beside the real
-  // (HttpOnly) session cookie; with the password gate off neither exists.
-  const loggedIn = document.cookie.includes('council_logged_in=');
   nav.innerHTML = `
     <div class="topnav-inner">
       <a class="brand" href="/index.html">Ticker <span>Council</span></a>
@@ -264,7 +261,7 @@ function renderNav(active) {
       <nav class="navlinks" id="navlinks" aria-label="Pages">
         ${NAV.map(l => `<a href="${l.href}"${l.href === active ? ' class="active" aria-current="page"' : ''}>${l.label}</a>`).join('')}
         <span class="spacer"></span>
-        ${loggedIn ? '<a href="/logout">Log out</a>' : ''}
+        <span id="nav-account"></span>
       </nav>
     </div>`;
   const btn = nav.querySelector('.nav-menu-btn');
@@ -274,6 +271,25 @@ function renderNav(active) {
     btn.textContent = open ? 'Close' : 'Menu';
   };
   document.body.prepend(nav);
+  refreshNavBadge(active);
+}
+
+// Who's signed in: admins get an Admin link (with how many sign-ups are
+// waiting), and everyone gets Sign out. Nothing when sign-in is off.
+let CURRENT_USER = null;
+async function refreshNavBadge(active = location.pathname) {
+  const slot = document.getElementById('nav-account');
+  if (!slot) return;
+  try {
+    const me = await fetchJSON('/api/me');
+    CURRENT_USER = me.user;
+    document.dispatchEvent(new CustomEvent('me', { detail: me }));
+    if (!me.user) { slot.replaceChildren(); return; }
+    const badge = me.pending_count ? `<span class="nav-badge" title="${me.pending_count} waiting for approval">${me.pending_count}</span>` : '';
+    slot.innerHTML = `
+      ${me.user.is_admin ? `<a href="/admin.html"${active === '/admin.html' ? ' class="active" aria-current="page"' : ''}>Admin${badge}</a>` : ''}
+      <a href="/logout" title="Signed in as ${escapeHtml(me.user.email)}">Sign out</a>`;
+  } catch (e) { /* the nav still works without it */ }
 }
 
 // ---- helpers -------------------------------------------------------------------

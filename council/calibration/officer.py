@@ -18,7 +18,7 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from council.config import Settings
-from council.crypt.db import effective_run_mode
+from council.crypt.db import effective_run_mode, owner_filter
 
 
 @dataclass
@@ -40,17 +40,20 @@ class SeatCalibration:
     calibration_curve: list[CalibrationBin] = field(default_factory=list)
 
 
-def _seat_history_rows(conn: sqlite3.Connection, seat_id: str) -> list[sqlite3.Row]:
+def _seat_history_rows(
+    conn: sqlite3.Connection, seat_id: str, account: int | None = None
+) -> list[sqlite3.Row]:
+    mine, params = owner_filter(account, "p.user_id") if account is not None else ("1=1", [])
     return conn.execute(
-        """
+        f"""
         SELECT sv.probability, sv.vote, p.horizon, r.realised_move_pct,
                p.run_mode, p.total_cost_usd
         FROM seat_votes sv
         JOIN predictions p ON p.id = sv.prediction_id
         JOIN resolutions r ON r.prediction_id = sv.prediction_id
-        WHERE sv.seat_id = ? AND sv.vote NOT IN ('NO_READ', 'NO_CONVICTION')
+        WHERE sv.seat_id = ? AND sv.vote NOT IN ('NO_READ', 'NO_CONVICTION') AND {mine}
         """,
-        (seat_id,),
+        (seat_id, *params),
     ).fetchall()
 
 
@@ -90,12 +93,14 @@ def compute_seat_calibration(
     horizon: str | None = None,
     run_mode: str | None = None,
     exclude_sample: bool = False,
+    account: int | None = None,
 ) -> SeatCalibration:
     """`run_mode` ("free" / "paid" / "sample") limits the track record to
     runs of that kind -- free-tier runs are scored apart from paid ones.
     `exclude_sample` drops sample runs (canned answers replayed with no AI
-    key), which are not real predictions."""
-    rows = _seat_history_rows(conn, seat_id)
+    key), which are not real predictions. `account` keeps only one
+    person's runs (None = everyone's)."""
+    rows = _seat_history_rows(conn, seat_id, account)
     if horizon:
         rows = [r for r in rows if r["horizon"] == horizon]
     if run_mode:

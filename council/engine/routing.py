@@ -76,7 +76,7 @@ def _fallback_route(seat_id: str, settings: Settings, default_model: str) -> Res
 def _override_model(seat_id: str, settings: Settings) -> str | None:
     conn = model_settings.connect(settings.settings_db_path)
     try:
-        return model_settings.get_overrides(conn).get(seat_id)
+        return model_settings.get_overrides(conn, settings.council_account).get(seat_id)
     finally:
         conn.close()
 

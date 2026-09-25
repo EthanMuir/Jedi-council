@@ -30,7 +30,18 @@ _PREDICTIONS_COLUMN_MIGRATIONS = [
     # term's position and warnings, identical on all three rows.
     ("run_id", "TEXT"),
     ("synthesis_json", "TEXT"),
+    # Whose run it is. NULL is the site's owner (every run from before
+    # accounts, and every run when sign-in is off); anyone else's id.
+    ("user_id", "INTEGER"),
 ]
+
+
+def owner_filter(account: int, column: str = "user_id") -> tuple[str, list]:
+    """SQL (and its params) keeping only one person's rows: the owner's
+    are NULL or 0, anyone else's carry their id."""
+    if account == 0:
+        return f"({column} IS NULL OR {column} = 0)", []
+    return f"{column} = ?", [account]
 
 
 def effective_run_mode(run_mode: str | None, total_cost_usd: float | None) -> str:
@@ -86,13 +97,15 @@ def get_sweepable_predictions(conn: sqlite3.Connection, as_of: str) -> list[sqli
     ).fetchall()
 
 
-def get_open_tickers(conn: sqlite3.Connection) -> list[str]:
+def get_open_tickers(conn: sqlite3.Connection, account: int = 0) -> list[str]:
     """Tickers with a prediction row that has no matching resolution yet --
-    used by the Risk Warden's concentration check. Since the resolution
-    sweep is Phase 4, every prediction is currently "open"."""
+    used by the Risk Warden's concentration check, on one person's own
+    runs (someone else's open NVDA call isn't in your book)."""
+    mine, params = owner_filter(account, "p.user_id")
     rows = conn.execute(
         "SELECT p.ticker FROM predictions p "
         "LEFT JOIN resolutions r ON r.prediction_id = p.id "
-        "WHERE r.prediction_id IS NULL"
+        f"WHERE r.prediction_id IS NULL AND {mine}",
+        params,
     ).fetchall()
     return [row["ticker"] for row in rows]

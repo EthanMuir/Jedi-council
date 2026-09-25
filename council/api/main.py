@@ -11,18 +11,20 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from council import key_store
+from council.api.admin import install_admin
 from council.api.auth import install_auth
 from council.api.serialize import to_jsonable
 from council.api.ui_files import UIFiles
 from council.calibration.benchmark import compute_benchmark
-from council.calibration.officer import compute_seat_calibration, compute_weights, rank_for_seat
-from council.config import as_lite, get_settings
-from council.crypt.db import connect, effective_run_mode
+from council.calibration import releases
+from council.calibration.officer import compute_seat_calibration, rank_for_seat
+from council.config import Settings, as_lite, get_settings, settings_for_account
+from council.crypt.db import connect, effective_run_mode, owner_filter
 from council.engine import model_settings
 from council.engine.cost_estimate import estimate_deliberation_cost
 from council.engine.horizons import COMPETENCE_MATRIX, TERMS
@@ -46,8 +48,9 @@ if not _council_log.handlers:
     _council_log.setLevel(logging.INFO)
     _council_log.propagate = False
 
-app = FastAPI(title="The High Council")
+app = FastAPI(title="Ticker Council")
 install_auth(app)
+install_admin(app)
 
 _UI_DIR = Path(__file__).resolve().parents[1] / "ui"
 _SEAT_TITLES = {seat.id: seat.title for seat in TIER_I_SEATS}
@@ -64,14 +67,42 @@ _ROLE_TITLES = {
 }
 
 
+def _user(request: Request):
+    """The signed-in person (council/api/auth.py), or None when sign-in is
+    off -- then the one user is the owner."""
+    return getattr(request.state, "user", None)
+
+
+def _account(request: Request) -> int:
+    user = _user(request)
+    return user.account if user else 0
+
+
+def _is_admin(request: Request) -> bool:
+    user = _user(request)
+    return user is None or user.is_admin
+
+
+def _can_see(request: Request, run_user_id: int | None) -> bool:
+    """Runs are private: only their owner sees them -- and the site's admins,
+    through the Master Crypt."""
+    return _is_admin(request) or (run_user_id or 0) == _account(request)
+
+
+def _settings(request: Request) -> Settings:
+    """Settings as the signed-in person: their keys, models, Free Mode."""
+    return settings_for_account(get_settings(), _account(request))
+
+
 @app.get("/api/deliberate/stream")
 async def deliberate_stream(
+    request: Request,
     ticker: str,
     as_of: str | None = None,
     context: str | None = None,
     lite: bool = False,
 ):
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
     as_of_dt = datetime.fromisoformat(as_of) if as_of else None
 
@@ -189,21 +220,22 @@ def _group_runs(predictions: list[dict]) -> list[dict]:
 
 @app.get("/api/predictions")
 async def list_predictions(
+    request: Request,
     ticker: str | None = None,
     term: str | None = None,
     mode: str | None = None,
     limit: int = 50,
 ):
     """`limit` counts runs; `term` keeps only that term's row of each run."""
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
+        mine, params = owner_filter(_account(request), "p.user_id")
         query = (
             f"SELECT {_PREDICTION_COLUMNS} "
-            "FROM predictions p LEFT JOIN resolutions r ON r.prediction_id = p.id WHERE 1=1"
+            f"FROM predictions p LEFT JOIN resolutions r ON r.prediction_id = p.id WHERE {mine}"
         )
-        params: list = []
         if ticker:
             query += " AND p.ticker = ?"
             params.append(ticker.upper())
@@ -232,13 +264,13 @@ async def list_predictions(
 
 
 @app.get("/api/predictions/{prediction_id}")
-async def get_prediction(prediction_id: str):
-    settings = get_settings()
+async def get_prediction(prediction_id: str, request: Request):
+    settings = _settings(request)
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
         pred = conn.execute("SELECT * FROM predictions WHERE id = ?", (prediction_id,)).fetchone()
-        if not pred:
+        if not pred or not _can_see(request, pred["user_id"]):
             raise HTTPException(404, "prediction not found")
         votes = conn.execute(
             "SELECT * FROM seat_votes WHERE prediction_id = ?", (prediction_id,)
@@ -258,11 +290,11 @@ async def get_prediction(prediction_id: str):
 
 
 @app.get("/api/runs/{run_id}")
-async def get_run(run_id: str):
+async def get_run(run_id: str, request: Request):
     """Everything saved for one run: each term's row, resolution and seat
     votes, plus the Grand Master's synthesis. A pre-terms prediction id
     works too (its run is just that one row)."""
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
@@ -271,7 +303,7 @@ async def get_run(run_id: str):
             "ORDER BY rowid ASC",
             (run_id, run_id),
         ).fetchall()
-        if not preds:
+        if not preds or not _can_see(request, preds[0]["user_id"]):
             raise HTTPException(404, "run not found")
         terms = {}
         for pred in preds:
@@ -306,30 +338,46 @@ async def get_run(run_id: str):
 
 
 @app.get("/api/archives")
-async def archives(mode: str | None = None):
-    """`mode` = "paid" / "free" keeps free-tier runs' track record apart
-    from the paid council's; omitted means every run."""
+async def archives(request: Request, mode: str | None = None):
+    """The Seat record. Each seat's say on each term comes from the weight
+    release the owner last published for this tier (`mode`: "paid", the
+    default, or "free"), with the pooled record behind it. Before any
+    release, the record shown is the person's own runs. The top-level
+    fields and the scoreboard are always the person's own runs."""
     if mode not in (None, "paid", "free"):
         raise HTTPException(400, f"invalid mode '{mode}'")
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
+    account = _account(request)
+    rconn = releases.connect(settings.settings_db_path)
+    try:
+        release = releases.published_release(rconn, mode or "paid")
+    finally:
+        rconn.close()
     conn = connect(settings.council_db_path)
     try:
-        seat_ids = [seat.id for seat in TIER_I_SEATS]
-        # The track-record multiplier each seat's lean gets on each term
-        # (1.0 until it has enough scored calls to move).
-        weights = {t: compute_weights(conn, seat_ids, settings, horizon=t) for t in TERMS}
         seats_summary = []
         for seat in TIER_I_SEATS:
-            calib = compute_seat_calibration(conn, seat.id, run_mode=mode)
+            calib = compute_seat_calibration(conn, seat.id, run_mode=mode, account=account)
             by_term = {}
             for t in TERMS:
-                term_calib = compute_seat_calibration(conn, seat.id, t, run_mode=mode)
+                if release:
+                    pooled = release["stats"].get(t, {}).get(seat.id, {})
+                    record = {
+                        "n_resolutions": pooled.get("n", 0),
+                        "hit_rate": pooled.get("hit_rate"),
+                        "brier_score": pooled.get("brier"),
+                    }
+                else:
+                    own = compute_seat_calibration(conn, seat.id, t, run_mode=mode, account=account)
+                    record = {
+                        "n_resolutions": own.n_resolutions,
+                        "hit_rate": own.hit_rate,
+                        "brier_score": own.brier_score,
+                    }
                 by_term[t] = {
-                    "n_resolutions": term_calib.n_resolutions,
-                    "hit_rate": term_calib.hit_rate,
-                    "brier_score": term_calib.brier_score,
-                    "weight": weights[t].get(seat.id, 1.0),
+                    **record,
+                    "weight": (release["weights"].get(t, {}).get(seat.id, 1.0) if release else 1.0),
                     "competence": COMPETENCE_MATRIX[seat.id][t],
                 }
             seats_summary.append(
@@ -347,8 +395,16 @@ async def archives(mode: str | None = None):
                     "terms": by_term,
                 }
             )
-        benchmark = compute_benchmark(conn, run_mode=mode)
-        return {"seats": seats_summary, "benchmark": benchmark, "mode": mode}
+        benchmark = compute_benchmark(conn, run_mode=mode, account=account)
+        return {
+            "seats": seats_summary,
+            "benchmark": benchmark,
+            "mode": mode,
+            "release": (
+                {k: release[k] for k in ("id", "tier", "published_at", "n_calls", "n_people")}
+                if release else None
+            ),
+        }
     finally:
         conn.close()
 
@@ -359,12 +415,12 @@ class _ModelOverrideRequest(BaseModel):
 
 
 @app.get("/api/settings/models")
-async def get_model_settings():
-    settings = get_settings()
+async def get_model_settings(request: Request):
+    settings = _settings(request)
     settings.ensure_dirs()
     conn = model_settings.connect(settings.settings_db_path)
     try:
-        overrides = model_settings.get_overrides(conn)
+        overrides = model_settings.get_overrides(conn, settings.council_account)
     finally:
         conn.close()
 
@@ -394,21 +450,21 @@ async def get_model_settings():
 
 
 @app.post("/api/settings/models")
-async def set_model_setting(body: _ModelOverrideRequest):
+async def set_model_setting(body: _ModelOverrideRequest, request: Request):
     if body.role not in RECOMMENDED:
         raise HTTPException(400, f"unknown role '{body.role}'")
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
     conn = model_settings.connect(settings.settings_db_path)
     try:
         if body.model_id is None:
-            model_settings.clear_override(conn, body.role)
+            model_settings.clear_override(conn, body.role, settings.council_account)
         else:
             try:
-                model_settings.set_override(conn, body.role, body.model_id)
+                model_settings.set_override(conn, body.role, body.model_id, settings.council_account)
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from exc
-        current = model_settings.get_effective_model(conn, body.role)
+        current = model_settings.get_effective_model(conn, body.role, settings.council_account)
     finally:
         conn.close()
     return {"role": body.role, "current_model": current, "is_override": body.model_id is not None}
@@ -423,7 +479,9 @@ def _api_key_status(settings) -> list[dict]:
     """Where each key comes from and its last four characters -- never the
     key itself. Callers pass a freshly read get_settings() after any change,
     since that's what layers saved keys over .env."""
-    saved = key_store.saved_keys(settings.settings_db_path)
+    saved = key_store.saved_keys(
+        settings.settings_db_path, settings.council_account, settings.secret_key or None
+    )
     status = []
     for name in key_store.KEY_NAMES:
         if name in saved:
@@ -438,33 +496,38 @@ def _api_key_status(settings) -> list[dict]:
 
 
 @app.get("/api/settings/keys")
-async def get_api_keys():
-    settings = get_settings()
+async def get_api_keys(request: Request):
+    settings = _settings(request)
     settings.ensure_dirs()
     return {"keys": _api_key_status(settings)}
 
 
 @app.post("/api/settings/keys")
-async def save_api_key(body: _ApiKeyRequest):
+async def save_api_key(body: _ApiKeyRequest, request: Request):
     if body.name not in key_store.KEY_NAMES:
         raise HTTPException(400, f"unknown key '{body.name}'")
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
     try:
-        key_store.save_key(settings.settings_db_path, body.name, body.value)
+        key_store.save_key(
+            settings.settings_db_path, body.name, body.value,
+            settings.council_account, settings.secret_key or None,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"keys": _api_key_status(get_settings())}
+    return {"keys": _api_key_status(_settings(request))}
 
 
 @app.delete("/api/settings/keys/{name}")
-async def delete_api_key(name: str):
+async def delete_api_key(name: str, request: Request):
     if name not in key_store.KEY_NAMES:
         raise HTTPException(400, f"unknown key '{name}'")
-    settings = get_settings()
+    settings = _settings(request)
     settings.ensure_dirs()
-    key_store.delete_key(settings.settings_db_path, name)
-    return {"keys": _api_key_status(get_settings())}
+    key_store.delete_key(
+        settings.settings_db_path, name, settings.council_account, settings.secret_key or None
+    )
+    return {"keys": _api_key_status(_settings(request))}
 
 
 class _FreeModeRequest(BaseModel):
@@ -474,7 +537,7 @@ class _FreeModeRequest(BaseModel):
 def _free_mode_status(settings) -> dict:
     conn = model_settings.connect(settings.settings_db_path)
     try:
-        enabled = model_settings.free_mode_enabled(conn)
+        enabled = model_settings.free_mode_enabled(conn, settings.council_account)
     finally:
         conn.close()
     return {
@@ -486,15 +549,15 @@ def _free_mode_status(settings) -> dict:
 
 
 @app.get("/api/settings/free-mode")
-async def get_free_mode():
-    settings = get_settings()
+async def get_free_mode(request: Request):
+    settings = _settings(request)
     settings.ensure_dirs()
     return _free_mode_status(settings)
 
 
 @app.post("/api/settings/free-mode")
-async def set_free_mode(body: _FreeModeRequest):
-    settings = get_settings()
+async def set_free_mode(body: _FreeModeRequest, request: Request):
+    settings = _settings(request)
     settings.ensure_dirs()
     conn = model_settings.connect(settings.settings_db_path)
     try:
@@ -509,17 +572,17 @@ async def set_free_mode(body: _FreeModeRequest):
                 raise HTTPException(
                     400, "add a free Gemini or Groq key under API Keys first"
                 )
-            model_settings.enable_free_mode(conn, free_model)
+            model_settings.enable_free_mode(conn, free_model, settings.council_account)
         else:
-            model_settings.disable_free_mode(conn)
+            model_settings.disable_free_mode(conn, settings.council_account)
     finally:
         conn.close()
     return _free_mode_status(settings)
 
 
 @app.get("/api/settings/cost-estimate")
-async def get_settings_cost_estimate(lite: bool = False):
-    settings = get_settings()
+async def get_settings_cost_estimate(request: Request, lite: bool = False):
+    settings = _settings(request)
     settings.ensure_dirs()
     if lite:
         settings = as_lite(settings)

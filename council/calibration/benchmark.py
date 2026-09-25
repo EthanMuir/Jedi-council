@@ -7,7 +7,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from council.crypt.db import effective_run_mode
+from council.crypt.db import effective_run_mode, owner_filter
 
 
 @dataclass
@@ -41,13 +41,19 @@ def _score_arm(rows: list[sqlite3.Row], vote_key: str, prob_key: str | None) -> 
     )
 
 
-def compute_benchmark(conn: sqlite3.Connection, run_mode: str | None = None) -> dict:
+def compute_benchmark(
+    conn: sqlite3.Connection, run_mode: str | None = None, account: int | None = None
+) -> dict:
+    """`account` keeps only one person's runs (None = everyone's)."""
+    mine, params = owner_filter(account, "p.user_id") if account is not None else ("1=1", [])
     rows = conn.execute(
-        """
+        f"""
         SELECT p.blind_vote, p.blind_probability, p.council_vote, p.council_confidence,
                p.p_extremized, r.realised_move_pct, p.run_mode, p.total_cost_usd
         FROM predictions p JOIN resolutions r ON r.prediction_id = p.id
-        """
+        WHERE {mine}
+        """,
+        params,
     ).fetchall()
     if run_mode:
         rows = [r for r in rows if effective_run_mode(r["run_mode"], r["total_cost_usd"]) == run_mode]

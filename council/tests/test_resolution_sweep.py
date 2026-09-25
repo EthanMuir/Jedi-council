@@ -105,3 +105,41 @@ async def test_resolutions_table_immutable_after_sweep(settings):
             (result.terms["short"].prediction_id,),
         )
     conn.close()
+
+
+@pytest.mark.asyncio
+async def test_lessons_use_the_run_owners_keys_and_memory(tmp_path, monkeypatch):
+    """A friend's run is scored with an AI call on the friend's own keys,
+    and the lessons land in the friend's seat memory -- never the owner's."""
+    from council.config import settings_for_account
+    from council.engine import resolution_sweep
+    from council.memory.store import MemoryStore
+
+    base = Settings(
+        no_llm=True,
+        use_data_fixtures=True,
+        council_db_path=str(tmp_path / "council.db"),
+        cache_db_path=str(tmp_path / "cache.db"),
+        settings_db_path=str(tmp_path / "settings.db"),
+        anthropic_api_key="sk-owner-env",
+    )
+    friend = settings_for_account(base, 9)
+    await run_deliberation("NVDA", friend, as_of=datetime(2026, 8, 1, 16, 0, 0))
+
+    used_accounts = []
+    real_client = resolution_sweep.LLMClient
+
+    def recording_client(settings):
+        used_accounts.append((settings.council_account, settings.anthropic_api_key))
+        return real_client(settings)
+
+    monkeypatch.setattr(resolution_sweep, "LLMClient", recording_client)
+    swept = await sweep_unresolved(base, as_of=datetime(2026, 9, 18))
+    assert swept and swept[0].lessons_written > 0
+    assert used_accounts == [(9, "")]
+
+    conn = connect(base.council_db_path)
+    later = datetime(2026, 8, 9)  # the day after the lesson; short-term memories fade fast
+    assert MemoryStore(conn, account=9).retrieve(seat_id="technician", ticker="NVDA", as_of=later)
+    assert MemoryStore(conn).retrieve(seat_id="technician", ticker="NVDA", as_of=later) == []
+    conn.close()

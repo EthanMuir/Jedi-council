@@ -104,6 +104,29 @@
           </div>
         </div>
       </section>
+      <!-- Account -->
+      <section class="page-section" data-section="account" data-title="Account">
+        <div class="card card-pad stack" id="account-card">
+          <h2>Account</h2>
+          <p class="muted" id="account-info">Loading…</p>
+        </div>
+        <div class="card card-pad stack" id="password-card" hidden>
+          <h2 id="password-title">Change password</h2>
+          <form class="stack" id="password-form" autocomplete="on">
+            <div class="field" id="current-field">
+              <label for="current-password">Current password</label>
+              <input class="input" type="password" id="current-password" autocomplete="current-password" />
+            </div>
+            <div class="field">
+              <label for="new-password">New password</label>
+              <input class="input" type="password" id="new-password" autocomplete="new-password" />
+              <span class="faint" style="font-size:12px">At least 10 characters. You'll stay signed in here; other devices are signed out.</span>
+            </div>
+            <p class="key-msg" id="password-msg" role="status"></p>
+            <div><button class="btn btn-primary btn-small" type="submit">Save password</button></div>
+          </form>
+        </div>
+      </section>
     </div>
   </div>
 </main>

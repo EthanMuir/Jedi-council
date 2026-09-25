@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Admin · Ticker Council</title>
+<script>try{var t=localStorage.getItem('council_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="/css/clean.css" />
+<link rel="stylesheet" href="/css/pages.css" />
+<link rel="stylesheet" href="/css/admin.css" />
+</head>
+<body>
+
+<main class="page">
+  <div class="page-head"><h1>Admin</h1></div>
+
+  <div class="sectioned">
+    <nav class="section-menu" aria-label="Admin sections"></nav>
+
+    <div class="section-panes">
+      <!-- People -->
+      <section class="page-section" data-section="people" data-title="People">
+        <div class="card">
+          <div class="card-head"><h2>Waiting for approval</h2><small id="pending-sub"></small></div>
+          <div class="pending-list" id="pending-list"><p class="empty">Loading…</p></div>
+        </div>
+        <p class="notice" id="email-notice" hidden>Email isn't set up yet, so people aren't emailed when you approve them. Let them know yourself, or set up email (see the README).</p>
+        <div class="card">
+          <div class="card-head"><h2>Everyone</h2><small id="people-sub"></small></div>
+          <div class="table-wrap">
+            <table class="data" id="people-table">
+              <thead><tr><th>Person</th><th>Status</th><th class="num">Runs · spent</th><th>Last run</th><th></th></tr></thead>
+              <tbody id="people-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="reset-box card card-pad" id="reset-box" hidden>
+          <h3>Reset link for <span id="reset-name"></span></h3>
+          <p class="muted">Works once, for the next hour. Send it to them however you like.</p>
+          <div class="copy-row"><input class="input mono" id="reset-link" readonly /><button class="btn btn-small" id="reset-copy" type="button">Copy</button></div>
+        </div>
+      </section>
+
+      <!-- Master Crypt -->
+      <section class="page-section" data-section="runs" data-title="All runs">
+        <div class="toolbar">
+          <label class="visually-hidden" for="run-person">Person</label>
+          <select class="input run-person" id="run-person"><option value="">Everyone</option></select>
+          <span class="faint" id="runs-sub"></span>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Person</th><th>Ticker</th><th>Date</th><th>Next week</th><th>Next 3 months</th><th>Next year</th><th>Run</th><th class="num">Cost</th></tr></thead>
+              <tbody id="runs-body"><tr><td colspan="8" class="faint">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Analytics -->
+      <section class="page-section" data-section="analytics" data-title="Analytics">
+        <div class="card card-pad"><div class="stats" id="stat-tiles"></div></div>
+        <div class="card card-pad stack">
+          <h2>Runs per day</h2>
+          <p class="faint" style="font-size:13px">The last 30 days, everyone's runs.</p>
+          <div class="day-chart" id="day-chart"></div>
+        </div>
+        <div class="card card-pad stack">
+          <h2>Track record</h2>
+          <div class="table-wrap"><table class="data compact-table" id="bench-table"></table></div>
+        </div>
+        <div class="card card-pad stack">
+          <h2>Most-run tickers</h2>
+          <div id="top-tickers" class="ticker-bars"></div>
+        </div>
+      </section>
+
+      <!-- Seat weights -->
+      <section class="page-section" data-section="weights" data-title="Seat weights">
+        <div class="pane-head">
+          <p class="muted">How much each seat counts on each period, learned from everyone's scored runs. Paid and free runs are trained apart. A new set is only a draft until you publish it; live runs keep using the published set.</p>
+          <div class="seg" role="group" aria-label="Tier" id="tier-seg">
+            <button type="button" data-tier="paid" aria-pressed="true">Paid runs</button>
+            <button type="button" data-tier="free" aria-pressed="false">Free runs</button>
+          </div>
+        </div>
+        <div class="card card-pad stack" id="live-card"></div>
+        <div class="card card-pad stack">
+          <div class="row" style="justify-content:space-between">
+            <h2>Compute a new set</h2>
+            <button class="btn btn-primary btn-small" id="compute-btn" type="button">Compute new weights</button>
+          </div>
+          <p class="muted" style="font-size:14px">Uses every scored call so far: each ticker counted once per day, no one person more than a fifth of a seat's record. A seat only moves off 1.0 after <span id="min-calls">20</span> scored calls on a period.</p>
+          <input class="input" id="draft-note" placeholder="Note for this set (optional), e.g. 'after 3 months of paid runs'" maxlength="300" />
+        </div>
+        <div class="card" id="draft-card" hidden>
+          <div class="card-head"><h2 id="draft-title"></h2><small id="draft-sub"></small></div>
+          <div class="table-wrap"><table class="data weights-table" id="draft-table"></table></div>
+          <div class="draft-actions">
+            <p class="faint" id="draft-hint">Nothing changes for live runs until you publish.</p>
+            <button class="btn btn-primary" id="publish-btn" type="button">Publish these weights</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>All sets</h2></div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>#</th><th>Runs</th><th>Status</th><th>Made</th><th>Published</th><th class="num">Calls</th><th class="num">People</th><th>Note</th></tr></thead>
+              <tbody id="releases-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/admin.js"></script>
+</body>
+</html>

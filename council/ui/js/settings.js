@@ -363,7 +363,52 @@ function syncAppearance() {
   document.querySelectorAll('#theme-seg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeChoice === themePref())));
 }
 
+// ---- account ---------------------------------------------------------------------
+
+function renderAccount(me) {
+  const info = document.getElementById('account-info');
+  const pwCard = document.getElementById('password-card');
+  if (!me.user) {
+    info.textContent = 'Sign-in is turned off on this server, so there are no accounts: everything here is yours.';
+    pwCard.hidden = true;
+    return;
+  }
+  const u = me.user;
+  const how = [u.has_password && 'email and password', u.google_linked && 'Google'].filter(Boolean).join(' or ');
+  const role = u.is_owner ? 'Owner' : u.is_admin ? 'Admin' : 'Member';
+  info.innerHTML = `
+    <b style="color:var(--ink)">${escapeHtml(u.name)}</b> · ${escapeHtml(u.email)} <span class="pill">${role}</span><br />
+    You sign in with ${escapeHtml(how || 'email')}. Member since ${fmtDate(u.created_at)}.<br />
+    <a href="/logout">Sign out</a> · <a href="/privacy">Privacy</a>`;
+  pwCard.hidden = false;
+  document.getElementById('current-field').hidden = !u.has_password;
+  document.getElementById('password-title').textContent = u.has_password ? 'Change password' : 'Add a password';
+}
+
+async function savePassword(e) {
+  e.preventDefault();
+  const msg = document.getElementById('password-msg');
+  try {
+    await fetchJSON('/api/auth/password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: document.getElementById('current-password').value,
+        new_password: document.getElementById('new-password').value,
+      }),
+    });
+    msg.textContent = 'Saved.';
+    msg.className = 'key-msg up';
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+  } catch (err) {
+    msg.textContent = friendlyError(err);
+    msg.className = 'key-msg down';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('me', e => renderAccount(e.detail));
+  document.getElementById('password-form').addEventListener('submit', savePassword);
   renderNav('/settings.html');
   initSections();
   document.getElementById('free-mode-toggle').onclick = toggleFreeMode;

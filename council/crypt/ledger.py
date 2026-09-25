@@ -61,6 +61,7 @@ def write_prediction(
     run_shape: str | None = None,
     run_id: str | None = None,
     synthesis_json: str | None = None,
+    user_id: int | None = None,
     created_at: datetime | None = None,
 ) -> str:
     created_at = created_at or datetime.utcnow()
@@ -115,6 +116,8 @@ def write_prediction(
         fields["run_id"] = run_id
     if synthesis_json is not None:
         fields["synthesis_json"] = synthesis_json
+    if user_id:  # the owner's runs (0 / None) leave it unset
+        fields["user_id"] = user_id
     row_hash = compute_row_hash(fields, prev_hash)
 
     columns = [k for k in fields] + ["prev_hash", "row_hash"]

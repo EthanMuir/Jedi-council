@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Awaitable, Callable
 
-from council.calibration.officer import compute_weights
+from council.calibration.releases import live_weights
 from council.config import Settings, as_lite
 from council.crypt.db import connect, get_open_tickers
 from council.crypt.ledger import write_prediction, write_seat_vote
@@ -56,7 +56,7 @@ from council.engine.cost_auditor import CostAuditResult, audit
 from council.engine.horizons import TERM_NAMES, TERM_WINDOWS, TERMS, competence, resolve_at_for
 from council.engine.llm_client import LLMClient
 from council.engine.risk_warden import RiskSizing, size_position
-from council.engine.routing import resolve_route
+from council.engine.routing import planned_run_mode, resolve_route
 from council.engine.sampling import SampledSeatVerdict, aggregate_samples
 from council.engine.schemas import (
     DebateArgument,
@@ -436,8 +436,12 @@ async def run_deliberation(
 
     # ---- Phase A: blind round -------------------------------------------
     seat_ids = [s.id for s in TIER_I_SEATS]
-    calibration_weights = {t: compute_weights(conn, seat_ids, settings, t) for t in TERMS}
-    memory = MemoryStore(conn, cap_per_seat=settings.memory_cap_per_seat)
+    # Track-record weights come only from a release the owner reviewed and
+    # published (council/calibration/releases.py), for this run's tier.
+    calibration_weights = live_weights(settings.settings_db_path, planned_run_mode(settings))
+    memory = MemoryStore(
+        conn, cap_per_seat=settings.memory_cap_per_seat, account=settings.council_account
+    )
 
     n_samples = settings.n_samples_per_seat
 
@@ -677,7 +681,7 @@ async def run_deliberation(
                 * DATA_QUALITY_MULTIPLIER.get(v.data_quality, 0.5)
                 * plausibility_multiplier
                 * coherence_multiplier
-                * calibration_weights[t].get(sid, 1.0),
+                * calibration_weights.get(t, {}).get(sid, 1.0),
                 4,
             )
     positions = {t: council_position(term_verdicts(t), weights[t]) for t in TERMS}
@@ -753,7 +757,7 @@ async def run_deliberation(
     )
 
     # ---- Risk Warden (sizing only, never sees the leans) ------------------------
-    open_tickers = get_open_tickers(conn)
+    open_tickers = get_open_tickers(conn, settings.council_account)
     risk_sizing = size_position(
         atr_implied_range_pct=reality_anchors["short"].atr_implied_range_pct,
         options_implied_move_pct=reality_anchors["short"].options_implied_move_pct,
@@ -903,6 +907,7 @@ async def run_deliberation(
                 run_shape=run_shape,
                 run_id=run_id,
                 synthesis_json=synthesis_json,
+                user_id=settings.council_account or None,
                 created_at=as_of,
             )
             for r in seat_results:

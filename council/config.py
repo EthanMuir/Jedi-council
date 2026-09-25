@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from council.key_store import apply_saved_keys
+from council.key_store import KEY_NAMES, apply_saved_keys
 
 
 class Settings(BaseSettings):
@@ -41,14 +41,29 @@ class Settings(BaseSettings):
     no_llm: bool | None = None
     use_data_fixtures: bool | None = None
 
-    # Task #78 -- a single shared-password gate for exposing this app
-    # beyond your own machine/LAN, ahead of real per-user accounts (a
-    # separate, larger piece of work). Blank means auth is off entirely,
-    # matching every prior local-only deployment's behaviour exactly (no
-    # existing test or local workflow should have to know this feature
-    # exists). Set a real value before putting this on the public internet
-    # -- see the README's hosting section.
+    # Turns sign-in on. Blank means auth is off entirely and the app is
+    # single-user, matching every local-only deployment's behaviour (no
+    # existing test or local workflow has to know accounts exist). Once
+    # set, the site has accounts: the first visit asks for this password
+    # once to create the owner's account, and after that everyone signs in
+    # with their own email/password or Google -- see the README.
     app_password: str = ""
+    # Encrypts saved API keys and signs sign-in state. Blank = a random one
+    # generated once into data/secret.key.
+    secret_key: str = ""
+    # The site's public address, for links in emails and Google sign-in.
+    public_url: str = ""
+    # Email (password resets, approvals, sign-up alerts) through Resend.
+    # Blank = no emails; the admin page shows reset links to pass on.
+    resend_api_key: str = ""
+    email_from: str = ""
+    # Google sign-in. Blank = the "Continue with Google" button is hidden.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # Which person's keys, models and runs this Settings object is for:
+    # 0 is the owner (and the only account when sign-in is off). Set per
+    # request by settings_for_account(), never from .env.
+    council_account: int = 0
     # Cookies default to non-Secure so the password gate still works over
     # plain HTTP (e.g. testing locally, or before HTTPS is set up on a
     # fresh deployment) -- set true once served over HTTPS so the session
@@ -173,6 +188,17 @@ def as_lite(settings: Settings) -> Settings:
 
 
 def get_settings() -> Settings:
-    """.env settings, with any API keys saved from the Settings screen
-    layered on top (see council/key_store.py)."""
+    """.env settings, with the owner's API keys saved from the Settings
+    screen layered on top (see council/key_store.py)."""
     return apply_saved_keys(Settings())
+
+
+def settings_for_account(base: Settings, account: int) -> Settings:
+    """The same settings seen as one person: their own keys (and, for
+    anyone but the owner, none of .env's), models and Free Mode."""
+    if account == base.council_account:
+        return base
+    return apply_saved_keys(Settings(**{
+        **base.model_dump(exclude={"council_account", *KEY_NAMES}),
+        "council_account": account,
+    }))

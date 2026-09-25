@@ -71,11 +71,23 @@ def _row_to_event(row: sqlite3.Row) -> MemoryEvent:
 
 
 class MemoryStore:
-    def __init__(self, conn: sqlite3.Connection, cap_per_seat: int = 200):
+    """One person's seat memories: each account's seats learn only from
+    that account's own runs (0 = the owner, whose rows are NULL or 0)."""
+
+    def __init__(self, conn: sqlite3.Connection, cap_per_seat: int = 200, account: int = 0):
         self._conn = conn
         self._cap = cap_per_seat
+        self._account = account
         self._conn.executescript(_SCHEMA_PATH.read_text())
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(memory_events)")}
+        if "user_id" not in columns:
+            self._conn.execute("ALTER TABLE memory_events ADD COLUMN user_id INTEGER")
         self._conn.commit()
+
+    def _mine(self) -> tuple[str, list]:
+        if self._account == 0:
+            return "(user_id IS NULL OR user_id = 0)", []
+        return "user_id = ?", [self._account]
 
     def add(
         self,
@@ -90,8 +102,8 @@ class MemoryStore:
     ) -> int:
         cur = self._conn.execute(
             "INSERT INTO memory_events "
-            "(seat_id, ticker, kind, as_of, horizon, content_json, importance, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(seat_id, ticker, kind, as_of, horizon, content_json, importance, created_at, user_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 seat_id,
                 ticker,
@@ -101,6 +113,7 @@ class MemoryStore:
                 json.dumps(content),
                 importance,
                 datetime.utcnow().isoformat(),
+                self._account or None,
             ),
         )
         self._conn.commit()
@@ -109,8 +122,10 @@ class MemoryStore:
         return event_id
 
     def _evict_if_over_cap(self, seat_id: str) -> None:
+        mine, params = self._mine()
         rows = self._conn.execute(
-            "SELECT id, as_of, importance FROM memory_events WHERE seat_id = ?", (seat_id,)
+            f"SELECT id, as_of, importance FROM memory_events WHERE seat_id = ? AND {mine}",
+            (seat_id, *params),
         ).fetchall()
         if len(rows) <= self._cap:
             return
@@ -132,9 +147,10 @@ class MemoryStore:
     def retrieve(
         self, *, seat_id: str, ticker: str, as_of: datetime, limit: int = 5
     ) -> list[MemoryEvent]:
+        mine, params = self._mine()
         rows = self._conn.execute(
-            "SELECT * FROM memory_events WHERE seat_id = ? AND as_of < ?",
-            (seat_id, as_of.isoformat()),
+            f"SELECT * FROM memory_events WHERE seat_id = ? AND as_of < ? AND {mine}",
+            (seat_id, as_of.isoformat(), *params),
         ).fetchall()
         half_life = half_life_for_seat(seat_id)
         scored = []

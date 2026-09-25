@@ -13,14 +13,14 @@
 <main class="page">
   <div class="page-head">
     <h1>Seat record</h1>
-    <p>How often each seat's call turned out right, per period. Once a seat has 20 scored calls on a period, its say there starts to move: up to twice as much for the most accurate seats, down to a quarter for the least, and the worst can be left out.</p>
+    <p>How often each seat's call turned out right, per period, and how much it counts. Once a seat has 20 scored calls on a period, its say there can move: up to twice as much for the most accurate seats, down to a quarter for the least, and the worst can be left out. Paid and free runs are scored apart.</p>
   </div>
+  <p class="release-line" id="release-line"></p>
 
   <div class="toolbar">
     <div class="seg" role="group" aria-label="Which runs" id="mode-seg">
-      <button type="button" data-mode="" aria-pressed="true">All runs</button>
-      <button type="button" data-mode="paid" aria-pressed="false">Paid</button>
-      <button type="button" data-mode="free" aria-pressed="false">Free</button>
+      <button type="button" data-mode="paid" aria-pressed="true">Paid runs</button>
+      <button type="button" data-mode="free" aria-pressed="false">Free runs</button>
     </div>
     <div class="seg" role="group" aria-label="Detail" id="detail-seg">
       <button type="button" data-detail="plain" aria-pressed="true">Plain</button>

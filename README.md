@@ -271,15 +271,45 @@ network:
    accumulates.
 
 **Security note:** with `APP_PASSWORD` unset (the default), there is no
-authentication on any of this -- anyone who can reach the port can run
-deliberations (spending your configured API keys) and read every
-prediction in the Crypt. That's an acceptable risk on your own home
-network, where only devices you control can reach it. Do **not**
-port-forward this out to the public internet without setting
-`APP_PASSWORD` in `.env` first (see "Host it on the public internet,
-for free" below) -- it's a single shared password gating the whole app,
-not real per-user accounts, but it's the minimum needed before this is
-reachable by strangers.
+sign-in -- anyone who can reach the port can run deliberations (spending
+your configured API keys) and read every prediction in the Crypt. That's an
+acceptable risk on your own home network. Do **not** expose it to the
+public internet without setting `APP_PASSWORD` first.
+
+## Accounts
+
+Setting `APP_PASSWORD` turns on accounts:
+
+- **Owner setup.** The first visit goes to `/setup`, which asks for
+  `APP_PASSWORD` once to create the owner's account. The owner keeps
+  everything from before accounts: `.env` keys, saved keys, model choices,
+  runs and seat memories.
+- **Sign-up with approval.** Visitors see a landing page (`/welcome`) and can
+  ask for an account at `/signup`. It waits until an admin approves it on
+  the admin page (`/admin.html`), which also has every run (the Master
+  Crypt), usage per person, analytics and seat weight releases.
+- **Private by person.** Each person has their own encrypted API keys,
+  model choices, Free Mode, History and seat memories. Nobody else's runs,
+  keys or the `.env` keys are ever used for them. New people get sample
+  answers until they add a key.
+- **Seat weights are reviewed.** Paid and free runs train separate weights
+  (each ticker counted once a day, no person more than a fifth of a seat's
+  record). Nothing goes live until an admin publishes a set on the admin
+  page; until the first one, every seat counts 1.0.
+
+Optional, in `.env` (see `.env.example`):
+
+- `PUBLIC_URL=https://yourdomain` -- used in emails and Google sign-in.
+- **Email** via [Resend](https://resend.com) (free for 3,000 a month):
+  `RESEND_API_KEY` and `EMAIL_FROM="Ticker Council <hello@yourdomain>"`,
+  after verifying your domain in Resend (it gives you DNS records to add).
+  Without it, approvals aren't emailed and the admin page makes password
+  reset links to pass on by hand.
+- **Google sign-in**: create an OAuth client (type "Web application") in
+  Google Cloud Console, add `<PUBLIC_URL>/auth/google/callback` as an
+  authorised redirect URI, and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+- `SECRET_KEY` -- encrypts saved API keys. Blank means a random one kept in
+  `data/secret.key`; back it up with the databases.
 
 ## Host it on the public internet, for free
 

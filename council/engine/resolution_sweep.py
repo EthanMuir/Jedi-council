@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 
-from council.config import Settings
+from council.config import Settings, settings_for_account
 from council.crypt.db import connect, get_sweepable_predictions
 from council.crypt.ledger import write_resolution
 from council.crypt.resolution import resolve_prediction
@@ -38,9 +38,22 @@ class SweepResult:
 async def sweep_unresolved(settings: Settings, as_of: datetime | None = None) -> list[SweepResult]:
     as_of = as_of or datetime.utcnow()
     data_service = build_data_service(settings)
-    llm_client = LLMClient(settings)
     conn = connect(settings.council_db_path)
-    memory = MemoryStore(conn, cap_per_seat=settings.memory_cap_per_seat)
+    # Price checks are the same for everyone; the seats' lessons are not.
+    # Each run's lessons are written by an AI call on its owner's own keys,
+    # into that owner's own seat memory -- never anyone else's.
+    per_owner: dict[int, tuple[Settings, LLMClient, MemoryStore]] = {}
+
+    def owner_tools(account: int) -> tuple[Settings, LLMClient, MemoryStore]:
+        if account not in per_owner:
+            owner_settings = settings_for_account(settings, account)
+            per_owner[account] = (
+                owner_settings,
+                LLMClient(owner_settings),
+                MemoryStore(conn, cap_per_seat=settings.memory_cap_per_seat, account=account),
+            )
+        return per_owner[account]
+
     try:
         rows = get_sweepable_predictions(conn, as_of.isoformat())
         results: list[SweepResult] = []
@@ -75,6 +88,7 @@ async def sweep_unresolved(settings: Settings, as_of: datetime | None = None) ->
                 conn, prediction_id=row["id"], resolved_at=resolve_at, outcome=outcome
             )
 
+            owner_settings, llm_client, memory = owner_tools(row["user_id"] or 0)
             lessons_written = await _reflect_on_resolution(
                 conn=conn,
                 memory=memory,
@@ -84,7 +98,7 @@ async def sweep_unresolved(settings: Settings, as_of: datetime | None = None) ->
                 resolve_at=resolve_at,
                 outcome=outcome,
                 llm_client=llm_client,
-                model=settings.seat_model,
+                model=owner_settings.seat_model,
             )
 
             results.append(

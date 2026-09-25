@@ -1,0 +1,43 @@
+/* The admin page (clean look). */
+
+.pending-list { display: grid; padding: 6px 0 8px; }
+.pending-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.pending-row:first-child { border-top: 0; }
+.pending-who { display: grid; gap: 1px; min-width: 0; }
+.pending-who b { font-size: 15px; }
+.pending-who span { font-size: 13.5px; overflow-wrap: anywhere; }
+.pending-who .faint { font-size: 12.5px; }
+.pending-actions { display: flex; gap: 8px; }
+.pending-actions .btn-primary { padding-inline: 18px; }
+
+.notice { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
+.row-actions { display: grid; grid-template-columns: repeat(2, max-content); gap: 2px 4px; justify-content: end; }
+.row-actions .btn { padding: 5px 8px; font-size: 12.5px; justify-content: flex-start; }
+.btn-danger { color: var(--down); }
+.btn-danger:hover { color: var(--down); }
+
+.reset-box h3 { font-size: 15px; }
+.copy-row { display: flex; gap: 8px; }
+.copy-row .input { font-size: 13px; }
+
+.run-person { width: auto; min-width: 180px; padding: 8px 32px 8px 12px; font-size: 14px; }
+
+.day-chart { display: grid; gap: 6px; }
+.day-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
+.day-bar { flex: 1; min-width: 0; background: var(--accent); border-radius: 3px 3px 1px 1px; opacity: 0.85; }
+.day-bar:hover { opacity: 1; }
+.day-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); }
+
+.ticker-bars { display: grid; gap: 8px; }
+.ticker-bar { display: grid; grid-template-columns: 70px minmax(0, 1fr) 40px; gap: 12px; align-items: center; font-size: 14px; }
+.ticker-bar .num { text-align: right; }
+.ticker-track { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+.ticker-track span { display: block; height: 100%; border-radius: 99px; background: var(--accent); }
+
+table.compact-table th, table.compact-table td { padding: 9px 12px; }
+
+.w-cell { display: grid; gap: 1px; justify-items: end; }
+.weights-table td, .weights-table th { padding-inline: 14px; }
+.draft-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 20px 18px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.draft-actions p { font-size: 13px; max-width: 52ch; }
+

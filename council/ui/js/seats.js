@@ -1,7 +1,7 @@
 // Seat record: each seat's hit rate per period, and the say it has earned.
 
 let seats = [];
-let mode = '';
+let mode = 'paid';
 let sort = { key: 'name', dir: 1 };
 
 function rate(v) {
@@ -53,8 +53,12 @@ function render() {
 
 async function load() {
   try {
-    const data = await fetchJSON(`/api/archives${mode ? `?mode=${mode}` : ''}`);
+    const data = await fetchJSON(`/api/archives?mode=${mode}`);
     seats = data.seats;
+    const r = data.release;
+    document.getElementById('release-line').textContent = r
+      ? `From everyone's ${mode} runs: weights published ${fmtDate(r.published_at)}, based on ${r.n_calls} scored calls by ${r.n_people} ${r.n_people === 1 ? 'person' : 'people'}.`
+      : `No weights published for ${mode} runs yet, so every seat counts the same. The record below is your own runs.`;
     render();
   } catch (e) {
     document.getElementById('seats-body').innerHTML = `<tr><td colspan="5" class="down">Couldn't load: ${escapeHtml(e.message)}</td></tr>`;

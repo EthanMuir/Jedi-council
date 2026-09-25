@@ -161,6 +161,8 @@ p { margin: 0; }
 .navlinks a:hover { color: var(--ink); background: var(--surface-3); text-decoration: none; }
 .navlinks a.active { color: var(--ink); background: var(--surface-3); }
 .navlinks .spacer { flex: 1; }
+#nav-account { display: contents; }
+.nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 5px; border-radius: 99px; background: var(--down); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; vertical-align: 1px; }
 .topnav .nav-menu-btn { display: none; margin-left: auto; }
 
 @media (max-width: 760px) {
