@@ -238,3 +238,35 @@ async def test_403_is_not_silently_swallowed_as_a_missing_form4_document():
     provider = _make_provider(handler)
     with pytest.raises(SECEdgarForbidden):
         await provider.fetch_insider_transactions("NVDA", date(2026, 1, 1), date(2026, 12, 31))
+
+
+@pytest.mark.asyncio
+async def test_form4_is_read_from_its_raw_xml_not_edgars_rendered_view():
+    """EDGAR's filing list names a Form 4's rendered web view
+    ("xslF345X05/..."). Reading that instead of the raw XML beside it
+    silently dropped every Form 4, so the insider seat almost always saw
+    nothing."""
+    import copy
+
+    submissions = copy.deepcopy(_SUBMISSIONS_PAYLOAD)
+    submissions["filings"]["recent"]["primaryDocument"][3] = "xslF345X05/wk-form4_1727215441.xml"
+    requested = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        requested.append(url)
+        if "company_tickers.json" in url:
+            return httpx.Response(200, json=_TICKERS_PAYLOAD)
+        if "submissions/CIK" in url:
+            return httpx.Response(200, json=submissions)
+        if "/xslF345X05/" in url:
+            return httpx.Response(200, text="<html><body><table>Rendered Form 4</table></body></html>")
+        if url.endswith("/wk-form4_1727215441.xml"):
+            return httpx.Response(200, text=_FORM4_XML)
+        return httpx.Response(404, text="not found")
+
+    provider = _make_provider(handler)
+    txns = await provider.fetch_insider_transactions("NVDA", date(2026, 1, 1), date(2026, 12, 31))
+
+    assert len(txns) == 2
+    assert not any("xslF345X05" in u for u in requested)

@@ -25,6 +25,7 @@ faked httpx transport shaped like the documented schemas above; treat the
 first live run like any new integration, not a known-good one."""
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from typing import Any
@@ -55,6 +56,12 @@ _FORM_TYPE_MAP = {
 _SKIP_FILING_FORMS = {"3", "3/A", "4", "4/A", "5", "5/A", "144"}
 
 _INSIDER_FORMS = {"4", "4/A"}
+# EDGAR lists a Form 4's primaryDocument as its XSL-rendered view, e.g.
+# "xslF345X05/wk-form4_1727215441.xml" -- a formatted web page, not data.
+# The raw ownershipDocument XML sits beside it without the prefix. Fetching
+# the rendered view made every Form 4 fail to parse and be skipped, so the
+# insider seat saw "no transactions" for nearly every ticker.
+_XSL_VIEW_PREFIX = re.compile(r"^xsl[^/]*/")
 # One HTTP request per Form 4 on top of the submissions.json call -- cap
 # how many get fetched per lookback window so a heavily-traded name doesn't
 # turn one gather() into dozens of requests.
@@ -250,7 +257,10 @@ class SECEdgarProvider:
 
         out = []
         for filed_date, accession, doc in candidates:
-            url = _ARCHIVE_URL.format(cik=cik, accession_no_dashes=accession.replace("-", ""), document=doc)
+            raw_doc = _XSL_VIEW_PREFIX.sub("", doc)
+            url = _ARCHIVE_URL.format(
+                cik=cik, accession_no_dashes=accession.replace("-", ""), document=raw_doc
+            )
             try:
                 xml_text = await self._get_text(url)
                 parsed = _parse_form4_xml(xml_text)

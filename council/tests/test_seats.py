@@ -317,3 +317,23 @@ async def test_technician_without_enough_history_is_no_read_without_a_call(data_
     answer = await seat.deliberate(ctx, client)
     assert not answer.read and answer.short.abstain_reason == "insufficient_history"
     assert client.calls == []
+
+
+# --- the insider seat: quiet insiders are a read, not missing data ------------
+
+
+@pytest.mark.asyncio
+async def test_no_insider_filings_is_dead_even_not_no_read():
+    from council.data.schemas import InsiderTransactionFeed
+
+    quiet = InsiderTransactionFeed(
+        ticker="CRWD", transactions=[], as_of=AS_OF, staleness_seconds=None, source="sec_edgar"
+    )
+    seat = InsiderReaderSeat()
+    ctx = SeatContext(seat.id, seat.allowed_data, {"insider": quiet}, ticker="CRWD", as_of=AS_OF)
+    client = _RecordingClient()
+    answer = await seat.deliberate(ctx, client)
+
+    assert answer.read
+    assert {answer.term(t).vote for t in _TERMS} == {"NO_CONVICTION"}
+    assert client.calls == []  # nothing to reason about -- no model call spent

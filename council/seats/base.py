@@ -378,6 +378,29 @@ class MultiTermVerdict(BaseModel):
         )
         return cls(short=verdict, medium=verdict, long=verdict)
 
+    @classmethod
+    def dead_even(
+        cls,
+        *,
+        thesis: str,
+        reason: str,
+        data_quality: Literal["GOOD", "PARTIAL", "POOR"] = "GOOD",
+        what_would_change_my_mind: str = "N/A",
+    ) -> "MultiTermVerdict":
+        """The seat read its data and it points neither way on any term --
+        e.g. its feed answered fine but held nothing to act on."""
+        verdict = SeatVerdict(
+            vote="NO_CONVICTION",
+            probability=0.5,
+            expected_move_pct=0.0,
+            thesis=thesis[:500],
+            what_would_change_my_mind=what_would_change_my_mind,
+            data_quality=data_quality,
+            abstain_reason=reason,
+            term_rationale=reason,
+        )
+        return cls(short=verdict, medium=verdict, long=verdict)
+
     def with_memories(self, memories: list[MemoryLesson]) -> "MultiTermVerdict":
         if not memories or not self.read:
             return self

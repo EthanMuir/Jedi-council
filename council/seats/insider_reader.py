@@ -66,11 +66,15 @@ class InsiderReaderSeat:
         feed = ctx["insider"]
 
         if not feed.transactions:
-            return MultiTermVerdict.no_read(
-                thesis="No Form 4 transactions filed in the lookback window.",
-                what_would_change_my_mind="Any new Form 4 filing.",
-                data_quality="POOR",
-                abstain_reason="no_data",
+            # SEC answered and there was simply nothing filed: a real read
+            # (insiders are quiet), not missing data. A failed fetch never
+            # gets here -- it raises and the seat shows NO_READ.
+            return MultiTermVerdict.dead_even(
+                thesis="No insider buying or selling was filed with the SEC in the last "
+                "6 months, so insiders give no signal either way.",
+                reason="No Form 4 insider transactions in the last 6 months.",
+                what_would_change_my_mind="A new Form 4 filing, especially an open-market "
+                "purchase by an officer.",
             )
 
         lines = []
