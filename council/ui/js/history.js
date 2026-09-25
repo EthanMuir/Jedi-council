@@ -31,11 +31,13 @@ function outcomeHtml(row) {
 function targetLine(row) {
   const t = row.price_target;
   if (!t) return '';
+  // Kept short so the table fits; the range is in the tooltip and on the run page.
+  const range = `${t.chance_pct}% chance ${fmtPrice(t.low, false, t.target)}–${fmtPrice(t.high, false, t.target)}`;
   if (row.in_range === null || row.in_range === undefined) {
-    return `<span class="target-line faint">Target ${fmtPrice(t.target)} <span class="num">(${fmtPrice(t.low, false, t.target)}–${fmtPrice(t.high, false, t.target)})</span></span>`;
+    return `<span class="target-line faint" title="${escapeHtml(range)}">Target ${fmtPrice(t.target, false, t.target >= 10 ? 100 : t.target)}</span>`;
   }
   const where = row.in_range ? '✓ In range' : row.final_price > t.high ? 'Above range' : 'Below range';
-  return `<span class="target-line ${row.in_range ? 'up' : 'faint'}">${where} <span class="num">${fmtPrice(row.final_price, true)}</span></span>`;
+  return `<span class="target-line ${row.in_range ? 'up' : 'faint'}" title="${escapeHtml(`${range}; ended at ${fmtPrice(row.final_price, true)}`)}">${where}</span>`;
 }
 
 function termCell(run, term) {
@@ -51,7 +53,7 @@ function termCell(run, term) {
   const p = rowP(row);
   const dir = dirOf(p);
   const lean = isExpert() ? `${arrowOf(p)} ${dir === 'even' ? '50/50' : pct(p)}` : `${arrowOf(p)} ${leanWords(p)}`;
-  return `<td><div class="term-cell">${label}<span class="${dir}">${lean}</span>${outcomeHtml(row)}${targetLine(row)}</div></td>`;
+  return `<td class="wrap"><div class="term-cell">${label}<span class="${dir}">${lean}</span>${outcomeHtml(row)}${targetLine(row)}</div></td>`;
 }
 
 function runTags(run) {
