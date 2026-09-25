@@ -12,96 +12,8 @@ function roleName(role) {
 }
 
 // ---- API keys ---------------------------------------------------------------
-// Setup help for each key, written for someone who has never made an API
-// key: what it's for, what it costs, and each step with a link.
-const KEY_GUIDES = [
-  {
-    name: 'anthropic_api_key',
-    label: 'Anthropic (Claude)',
-    tag: 'Best quality',
-    group: 'ai',
-    purpose: 'The strongest answers the Council can give. Paid: a typical run costs well under a dollar.',
-    placeholder: 'Paste key (sk-ant-…)',
-    cost: 'Pay as you go; $5 of credit is plenty to start. A Claude.ai subscription doesn\'t include this. API credit is bought separately.',
-    steps: [
-      { text: 'Create a free account on the Anthropic Console.', link: 'https://console.anthropic.com/', linkText: 'Open Anthropic Console' },
-      { text: 'Add credit to your account under Billing.', link: 'https://console.anthropic.com/settings/billing', linkText: 'Open Billing' },
-      { text: 'Go to API Keys, click "Create Key", and give it any name, like "council".', link: 'https://console.anthropic.com/settings/keys', linkText: 'Open API Keys' },
-      { text: 'Copy the key (it starts with sk-ant-) and paste it above. It\'s only shown once.' },
-    ],
-  },
-  {
-    name: 'google_api_key',
-    label: 'Google (Gemini)',
-    tag: 'Free',
-    group: 'ai',
-    purpose: 'Free AI answers, no card needed. Weaker than Claude; see Free Mode under Models and cost.',
-    placeholder: 'Paste key (AIza…)',
-    cost: 'Free within Google\'s daily limits, no card needed. Stay free by not adding billing to the Google project the key belongs to. On the free tier, Google may use what you send to improve its products.',
-    steps: [
-      { text: 'Open Google AI Studio and sign in with any Google account.', link: 'https://aistudio.google.com/', linkText: 'Open AI Studio' },
-      { text: 'Go to "Get API key" and click "Create API key". If it asks about a project, let it create one.', link: 'https://aistudio.google.com/apikey', linkText: 'Open API keys' },
-      { text: 'Copy the key (it starts with AIza) and paste it above.' },
-      { text: 'Then turn on Free Mode under Models and cost so every seat uses it.' },
-    ],
-  },
-  {
-    name: 'groq_api_key',
-    label: 'Groq',
-    tag: 'Free backup',
-    group: 'optional',
-    purpose: 'More free runs per day: when Gemini\'s free daily limit runs out mid-run, the Council switches to Groq\'s free models.',
-    placeholder: 'Paste key (gsk_…)',
-    cost: 'Free within daily limits, no card needed.',
-    steps: [
-      { text: 'Open the Groq Console and sign in (Google, GitHub or email).', link: 'https://console.groq.com/', linkText: 'Open Groq Console' },
-      { text: 'Go to API Keys and click "Create API Key".', link: 'https://console.groq.com/keys', linkText: 'Open API Keys' },
-      { text: 'Copy the key (it starts with gsk_) and paste it above. It\'s only shown once.' },
-    ],
-  },
-  {
-    name: 'openai_api_key',
-    label: 'OpenAI (GPT)',
-    group: 'optional',
-    purpose: 'Some seats are set to use OpenAI models. Without this key those seats use another model you have a key for.',
-    placeholder: 'Paste key (sk-…)',
-    cost: 'Pay as you go. A ChatGPT subscription doesn\'t include this. API credit is bought separately.',
-    steps: [
-      { text: 'Sign in, or create an account, on the OpenAI Platform.', link: 'https://platform.openai.com/', linkText: 'Open OpenAI Platform' },
-      { text: 'Add credit under Billing.', link: 'https://platform.openai.com/settings/organization/billing/overview', linkText: 'Open Billing' },
-      { text: 'Go to API keys and click "Create new secret key".', link: 'https://platform.openai.com/api-keys', linkText: 'Open API keys' },
-      { text: 'Copy the key (it starts with sk-) and paste it above. It\'s only shown once.' },
-    ],
-  },
-  {
-    name: 'fred_api_key',
-    label: 'FRED (economic data)',
-    tag: 'Free',
-    group: 'optional',
-    purpose: 'Interest rates, inflation and jobs data for the Economy seat. Without it, that seat sits out.',
-    placeholder: 'Paste key',
-    cost: 'Free.',
-    steps: [
-      { text: 'Create a free FRED account (run by the St. Louis Fed) and sign in.', link: 'https://fredaccount.stlouisfed.org/apikeys', linkText: 'Open FRED API keys' },
-      { text: 'Click "Request API Key", write one line about what it\'s for (e.g. "personal stock research"), and submit.' },
-      { text: 'Copy the 32-character key and paste it above.' },
-    ],
-  },
-  {
-    name: 'alpha_vantage_api_key',
-    label: 'Alpha Vantage (congress trades)',
-    tag: 'Free',
-    group: 'optional',
-    purpose: 'Stock trades disclosed by members of the House and Senate, for the Congress Trades seat. Without it, that seat sits out.',
-    placeholder: 'Paste key',
-    cost: 'Free: 25 requests a day, and each run uses at most one (repeat runs on the same stock reuse it for 6 hours).',
-    steps: [
-      { text: 'Open Alpha Vantage\'s free key page.', link: 'https://www.alphavantage.co/support/#api-key', linkText: 'Open Alpha Vantage' },
-      { text: 'Fill in the short form (choose "Investor" or "Student", any organisation name) and click "GET FREE API KEY".' },
-      { text: 'Copy the key it shows and paste it above.' },
-    ],
-  },
-];
+// KEY_GUIDES (the setup steps for each key) is in keys.js, shared with the
+// setup wizard on the Run page.
 
 let KEY_STATUS = {};
 let FREE_MODE = { enabled: false, gemini_key: false, groq_key: false };
@@ -122,12 +34,9 @@ function renderKeysSummary() {
   if (hasPaid) {
     el.className = 'keys-summary ok';
     el.textContent = 'You\'re all set. The Council reads any stock with real AI and real market data.';
-  } else if (hasFree && FREE_MODE.enabled) {
+  } else if (hasFree) {
     el.className = 'keys-summary ok';
     el.textContent = 'You\'re all set for free runs. Free Mode is on.';
-  } else if (hasFree) {
-    el.className = 'keys-summary todo';
-    el.innerHTML = 'Almost there. Your free key works; last step: <a href="#models">turn on Free Mode</a> so every seat uses it.';
   } else {
     el.className = 'keys-summary todo';
     el.textContent = 'Right now the Council only replays sample answers about NVDA. Add either key below to read any stock for real. The Gemini one is free.';
@@ -170,13 +79,17 @@ function buildKeyCard(guide) {
     if (!value) { say('Paste a key into the box first.', true); return; }
     save.disabled = true;
     try {
+      msg.textContent = 'Checking the key…'; msg.className = 'key-msg';
       const data = await fetchJSON('/api/settings/keys', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: guide.name, value }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: guide.name, value, check: true }),
       });
       input.value = '';
       applyKeyStatus(data.keys);
-      say('Saved. The Council uses this key from the next run on.');
+      const check = data.check || { status: 'ok' };
+      if (check.status === 'ok') say('Key works and is saved. The Council uses it from the next run on.');
+      else { say(check.message); msg.className = 'key-msg warn'; }
       loadFreeMode();
+      loadRoles();
       loadCostEstimate();
     } catch (err) {
       say(`That key couldn't be saved: ${friendlyError(err)}`, true);
@@ -191,6 +104,7 @@ function buildKeyCard(guide) {
       applyKeyStatus(data.keys);
       say(KEY_STATUS[guide.name]?.is_set ? 'Removed. Using the key from the server\'s .env file again.' : 'Removed.');
       loadFreeMode();
+      loadRoles();
       loadCostEstimate();
     } catch (err) {
       say(`Couldn't remove it: ${friendlyError(err)}`, true);
@@ -237,9 +151,11 @@ function renderFreeMode() {
   pill.className = `pill ${FREE_MODE.enabled ? 'pill-free' : ''}`;
   if (FREE_MODE.enabled) {
     btn.textContent = 'Turn off Free Mode';
-    btn.disabled = false;
+    btn.disabled = !!FREE_MODE.locked;
     const using = FREE_MODE.gemini_key ? (FREE_MODE.groq_key ? 'Gemini, with Groq as backup' : 'Gemini') : 'Groq';
-    status.textContent = `Every seat uses free models (${using}). Turning it off puts back the models you had before.`;
+    status.textContent = FREE_MODE.locked
+      ? `Every seat uses free models (${using}). It stays on while your only AI keys are free ones; add an Anthropic key to use paid models.`
+      : `Every seat uses free models (${using}). Turning it off puts back the models you had before.`;
   } else {
     btn.textContent = 'Turn on Free Mode';
     btn.disabled = !hasFreeKey;

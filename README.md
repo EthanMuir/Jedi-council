@@ -199,10 +199,15 @@ With no AI key at all, seat verdicts come from
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or a free `GOOGLE_API_KEY` /
 `GROQ_API_KEY` -- switches both to live: market data needs no key of its
 own (yfinance and SEC EDGAR are free; `FRED_API_KEY` is free and optional).
-Keys can also be added from Settings -> API Keys instead of `.env`.
+Keys can also be added from Settings -> API Keys instead of `.env`, or
+through the setup that opens on an account's first sign-in (sample-run
+slides, then a step for the AI key, FRED and Alpha Vantage). Keys added in
+the app are tried with their provider first (`council/key_check.py`), so a
+mistyped key is turned away rather than failing the first run.
+`scripts/make-sample-run.py` rebuilds the sample run those slides show.
 
 **Free Mode** (Settings -> Models & Cost) puts every seat on free-tier
-models: Gemini's newest Flash-Lite model (picked from what the key can
+models, and is always on for an account whose only AI keys are free ones: Gemini's newest Flash-Lite model (picked from what the key can
 list), with Groq's open models taking over automatically if Gemini's free
 daily limit runs out mid-run. If every usable provider is out -- or a paid
 account runs out of credit -- the run stops with the reason and nothing is

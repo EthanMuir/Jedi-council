@@ -1,13 +1,14 @@
-"""First sign-in (#125): whether someone has seen the welcome tour, and the
-parts of the Getting started checklist that can't be read from elsewhere
-(opened a seat, added the app to their Home Screen, hid the checklist).
+"""First sign-in (#125): whether someone has seen the welcome tour and been
+through the key setup that follows it, and the parts of the Getting started
+checklist that can't be read from elsewhere (opened a seat, added the app to
+their Home Screen, hid the checklist).
 Kept per account in settings.db, so it follows them to a new phone."""
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 
-FLAGS = ("tour_done", "checklist_hidden", "seat_opened", "home_screen")
+FLAGS = ("tour_done", "setup_done", "checklist_hidden", "seat_opened", "home_screen")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS onboarding (
@@ -15,9 +16,13 @@ CREATE TABLE IF NOT EXISTS onboarding (
     tour_done INTEGER NOT NULL DEFAULT 0,
     checklist_hidden INTEGER NOT NULL DEFAULT 0,
     seat_opened INTEGER NOT NULL DEFAULT 0,
-    home_screen INTEGER NOT NULL DEFAULT 0
+    home_screen INTEGER NOT NULL DEFAULT 0,
+    setup_done INTEGER NOT NULL DEFAULT 0
 );
 """
+
+# Added after the table first shipped; older databases get the column here.
+_ADDED_COLUMNS = ("setup_done",)
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
@@ -25,6 +30,10 @@ def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(onboarding)")}
+    for column in _ADDED_COLUMNS:
+        if column not in have:
+            conn.execute(f"ALTER TABLE onboarding ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
     return conn
 
 

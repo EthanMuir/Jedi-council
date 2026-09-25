@@ -38,3 +38,45 @@ def test_key_and_run_steps_come_from_real_state(site):
 def test_onboarding_needs_sign_in(site):
     _, settings = site
     assert _new_client(settings).get("/api/onboarding").status_code == 401
+
+
+def test_setup_shows_for_new_accounts_and_for_anyone_without_a_key(site):
+    owner_client, settings = site
+    friend, _ = _signup_and_approve(owner_client, settings)
+    assert friend.get("/api/onboarding").json()["show_setup"] is True
+    # Went through the old tour but never added a key: still shown, once.
+    assert friend.post("/api/onboarding", json={"tour_done": True}).json()["show_setup"] is True
+    done = friend.post("/api/onboarding", json={"setup_done": True}).json()
+    assert done["setup_done"] is True and done["show_setup"] is False
+    # The owner has an AI key and, once past the tour, isn't asked again.
+    assert owner_client.post("/api/onboarding", json={"tour_done": True}).json()["show_setup"] is False
+
+
+def test_onboarding_says_which_keys_are_set(site, monkeypatch):
+    owner_client, settings = site
+    friend, _ = _signup_and_approve(owner_client, settings)
+    keys = friend.get("/api/onboarding").json()["keys"]
+    assert keys["fred_api_key"] is False and keys["google_api_key"] is False
+    friend.post("/api/settings/keys", json={"name": "fred_api_key", "value": "a" * 32})
+    assert friend.get("/api/onboarding").json()["keys"]["fred_api_key"] is True
+
+
+def test_an_older_onboarding_table_gets_the_setup_column(tmp_path):
+    import sqlite3
+
+    from council import onboarding
+
+    db = str(tmp_path / "settings.db")
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE onboarding (account INTEGER PRIMARY KEY, tour_done INTEGER NOT NULL DEFAULT 0, "
+        "checklist_hidden INTEGER NOT NULL DEFAULT 0, seat_opened INTEGER NOT NULL DEFAULT 0, "
+        "home_screen INTEGER NOT NULL DEFAULT 0)"
+    )
+    conn.execute("INSERT INTO onboarding (account, tour_done) VALUES (5, 1)")
+    conn.commit()
+    conn.close()
+    assert onboarding.get(db, 5) == {
+        "tour_done": True, "setup_done": False, "checklist_hidden": False, "seat_opened": False, "home_screen": False,
+    }
+    assert onboarding.update(db, 5, {"setup_done": True})["setup_done"] is True

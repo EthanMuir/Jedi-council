@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from council import key_store
+from council import key_check, key_store
 from council.api.admin import install_admin
 from council.api.auth import count_visit, install_auth
 from council.api.reports import install_reports
@@ -100,6 +100,33 @@ def _settings(request: Request) -> Settings:
     return settings_for_account(get_settings(), _account(request))
 
 
+_PAID_AI_KEYS = ("anthropic_api_key", "openai_api_key")
+
+
+def _only_free_keys(settings: Settings) -> bool:
+    """Has an AI key, and every one of them is a free-tier one."""
+    return not any(getattr(settings, k) for k in _PAID_AI_KEYS) and bool(settings.google_api_key or settings.groq_api_key)
+
+
+def _free_mode_default(request: Request) -> Settings:
+    """With only free keys, Free Mode is on: without it seats would be routed
+    to paid models the free key can't use. Turned on the moment that's true
+    (a free key saved, the last paid key removed, or an older account from
+    before this) and returns the person's settings as they now stand."""
+    settings = _settings(request)
+    if not _only_free_keys(settings):
+        return settings
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        if model_settings.free_mode_enabled(conn, settings.council_account):
+            return settings
+        free_model = FREE_MODELS["google"] if settings.google_api_key else FREE_MODELS["groq"]
+        model_settings.enable_free_mode(conn, free_model, settings.council_account)
+    finally:
+        conn.close()
+    return _settings(request)
+
+
 # Runs still going after their page lost the connection (a phone locking
 # its screen drops the stream). Held here so they finish and save to
 # History instead of being garbage-collected or cancelled with the request.
@@ -116,6 +143,7 @@ async def deliberate_stream(
 ):
     settings = _settings(request)
     settings.ensure_dirs()
+    settings = _free_mode_default(request)
     as_of_dt = datetime.fromisoformat(as_of) if as_of else None
 
     async def event_generator():
@@ -231,10 +259,17 @@ def _has_run(request: Request) -> bool:
 async def get_onboarding(request: Request):
     """The welcome tour and Getting started checklist (#125): what's done."""
     state = onboarding.get(get_settings().settings_db_path, _account(request))
+    settings = _free_mode_default(request)
+    has_key = _has_ai_key(settings)
     return {
         **state,
+        # The welcome slides and key setup open for a new account, and once
+        # for anyone who got past them before without adding an AI key.
+        "show_setup": not state["setup_done"] and (not state["tour_done"] or not has_key),
+        "keys": {k["name"]: k["is_set"] for k in _api_key_status(settings)},
+        "free_mode": _free_mode_status(settings)["enabled"],
         "steps": {
-            "key": _has_ai_key(_settings(request)),
+            "key": has_key,
             "run": _has_run(request),
             "seat": state["seat_opened"],
             "home": state["home_screen"],
@@ -244,6 +279,7 @@ async def get_onboarding(request: Request):
 
 class _OnboardingRequest(BaseModel):
     tour_done: bool | None = None
+    setup_done: bool | None = None
     checklist_hidden: bool | None = None
     seat_opened: bool | None = None
     home_screen: bool | None = None
@@ -659,6 +695,9 @@ async def set_model_setting(body: _ModelOverrideRequest, request: Request):
 class _ApiKeyRequest(BaseModel):
     name: str
     value: str
+    # Try the key with its provider first, and refuse it if it's turned
+    # down (the setup wizard and Settings both do; see key_check.py).
+    check: bool = False
 
 
 def _api_key_status(settings) -> list[dict]:
@@ -694,6 +733,15 @@ async def save_api_key(body: _ApiKeyRequest, request: Request):
         raise HTTPException(400, f"unknown key '{body.name}'")
     settings = _settings(request)
     settings.ensure_dirs()
+    checked = None
+    if body.check:
+        try:
+            value = key_store.clean_key_value(body.value)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        checked = (await key_check.check_key(body.name, value)).as_dict()
+        if not checked["ok"]:
+            raise HTTPException(400, checked["message"])
     try:
         key_store.save_key(
             settings.settings_db_path, body.name, body.value,
@@ -701,7 +749,7 @@ async def save_api_key(body: _ApiKeyRequest, request: Request):
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"keys": _api_key_status(_settings(request))}
+    return {"keys": _api_key_status(_free_mode_default(request)), "check": checked}
 
 
 @app.delete("/api/settings/keys/{name}")
@@ -713,7 +761,7 @@ async def delete_api_key(name: str, request: Request):
     key_store.delete_key(
         settings.settings_db_path, name, settings.council_account, settings.secret_key or None
     )
-    return {"keys": _api_key_status(_settings(request))}
+    return {"keys": _api_key_status(_free_mode_default(request))}
 
 
 class _FreeModeRequest(BaseModel):
@@ -728,6 +776,8 @@ def _free_mode_status(settings) -> dict:
         conn.close()
     return {
         "enabled": enabled,
+        # Only free keys: Free Mode stays on (see _free_mode_default).
+        "locked": _only_free_keys(settings),
         "gemini_key": bool(settings.google_api_key),
         "groq_key": bool(settings.groq_api_key),
         "run_mode": planned_run_mode(settings),
@@ -736,9 +786,8 @@ def _free_mode_status(settings) -> dict:
 
 @app.get("/api/settings/free-mode")
 async def get_free_mode(request: Request):
-    settings = _settings(request)
-    settings.ensure_dirs()
-    return _free_mode_status(settings)
+    _settings(request).ensure_dirs()
+    return _free_mode_status(_free_mode_default(request))
 
 
 @app.post("/api/settings/free-mode")
@@ -760,6 +809,10 @@ async def set_free_mode(body: _FreeModeRequest, request: Request):
                 )
             model_settings.enable_free_mode(conn, free_model, settings.council_account)
         else:
+            if _only_free_keys(settings):
+                raise HTTPException(
+                    400, "Free Mode stays on while your only AI keys are free ones. Add an Anthropic or OpenAI key to turn it off."
+                )
             model_settings.disable_free_mode(conn, settings.council_account)
     finally:
         conn.close()
