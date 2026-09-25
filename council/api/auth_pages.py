@@ -321,127 +321,300 @@ _SEATS = [
     ("Related Markets", "Similar stocks, the index, overseas"),
 ]
 
+
+# How each seat leaned on the 3-month term in the replayed run: up, down or even.
+_DEMO_VOTES = ["up", "up", "up", "up", "dn", "ev", "up", "ev", "up", "up", "dn", "up"]
+
+# (term, where the Council landed, word shown) -- the same 25%-75% scale as the app's bars.
+_DEMO_TERMS = [("Next week", 0.515, "Barely up"), ("3 months", 0.537, "Leaning up"), ("Next year", 0.564, "Up")]
+
 _LANDING_STYLE = """
   :root {
     color-scheme: light;
-    --bg: #f5f6f9; --surface: #ffffff; --surface-2: #f7f8fa; --ink: #141820; --muted: #5a6475;
-    --faint: #8a93a3; --line: #e0e4ea; --line-strong: #cfd5de; --accent: #2c56c9; --accent-ink: #fff;
-    --accent-soft: #e6ecfb; --up: #16835a; --up-soft: #e3f3ec; --up-mid: #7cc4a3; --down: #c23b35;
-    --even: #8a6d1c; --track: #e9ecf1; --knob: #fff;
-    --shadow: 0 1px 2px rgba(20,24,32,.05), 0 12px 40px rgba(20,24,32,.08);
+    --bg: #fbfbfd; --page: none; --surface: #ffffff; --surface-2: #f5f5f7; --ink: #1d1d1f;
+    --muted: #6e6e73; --faint: #86868b; --line: rgba(0,0,0,.08); --line-strong: rgba(0,0,0,.14);
+    --accent: #0071e3; --grad: linear-gradient(90deg, #0071e3, #8e44ec);
+    --cta: #0071e3; --cta-ink: #ffffff; --cta-glow: none;
+    --up: #1f9d55; --up-soft: #e3f5e9; --down: #d93025; --down-soft: #fde8e8; --even: #a07b12; --even-soft: #f7efd9;
+    --track: #ececf0; --knob: #ffffff;
+    --card: #ffffff; --card-border: rgba(0,0,0,.04);
+    --card-shadow: 0 30px 80px -20px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.04);
+    --tile-shadow: 0 0 0 1px rgba(0,0,0,.05);
+    --glow-up: none; --glow-down: none; --glow-bar: none;
+    --header: rgba(251,251,253,.78);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --bg: #0d1015; --surface: #151a21; --surface-2: #1a2029; --ink: #e5e8ed; --muted: #9aa3b2;
-      --faint: #6d7788; --line: #262d38; --line-strong: #323b48; --accent: #7597f2; --accent-ink: #0d1015;
-      --accent-soft: #1c2640; --up: #45c08a; --up-soft: #12291f; --up-mid: #2c7d59; --down: #ec6b64;
-      --even: #d4b45a; --track: #232a35; --knob: #e5e8ed; --shadow: 0 12px 40px rgba(0,0,0,.4);
-    }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #07080d; --page: radial-gradient(1200px 700px at 78% -8%, #1b2340 0%, rgba(7,8,13,0) 62%), radial-gradient(900px 600px at -10% 40%, #161a33 0%, rgba(7,8,13,0) 60%);
+    --surface: rgba(255,255,255,.04); --surface-2: rgba(255,255,255,.06); --ink: #f2f3f7;
+    --muted: #9aa0b4; --faint: #6f7690; --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.16);
+    --accent: #9aa6ff; --grad: linear-gradient(90deg, #9aa6ff, #e0b3ff);
+    --cta: linear-gradient(90deg, #7c8cff, #b18cff); --cta-ink: #0b0c12; --cta-glow: 0 0 30px rgba(140,140,255,.45);
+    --up: #3ddc97; --up-soft: rgba(61,220,151,.08); --down: #ff5c7a; --down-soft: rgba(255,92,122,.08); --even: #e6c35c; --even-soft: rgba(230,195,92,.08);
+    --track: rgba(255,255,255,.08); --knob: #f2f3f7;
+    --card: rgba(255,255,255,.04); --card-border: rgba(255,255,255,.08);
+    --card-shadow: 0 0 80px rgba(120,120,255,.15), 0 0 0 1px rgba(255,255,255,.08);
+    --tile-shadow: 0 0 0 1px rgba(255,255,255,.07);
+    --glow-up: 0 0 14px rgba(61,220,151,.35); --glow-down: 0 0 14px rgba(255,92,122,.35); --glow-bar: 0 0 12px;
+    --header: rgba(7,8,13,.6);
   }
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  html { -webkit-text-size-adjust: 100%; background: var(--bg); }
+  body {
+    margin: 0; background: var(--page), var(--bg); background-repeat: no-repeat; color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+    transition: color .4s ease;
+  }
+  h1, h2, h3, .brand, .demo-tkr { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Segoe UI", Roboto, sans-serif; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; }
-  header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: saturate(180%) blur(16px); backdrop-filter: saturate(180%) blur(16px); border-bottom: 1px solid var(--line); }
-  header.top .wrap { display: flex; align-items: center; gap: 16px; height: 58px; }
-  .brand { font-weight: 700; font-size: 16px; color: var(--ink); letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 7px; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
+
+  header.top { position: sticky; top: 0; z-index: 10; background: var(--header); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); border-bottom: 1px solid var(--line); }
+  header.top .wrap { display: flex; align-items: center; gap: 12px; height: 58px; }
+  .brand { font-weight: 700; font-size: 17px; color: var(--ink); letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 7px; }
   .brand .logo { width: 24px; height: 24px; color: var(--accent); margin-top: -3px; }
   .brand span { color: var(--accent); }
   .brand:hover { text-decoration: none; }
-  .top-links { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; font: inherit; font-weight: 600; font-size: 15px; border-radius: 11px; padding: 11px 20px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); white-space: nowrap; }
+  .top-links { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .theme-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .theme-btn:hover { border-color: var(--line-strong); }
+  .theme-btn svg { width: 18px; height: 18px; }
+  .theme-btn .sun { display: none; }
+  html[data-theme="dark"] .theme-btn .sun { display: block; }
+  html[data-theme="dark"] .theme-btn .moon { display: none; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; font: inherit; font-weight: 600; font-size: 16px; border-radius: 999px; padding: 13px 26px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); white-space: nowrap; transition: transform .15s ease, filter .15s ease; }
   .btn:hover { text-decoration: none; background: var(--surface-2); }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .btn-primary:hover { background: var(--accent); filter: brightness(1.07); }
-  .btn-small { padding: 8px 14px; font-size: 14px; border-radius: 9px; }
-  .btn-quiet { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--cta); border-color: transparent; color: var(--cta-ink); box-shadow: var(--cta-glow); }
+  .btn-primary:hover { background: var(--cta); filter: brightness(1.08); }
+  .btn-small { padding: 8px 16px; font-size: 14px; }
+  .btn-quiet { border-color: transparent; color: var(--muted); }
 
-  .hero { padding-block: 72px 40px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 48px; align-items: center; }
-  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
-  h1 { font-size: clamp(34px, 5.2vw, 54px); line-height: 1.06; letter-spacing: -.025em; margin: 0 0 18px; text-wrap: balance; font-weight: 700; }
-  .lede { font-size: 18px; color: var(--muted); margin: 0 0 26px; max-width: 34em; text-wrap: pretty; }
+  .hero { padding-block: 76px 64px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 56px; align-items: center; }
+  .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 16px; }
+  h1 { font-size: clamp(40px, 6vw, 68px); line-height: 1.02; letter-spacing: -.04em; margin: 0 0 22px; font-weight: 700; text-wrap: balance; }
+  .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: 19px; color: var(--muted); margin: 0 0 30px; max-width: 32em; text-wrap: pretty; }
   .ctas { display: flex; gap: 10px; flex-wrap: wrap; }
-  .fine { font-size: 13px; color: var(--faint); margin: 14px 0 0; }
+  .fine { font-size: 13px; color: var(--faint); margin: 16px 0 0; }
 
-  .demo { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 22px 22px 10px; }
-  .demo-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
-  .demo-tkr { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
-  .demo-meta { font-size: 12px; color: var(--faint); margin-left: auto; }
-  .demo-line { font-size: 14px; color: var(--muted); margin: 0 0 8px; }
-  .row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 104px; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
-  .row:first-of-type { border-top: 0; }
-  .term { font-size: 14px; font-weight: 600; }
-  .val { text-align: right; font-weight: 600; font-size: 15px; }
-  .val.up { color: var(--up); }
-  .val.even { color: var(--even); }
-  .track { position: relative; height: 8px; border-radius: 99px; background: var(--track); }
+  /* The replayed council run */
+  .demo { background: var(--card); border-radius: 26px; box-shadow: var(--card-shadow); padding: 22px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .demo-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .demo-tkr { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+  .demo-status { margin-left: auto; font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  .done .pulse { animation: none; background: var(--up); }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .dseats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+  .dseat { border-radius: 12px; padding: 8px 10px; font-size: 12px; font-weight: 600; line-height: 1.25; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 42px; background: var(--surface-2); border: 1px solid transparent; transition: background .35s, border-color .35s, box-shadow .35s; }
+  .dseat .v { font-size: 11px; opacity: 0; transform: scale(.4); transition: opacity .3s, transform .3s cubic-bezier(.3,1.6,.5,1); }
+  .dseat.voted .v { opacity: 1; transform: none; }
+  .dseat.voted.up { background: var(--up-soft); } .dseat.voted.up .v { color: var(--up); }
+  .dseat.voted.dn { background: var(--down-soft); } .dseat.voted.dn .v { color: var(--down); }
+  .dseat.voted.ev { background: var(--even-soft); } .dseat.voted.ev .v { color: var(--even); }
+  html[data-theme="dark"] .dseat.voted.up { border-color: var(--up); box-shadow: var(--glow-up); }
+  html[data-theme="dark"] .dseat.voted.dn { border-color: var(--down); box-shadow: var(--glow-down); }
+  html[data-theme="dark"] .dseat.voted.ev { border-color: rgba(230,195,92,.5); }
+  .terms { margin-top: 18px; }
+  .term-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) 92px; gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .term-row b { font-weight: 600; }
+  .track { position: relative; height: 10px; border-radius: 99px; background: var(--track); }
   .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--line-strong); border-radius: 1px; }
-  .fill { position: absolute; top: 0; bottom: 0; left: 50%; border-radius: 99px; background: linear-gradient(90deg, var(--up-mid), var(--up)); }
-  .knob { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--knob); border: 3px solid var(--up); box-shadow: 0 1px 4px rgba(20,24,32,.25); }
-  .knob.even { border-color: var(--even); }
-  .dots { position: relative; height: 8px; margin-top: 7px; }
-  .dot { position: absolute; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--up); opacity: .7; }
-  .dot.d { background: var(--down); }
-  .dot.e { background: var(--even); }
+  .fill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--up) 45%, transparent), var(--up)); box-shadow: var(--glow-bar) var(--up); transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
+  .knob { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--knob); border: 3px solid var(--up); box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: left 1.1s cubic-bezier(.2,.8,.2,1); }
+  .word { text-align: right; font-weight: 600; color: var(--up); opacity: 0; transition: opacity .5s .6s; }
+  .demo.bars .word { opacity: 1; }
+  .verdict { margin-top: 12px; border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.5; background: var(--surface-2); color: var(--ink); opacity: 0; transform: translateY(6px); transition: opacity .5s, transform .5s; }
+  html[data-theme="dark"] .verdict { background: rgba(124,140,255,.1); box-shadow: inset 0 0 0 1px rgba(124,140,255,.25); }
+  .demo.done .verdict { opacity: 1; transform: none; }
 
-  section.band { padding-block: 56px; }
-  h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; text-wrap: balance; }
-  .section-lede { color: var(--muted); font-size: 17px; margin: 0 0 30px; max-width: 40em; }
-  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; list-style: none; padding: 0; margin: 0; counter-reset: step; }
-  .steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; counter-increment: step; }
-  .steps li::before { content: counter(step); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 14px; margin-bottom: 12px; }
-  .steps h3, .honest h3 { margin: 0 0 6px; font-size: 17px; }
-  .steps p, .honest p { margin: 0; color: var(--muted); font-size: 15px; }
-  .seats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-  .seat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-  .seat b { display: block; font-size: 15px; margin-bottom: 2px; }
-  .seat span { font-size: 13.5px; color: var(--muted); }
-  .honest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 40px; }
-  .honest div { border-top: 2px solid var(--line); padding-top: 14px; }
-  .closing { text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 44px 24px; }
-  .closing p { color: var(--muted); margin: 0 0 22px; font-size: 17px; }
+  section.band { padding-block: 72px; }
+  h2 { font-size: clamp(30px, 4.2vw, 46px); letter-spacing: -.03em; line-height: 1.08; margin: 0 0 12px; text-wrap: balance; }
+  .section-lede { color: var(--muted); font-size: 18px; margin: 0 0 36px; max-width: 38em; }
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; list-style: none; padding: 0; margin: 0; }
+  .steps li, .seat, .faq details, .closing { background: var(--surface); box-shadow: var(--tile-shadow); }
+  .steps li { border-radius: 22px; padding: 26px; }
+  .steps .n { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+  .steps h3 { margin: 0 0 8px; font-size: 21px; letter-spacing: -.01em; }
+  .steps p { margin: 0; color: var(--muted); font-size: 16px; }
+  .seats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .seat { border-radius: 18px; padding: 16px 18px; }
+  .seat b { display: block; font-size: 16px; margin-bottom: 3px; }
+  .seat span { font-size: 14px; color: var(--muted); }
+  .faq { max-width: 780px; display: grid; gap: 10px; }
+  .faq details { border-radius: 16px; padding: 0 20px; }
+  .faq summary { cursor: pointer; list-style: none; font-weight: 600; font-size: 17px; padding: 18px 28px 18px 0; position: relative; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: 22px; font-weight: 400; color: var(--muted); transition: transform .25s; }
+  .faq details[open] summary::after { transform: translateY(-50%) rotate(45deg); }
+  .faq details p { margin: 0 0 18px; color: var(--muted); font-size: 16px; }
+  .closing { text-align: center; border-radius: 28px; padding: 56px 24px; }
+  .closing p { color: var(--muted); margin: 0 0 24px; font-size: 18px; }
   .closing .ctas { justify-content: center; }
-  footer { padding: 34px 0 48px; color: var(--faint); font-size: 13px; }
+  footer { padding: 34px 0 48px; color: var(--faint); font-size: 13px; border-top: 1px solid var(--line); }
   footer .wrap { display: grid; gap: 10px; }
   footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
   footer p { margin: 0; max-width: 60em; }
 
+  /* Sections ease in as you scroll (only when JS is on, and never with reduced motion). */
+  html.js .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s ease, transform .8s cubic-bezier(.2,.8,.2,1); }
+  html.js .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html.js .reveal { opacity: 1; transform: none; transition: none; }
+    .pulse { animation: none; }
+  }
+
   @media (max-width: 900px) {
-    .hero { grid-template-columns: 1fr; padding-block-start: 44px; gap: 36px; }
+    .hero { grid-template-columns: 1fr; padding-block: 44px 48px; gap: 40px; }
     .seats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
+  /* Phones: a tighter hero so the council replay starts near the top of the screen. */
   @media (max-width: 640px) {
-    .steps, .honest { grid-template-columns: 1fr; }
-    .seats { grid-template-columns: 1fr; }
-    .row { grid-template-columns: 78px minmax(0, 1fr) 88px; gap: 10px; }
+    header.top .wrap { height: 54px; }
+    .brand { font-size: 16px; }
     .top-links .btn-quiet { display: none; }
-    .lede { font-size: 17px; }
+    .top-links .btn-small { padding: 7px 13px; font-size: 13.5px; }
+    .theme-btn { width: 34px; height: 34px; }
+    .hero { padding-block: 26px 36px; gap: 26px; }
+    .eyebrow { font-size: 12px; margin-bottom: 10px; }
+    h1 { font-size: clamp(31px, 9.6vw, 40px); margin-bottom: 14px; }
+    .lede { font-size: 16px; margin-bottom: 20px; }
+    .ctas { display: grid; grid-template-columns: 1fr 1fr; }
+    .ctas .btn { padding: 13px 12px; font-size: 15px; }
+    .fine { font-size: 12px; margin-top: 12px; }
+    .demo { padding: 14px; border-radius: 20px; }
+    .demo-head { margin-bottom: 10px; }
+    .demo-tkr { font-size: 20px; }
+    .dseats { gap: 5px; }
+    .dseat { font-size: 10.5px; padding: 6px 7px; min-height: 36px; border-radius: 10px; }
+    .terms { margin-top: 12px; }
+    .term-row { grid-template-columns: 66px minmax(0, 1fr) 76px; gap: 10px; font-size: 13px; padding: 9px 0; }
+    .verdict { font-size: 13px; padding: 10px 12px; }
+    section.band { padding-block: 44px; }
+    .section-lede { font-size: 16px; margin-bottom: 22px; }
+    .steps { grid-template-columns: 1fr; gap: 10px; }
+    .steps li { padding: 18px 20px; border-radius: 18px; }
+    .steps .n { margin-bottom: 6px; }
+    .steps h3 { font-size: 18px; }
+    .steps p { font-size: 15px; }
+    .seats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .seat { padding: 12px 13px; border-radius: 14px; }
+    .seat b { font-size: 14.5px; }
+    .seat span { font-size: 12.5px; }
+    .faq details { padding: 0 16px; }
+    .faq summary { font-size: 15.5px; padding: 15px 26px 15px 0; }
+    .faq details p { font-size: 15px; margin-bottom: 15px; }
+    .closing { padding: 36px 18px; border-radius: 22px; }
+    .closing p { font-size: 16px; }
+    footer { padding: 26px 0 36px; }
+  }
+  /* The smallest phones: the hero already has the Request access button. */
+  @media (max-width: 360px) {
+    .top-links .btn-primary { display: none; }
+    .ctas { grid-template-columns: 1fr; }
+    .seats { grid-template-columns: 1fr; }
   }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 """
 
+# Runs before first paint so a remembered dark choice never flashes light.
+_LANDING_HEAD_SCRIPT = """
+  document.documentElement.classList.add('js');
+  try { if (localStorage.getItem('tc_landing_theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+"""
 
-def _demo_row(term: str, p: float, label: str, dots: list[float], even: bool = False) -> str:
-    # The same 25%-75% scale as the app's own bars.
-    def x(v: float) -> float:
-        return max(0.0, min(1.0, (v - 0.25) / 0.5)) * 100
+_LANDING_SCRIPT = """
+(function () {
+  const root = document.documentElement;
+  const toggle = document.getElementById('theme-btn');
+  function syncToggle() {
+    const dark = root.dataset.theme === 'dark';
+    toggle.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    toggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+  }
+  toggle.addEventListener('click', () => {
+    if (root.dataset.theme === 'dark') delete root.dataset.theme; else root.dataset.theme = 'dark';
+    try { localStorage.setItem('tc_landing_theme', root.dataset.theme === 'dark' ? 'dark' : 'light'); } catch (e) {}
+    syncToggle();
+  });
+  syncToggle();
 
-    pos = x(p)
-    fill = "" if even else f'<span class="fill" style="width:{pos - 50:.1f}%"></span>'
-    dot_html = "".join(
-        f'<span class="dot{" d" if d < 0.5 else " e" if d == 0.5 else ""}" style="left:{x(d):.1f}%"></span>'
-        for d in dots
-    )
-    return f"""
-      <div class="row">
-        <div class="term">{term}</div>
-        <div><div class="track"><span class="mid"></span>{fill}<span class="knob{' even' if even else ''}" style="left:{pos:.1f}%"></span></div>
-          <div class="dots">{dot_html}</div></div>
-        <div class="val {'even' if even else 'up'}">{label}</div>
-      </div>"""
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  if (still || !('IntersectionObserver' in window)) {
+    reveals.forEach(el => el.classList.add('in'));
+  } else {
+    const io = new IntersectionObserver(entries => entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }), { threshold: 0.12 });
+    reveals.forEach(el => io.observe(el));
+  }
+
+  // The replayed council run
+  const demo = document.getElementById('demo');
+  const seats = [...demo.querySelectorAll('.dseat')];
+  const rows = [...demo.querySelectorAll('.term-row')];
+  const status = demo.querySelector('.status-text');
+  let timers = [];
+  const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+
+  function showBars() {
+    demo.classList.add('bars');
+    rows.forEach(r => {
+      const pos = parseFloat(r.dataset.pos);
+      r.querySelector('.knob').style.left = pos + '%';
+      r.querySelector('.fill').style.width = Math.max(0, pos - 50) + '%';
+    });
+  }
+  function finish() { demo.classList.add('done'); status.textContent = 'Verdict reached'; }
+  function reset() {
+    demo.classList.remove('bars', 'done');
+    seats.forEach(s => s.classList.remove('voted'));
+    rows.forEach(r => { r.querySelector('.knob').style.left = '50%'; r.querySelector('.fill').style.width = '0'; });
+    status.textContent = 'Council in session…';
+  }
+  function play() {
+    timers.forEach(clearTimeout); timers = [];
+    reset();
+    const order = seats.map((_, i) => i).sort(() => Math.random() - 0.5);
+    order.forEach((i, k) => later(() => seats[i].classList.add('voted'), 700 + k * 230));
+    const voted = 700 + seats.length * 230 + 250;
+    later(showBars, voted);
+    later(finish, voted + 1300);
+    later(play, voted + 9500);
+  }
+  if (still) { seats.forEach(s => s.classList.add('voted')); showBars(); finish(); }
+  else play();
+})();
+"""
+
+_MOON = '<svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
+_SUN = '<svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+
+_FAQ = [
+    ("Is this financial advice?",
+     "No. Ticker Council is a research tool. Its calls can be wrong, and the same stock gets the same kind of "
+     "read for everyone. Use it as a second opinion, decide for yourself, and only invest what you can afford to lose."),
+    ("Why twelve AIs instead of one?",
+     "Each seat sees only its own kind of data, so no single source can drown out the rest. After they vote, a bull "
+     "case and a bear case argue it out, a challenger looks for holes, and a final judge writes the verdict."),
+    ("How do I know if it's any good?",
+     "Every call is saved where it can't be edited, then scored against what the price actually did a week, 3 months "
+     "and a year later. Seats that keep getting it right count for more over time."),
+    ("What does it cost?",
+     "Accounts are in early access and approved by hand. Right now you bring your own AI key, and a free Google "
+     "Gemini key is enough to get started."),
+    ("Which stocks can I look up?",
+     "US-listed stocks, by ticker. Type something like NVDA or AAPL and the Council convenes."),
+    ("What happens to my data?",
+     "Your runs are private to you, and any API keys you add are stored encrypted and only used for your own runs."),
+]
 
 
 def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
@@ -455,78 +628,82 @@ def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
         if signed_in else
         '<a class="btn btn-small btn-quiet" href="/login">Sign in</a><a class="btn btn-small btn-primary" href="/signup">Request access</a>'
     )
-    seats = "".join(f'<div class="seat"><b>{escape(n)}</b><span>{escape(r)}</span></div>' for n, r in _SEATS)
-    demo = (
-        _demo_row("Next week", 0.515, "Barely up", [0.5, 0.5, 0.53, 0.54, 0.45, 0.52, 0.47, 0.55, 0.5], even=False)
-        + _demo_row("3 months", 0.537, "Leaning up", [0.55, 0.56, 0.57, 0.47, 0.54, 0.53, 0.58, 0.46, 0.55, 0.51])
-        + _demo_row("Next year", 0.564, "Up", [0.58, 0.61, 0.62, 0.59, 0.53, 0.55, 0.54, 0.48, 0.6, 0.57, 0.52])
+    marks = {"up": "▲", "dn": "▼", "ev": "●"}
+    demo_seats = "".join(
+        f'<div class="dseat {v}"><span>{escape(name)}</span><span class="v">{marks[v]}</span></div>'
+        for (name, _), v in zip(_SEATS, _DEMO_VOTES)
     )
+    demo_terms = "".join(
+        f'<div class="term-row" data-pos="{max(0.0, min(1.0, (p - 0.25) / 0.5)) * 100:.1f}"><b>{term}</b>'
+        f'<div class="track"><span class="mid"></span><span class="fill"></span><span class="knob"></span></div>'
+        f'<span class="word">{word}</span></div>'
+        for term, p, word in _DEMO_TERMS
+    )
+    seats = "".join(f'<div class="seat"><b>{escape(n)}</b><span>{escape(r)}</span></div>' for n, r in _SEATS)
+    faq = "".join(f"<details><summary>{escape(q)}</summary><p>{escape(a)}</p></details>" for q, a in _FAQ)
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 {_FAVICON}
-<title>Ticker Council · Twelve AI analysts, one honest read on any stock</title>
-<meta name="description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and tell you which way it leans over the next week, 3 months and year, and how sure they are." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" />
+<title>Ticker Council · Twelve AIs debate every stock</title>
+<meta name="description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and give you one clear verdict for the next week, 3 months and year." />
+<script>{_LANDING_HEAD_SCRIPT}</script>
 <style>{_LANDING_STYLE}</style>
 </head>
 <body>
 <header class="top"><div class="wrap">
   <a class="brand" href="/welcome">{_EMU}Ticker <span>Council</span></a>
-  <nav class="top-links" aria-label="Account">{top}</nav>
+  <nav class="top-links" aria-label="Account">
+    <button type="button" class="theme-btn" id="theme-btn" aria-pressed="false" aria-label="Switch to dark mode">{_MOON}{_SUN}</button>
+    {top}
+  </nav>
 </div></header>
 
 <main>
   <section class="wrap hero">
     <div>
       <p class="eyebrow">AI stock research</p>
-      <h1>Twelve AI analysts. One honest read on any stock.</h1>
-      <p class="lede">Each analyst reads one kind of data: the price chart, earnings, insider and Congress trades, the options market and more. They debate, and the Council tells you which way the stock leans over the next week, the next 3 months and the next year, and how sure it is.</p>
+      <h1>Twelve AIs debate every stock. <span class="grad">You get the verdict.</span></h1>
+      <p class="lede">Each seat reads a different kind of data, from the price chart and earnings to Congress trades and the options market. They argue it out and hand you one clear call for the next week, 3 months and year.</p>
       <div class="ctas">{ctas}</div>
-      <p class="fine">Accounts are approved by hand. Bring your own AI key; a free Google Gemini key works.</p>
+      <p class="fine">Early access · Accounts approved by hand · Not financial advice</p>
     </div>
-    <div class="demo" role="img" aria-label="Example result for NVDA: next week close to even, next 3 months leaning up, next year up.">
-      <div class="demo-head"><span class="demo-tkr">NVDA</span><span class="demo-meta">Example result</span></div>
-      <p class="demo-line">Leaning up over the next year on rising estimates and analyst targets. Next week is close to a toss-up.</p>
-      {demo}
+    <div class="demo" id="demo" role="img" aria-label="A replay of a council run on NVDA: twelve seats vote, then the verdict leans up over the next year, leaning up over 3 months, and barely up next week.">
+      <div class="demo-head"><span class="demo-tkr">NVDA</span><span class="demo-status"><span class="pulse"></span><span class="status-text">Council in session…</span></span></div>
+      <div class="dseats">{demo_seats}</div>
+      <div class="terms">{demo_terms}</div>
+      <div class="verdict"><b>Leaning up over the next year.</b> Rising earnings estimates and heavy call buying outweigh a stretched valuation. Next week is close to a toss-up.</div>
     </div>
   </section>
 
-  <section class="band"><div class="wrap">
+  <section class="band reveal"><div class="wrap">
     <h2>How it works</h2>
     <p class="section-lede">A few minutes from ticker to a reasoned call.</p>
     <ol class="steps">
-      <li><h3>Pick a stock</h3><p>Type a ticker. A Full run is the most thorough; a Lite run costs about a third as much.</p></li>
-      <li><h3>Twelve seats read and debate</h3><p>Each seat sees only its own data, so their views stay independent. Then a bull case and a bear case argue it out, and a challenger looks for holes.</p></li>
-      <li><h3>Read the call</h3><p>Where the Council leans for each period, why, and who disagreed. In plain words, or with every number.</p></li>
+      <li><div class="n grad">01</div><h3>Pick a stock</h3><p>Type any US ticker and the council convenes.</p></li>
+      <li><div class="n grad">02</div><h3>The council debates</h3><p>Twelve AI seats each study their own data and vote. Then a bull and a bear argue it out, and a challenger looks for holes.</p></li>
+      <li><div class="n grad">03</div><h3>You get the verdict</h3><p>Where the stock leans for each period, how sure the council is, and every seat's reasoning. In plain words, or with every number.</p></li>
     </ol>
   </div></section>
 
-  <section class="band"><div class="wrap">
-    <h2>Twelve seats, twelve kinds of data</h2>
-    <p class="section-lede">No single source decides the call. Each seat counts most on the period its data actually says something about.</p>
+  <section class="band reveal"><div class="wrap">
+    <h2>Meet the council</h2>
+    <p class="section-lede">Twelve seats, twelve kinds of data. No single source decides the call.</p>
     <div class="seats">{seats}</div>
   </div></section>
 
-  <section class="band"><div class="wrap">
-    <h2>Built to be honest</h2>
-    <p class="section-lede">A stock tool is only useful if you know when not to trust it.</p>
-    <div class="honest">
-      <div><h3>Weak calls look weak</h3><p>A lean barely off the middle is shown as close to a coin flip, not dressed up as a prediction.</p></div>
-      <div><h3>Every call gets checked</h3><p>Each run is saved where it can't be edited, then scored against what the price actually did a week, 3 months and a year later.</p></div>
-      <div><h3>Seats earn their say</h3><p>Analysts that keep getting it right count for more over time, and the ones that don't count for less.</p></div>
-      <div><h3>Private by default</h3><p>Your runs are yours alone, your API keys are stored encrypted, and they're only ever used for your own runs. <a href="/privacy">Privacy</a></p></div>
-    </div>
+  <section class="band reveal"><div class="wrap">
+    <h2>Questions</h2>
+    <p class="section-lede">The short answers.</p>
+    <div class="faq">{faq}</div>
   </div></section>
 
-  <section class="band"><div class="wrap">
+  <section class="band reveal"><div class="wrap">
     <div class="closing">
-      <h2>Get a second opinion from twelve.</h2>
-      <p>Request an account and you'll get an email once it's approved.</p>
+      <h2>Get a second opinion <span class="grad">from twelve.</span></h2>
+      <p>Request access and you'll get an email once your account is approved.</p>
       <div class="ctas">{ctas}</div>
     </div>
   </div></section>
@@ -536,5 +713,6 @@ def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
   <nav aria-label="Footer"><a href="/privacy">Privacy</a><a href="/login">Sign in</a><a href="/signup">Request access</a></nav>
   <p>Not financial advice. Ticker Council is a research tool: its calls can be wrong, and past accuracy doesn't guarantee future results. Decide for yourself, and only invest what you can afford to lose.</p>
 </div></footer>
+<script>{_LANDING_SCRIPT}</script>
 </body>
 </html>"""
