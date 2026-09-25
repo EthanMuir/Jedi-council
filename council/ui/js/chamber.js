@@ -418,13 +418,16 @@ function renderHolocron(bars) {
   const mean = ps.reduce((a, b) => a + b, 0) / ps.length;
   const vote = voteFromP(mean);
   setHolocronVerdict(vote === 'BULLISH' ? 'verdict-bullish' : vote === 'BEARISH' ? 'verdict-bearish' : 'verdict-noconviction');
-  label.innerHTML = TERMS.filter(t => bars[t]).map(t => {
+  // Its own dark panel: three lines are taller than the scrim behind the
+  // single-word labels, and would otherwise sit on the bright core.
+  const lines = TERMS.filter(t => bars[t]).map(t => {
     const p = bars[t].p_bullish;
     const v = voteFromP(p);
     const arrow = v === 'BULLISH' ? '&#9650;' : v === 'BEARISH' ? '&#9660;' : '&#9679;';
     const pct = v === 'NO_CONVICTION' ? '50/50' : `${Math.round(Math.max(p, 1 - p) * 100)}%`;
-    return `${TERM_LETTERS[t]} ${arrow} ${pct}`;
-  }).join('<br/>');
+    return `<span class="readout-line ${voteClass(v)}">${TERM_LETTERS[t]} ${arrow} ${pct}</span>`;
+  }).join('');
+  label.innerHTML = `<span class="holocron-readout">${lines}</span>`;
 }
 
 function dissentHtml(bars) {

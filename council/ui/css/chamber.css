@@ -881,3 +881,21 @@
 .seat-chair.chair-lean-barely .seat-bust-fill { opacity: 0.35; }
 .seat-chair.chair-lean-leaning .seat-bust-fill { opacity: 0.7; }
 .seat-chair.chair-lean-barely .wiz-chair-glow { opacity: 0.12 !important; }
+
+/* The finished run's three-line readout in the centerpiece. */
+.holocron-readout {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  background: rgba(5, 7, 13, 0.86);
+  border: 1px solid rgba(232, 228, 216, 0.14);
+  box-shadow: 0 0 14px 6px rgba(5, 7, 13, 0.75);
+  font-size: 8px;
+  line-height: 1.7;
+  text-shadow: none;
+}
+.holocron-readout .readout-line { white-space: nowrap; }
+/* Some centerpieces (the nebula's pulsing core) are layered above the
+   label by default -- the readout must always be on top. */
+.holocron .holocron-label { z-index: 20; }
