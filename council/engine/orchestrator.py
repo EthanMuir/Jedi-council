@@ -52,6 +52,7 @@ from council.engine.aggregation import (
     p_bullish,
 )
 from council.engine.base_rate import RealityAnchor, check_plausibility, compute_reality_anchor
+from council.engine.price_target import price_target, range_record, term_sigma
 from council.engine.cost_auditor import CostAuditResult, audit
 from council.engine.horizons import TERM_NAMES, TERM_WINDOWS, TERMS, competence, resolve_at_for
 from council.engine.llm_client import LLMClient
@@ -851,12 +852,30 @@ async def run_deliberation(
         tv = technician.verdicts.short
         levels["short"] = (tv.entry, tv.exit, tv.invalidation)
 
+    # A most-likely price and a likely range per term (price_target.py),
+    # with the chance calculated from how past ranges did.
+    record = range_record(conn)
+    price_targets = {}
+    for t in TERMS:
+        target = None
+        if positions[t].p_bullish is not None and positions[t].seats_counted:
+            hits, scored = record.get(t, (0, 0))
+            target = price_target(
+                price_at_prediction,
+                positions[t].p_bullish,
+                term_sigma(anchor_series.bars, t, reality_anchors[t].options_implied_move_pct),
+                hits=hits,
+                scored=scored,
+            )
+        price_targets[t] = target.as_dict() if target else None
+
     terms_payload = {
         t: {
             **_position_payload(positions[t]),
             "name": TERM_NAMES[t],
             "window": TERM_WINDOWS[t],
             "expected_move_pct": expected_moves[t],
+            "price_target": price_targets[t],
             "warnings": [dataclasses.asdict(w) for w in warnings[t]],
             "ticks": [dataclasses.asdict(k) for k in ticks[t]],
             "note": synthesis.note(t),

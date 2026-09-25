@@ -301,6 +301,7 @@ function stateFromSaved(run) {
     }
   }
 
+  s.resolutions = Object.fromEntries(Object.entries(run.terms || {}).map(([t, x]) => [t, x.resolution]));
   s.reality = replay.reality_anchor || null;
   s.debate = replay.debate || [];
   s.risk = replay.risk || null;
@@ -479,12 +480,18 @@ function renderPositions() {
     const syn = s.synthesis;
     const noteText = syn ? (expert ? (syn[term] || syn.terms?.[term]?.note) : (syn[`plain_${term}`] || syn[term] || syn.terms?.[term]?.note)) : '';
     const extra = expert && final?.expected_move_pct ? `<div class="faint" style="font-size:12px">Expected move about ±${Number(final.expected_move_pct).toFixed(1)}%</div>` : '';
+    // Once scored: whether the direction was right comes first, then the range.
+    const res = s.resolutions?.[term];
+    const scored = res && res.direction_correct !== null && res.direction_correct !== undefined
+      ? `<div class="pos-scored ${res.direction_correct ? 'up' : 'down'}">${res.direction_correct ? '✓ Right' : '✗ Wrong'}: the price ${res.realised_move_pct >= 0 ? 'rose' : 'fell'} ${Math.abs(res.realised_move_pct).toFixed(1)}%</div>`
+      : '';
+    const target = p !== null ? priceTargetHtml(final?.price_target, { realised: res?.realised_move_pct ?? null, note: term === 'short' }) : '';
     return `
       <div class="pos">
         <div class="pos-term"><b>${TERM_LABEL[term]}</b><span>${{ short: 'Scored in 7 days', medium: 'Scored in 3 months', long: 'Scored in a year' }[term]}</span></div>
         <div class="pos-bar">${leanBarHtml(p, { dots })}</div>
         <div class="pos-value">${value}</div>
-        ${noteText || warnings || extra ? `<div class="pos-extra">${noteText ? `<p class="pos-note">${aiText(noteText)}</p>` : ''}${extra}${warnings}</div>` : ''}
+        ${noteText || warnings || extra || target || scored ? `<div class="pos-extra">${scored}${noteText ? `<p class="pos-note">${aiText(noteText)}</p>` : ''}${target}${extra}${warnings}</div>` : ''}
       </div>`;
   }).join('');
   document.getElementById('positions-sub').textContent = isExpert()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import sqlite3
 from pathlib import Path
@@ -16,6 +17,7 @@ from pathlib import Path
 from council import accounts, emailer, secrets_box
 from council.config import Settings
 from council.crypt.db import connect, effective_run_mode
+from council.engine import price_target
 
 log = logging.getLogger("council.notify")
 
@@ -81,6 +83,29 @@ def _person(conn, account: int) -> accounts.User | None:
     return user
 
 
+def _price(v: float, like: float | None = None) -> str:
+    """Whole dollars from $100 up, cents below; `like` keeps a line's prices
+    in step (a $95-$108 range reads "$95-$108", not "$95.00-$108")."""
+    return f"${v:,.0f}" if (like if like is not None else v) >= 100 else f"${v:,.2f}"
+
+
+def _targets(conn, run_ids: set[str]) -> dict[tuple[str, str], dict]:
+    """Each run's price targets, by (run_id, term), from its saved synthesis."""
+    out = {}
+    for run_id in run_ids:
+        row = conn.execute(
+            "SELECT synthesis_json FROM predictions WHERE run_id = ? AND synthesis_json IS NOT NULL LIMIT 1", (run_id,)
+        ).fetchone()
+        try:
+            terms = (json.loads(row["synthesis_json"]).get("terms") or {}) if row else {}
+        except ValueError:
+            continue
+        for term, t in terms.items():
+            if isinstance(t, dict) and t.get("price_target"):
+                out[(run_id, term)] = t["price_target"]
+    return out
+
+
 def compose(name: str, lines: list[dict], base_url: str, unsubscribe_url: str) -> tuple[str, str]:
     right = sum(1 for x in lines if x["correct"])
     if len(lines) == 1:
@@ -93,6 +118,15 @@ def compose(name: str, lines: list[dict], base_url: str, unsubscribe_url: str) -
         move = f"price {x['move']:+.1f}%" if x["move"] is not None else "price change unknown"
         verdict = "RIGHT" if x["correct"] else "WRONG"
         body.append(f"- {x['ticker']}, {TERM_NAMES.get(x['term'], x['term'])}: called {x['called']} -> {verdict} ({move})")
+        target = x.get("target")
+        ended = price_target.final_price(target, x["move"])
+        if ended is not None:
+            landed = "inside" if price_target.landed_in_range(target, x["move"]) else "outside"
+            body.append(
+                f"  Price target about {_price(target['target'])} ({target['chance_pct']}% chance "
+                f"{_price(target['low'], target['target'])}-{_price(target['high'], target['target'])}): "
+                f"ended at {_price(ended, target['target'])}, {landed} the range"
+            )
         if base_url and x["run_id"]:
             body.append(f"  {base_url}/index.html?run={x['run_id']}")
     body += ["", f"{right} of {len(lines)} right this time. Every scored call counts toward each seat's track record."]
@@ -117,6 +151,7 @@ async def email_scored_calls(settings: Settings, swept: list) -> int:
             f"run_mode, total_cost_usd FROM predictions WHERE id IN ({marks})",
             ids,
         ).fetchall()
+        targets = _targets(council, {row["run_id"] for row in rows if row["run_id"]})
     finally:
         council.close()
 
@@ -133,6 +168,7 @@ async def email_scored_calls(settings: Settings, swept: list) -> int:
         per_account.setdefault(row["user_id"] or 0, []).append({
             "ticker": row["ticker"], "term": row["horizon"], "run_id": row["run_id"] or row["id"],
             "called": _lean(p), "correct": bool(result.direction_correct), "move": result.realised_move_pct,
+            "target": targets.get((row["run_id"], row["horizon"])),
         })
 
     sent = 0

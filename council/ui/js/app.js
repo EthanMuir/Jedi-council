@@ -389,6 +389,61 @@ function fmtMove(v) {
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 }
 
+// A share price: whole dollars from $100 up, cents below. `exact` keeps
+// cents; `like` rounds by another price so a range reads "$95–$108".
+function fmtPrice(v, exact = false, like = null) {
+  if (v === null || v === undefined) return '–';
+  const digits = exact || (like ?? v) < 100 ? 2 : 0;
+  return `$${v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+// ---- price targets ------------------------------------------------------------
+// Each term's most likely price and likely range, worked out by the run
+// (council/engine/price_target.py), and once scored, where the price ended.
+
+function targetEnded(target, realisedMovePct) {
+  if (!target || realisedMovePct === null || realisedMovePct === undefined) return null;
+  const price = target.price_now * (1 + realisedMovePct / 100);
+  return { price, inRange: price >= target.low && price <= target.high, side: price > target.high ? 'above' : price < target.low ? 'below' : 'in' };
+}
+
+function targetChanceNote(target) {
+  return target.scored_ranges
+    ? `Worked out from how much the stock usually moves and the Council's lean. The ${target.chance_pct}% is how often past ranges for this period held the final price (${target.scored_ranges} scored).`
+    : `Worked out from how much the stock usually moves and the Council's lean. ${target.chance_pct}% is the estimate until enough past ranges have been scored; then it becomes how often they actually held the price.`;
+}
+
+function priceTargetHtml(target, { realised = null, compact = false, note = true } = {}) {
+  if (!target) return '';
+  if (compact) {
+    return `<div class="target-compact"><span>Price target <b class="num">about ${fmtPrice(target.target)}</b></span><span class="faint">${target.chance_pct}% chance ${fmtPrice(target.low, false, target.target)}–${fmtPrice(target.high, false, target.target)}</span></div>`;
+  }
+  const ended = targetEnded(target, realised);
+  const points = [target.low, target.high, target.price_now, ended?.price].filter(v => v !== null && v !== undefined);
+  const pad = (target.high - target.low) * 0.18;
+  const min = Math.min(...points) - pad;
+  const max = Math.max(...points) + pad;
+  const at = v => (((v - min) / (max - min)) * 100).toFixed(2);
+  const endedRow = ended ? `<dt>Ended at</dt><dd class="num">${fmtPrice(ended.price, true)} <span class="${ended.inRange ? 'up' : 'down'}">${ended.inRange ? '✓ in range' : `✗ ${ended.side} range`}</span></dd>` : '';
+  return `
+    <div class="target">
+      <dl class="target-rows">
+        <dt>Price target</dt><dd><b class="num">about ${fmtPrice(target.target)}</b></dd>
+        <dt>${target.chance_pct}% chance</dt><dd class="num">${fmtPrice(target.low, false, target.target)} – ${fmtPrice(target.high, false, target.target)}</dd>
+        <dt>Today</dt><dd class="num">${fmtPrice(target.price_now, true)}</dd>
+        ${endedRow}
+      </dl>
+      <div class="target-track" aria-hidden="true">
+        <span class="target-band" style="left:${at(target.low)}%;width:${(at(target.high) - at(target.low)).toFixed(2)}%"></span>
+        <span class="target-now" style="left:${at(target.price_now)}%" title="Today"></span>
+        <span class="target-mid" style="left:${at(target.target)}%" title="Price target"></span>
+        ${ended ? `<span class="target-end ${ended.inRange ? 'up' : 'down'}" style="left:${at(ended.price)}%" title="Ended"></span>` : ''}
+      </div>
+      <div class="target-key faint" aria-hidden="true"><span><i class="k-now"></i>Today</span><span><i class="k-mid"></i>Target</span><span><i class="k-band"></i>Range</span>${ended ? '<span><i class="k-end"></i>Ended</span>' : ''}</div>
+      ${note ? `<p class="target-note faint">${targetChanceNote(target)}</p>` : ''}
+    </div>`;
+}
+
 // Settings and the Guide show one section at a time, picked from a side
 // menu; the URL hash names it (#keys, #appearance, ...).
 function initSections() {

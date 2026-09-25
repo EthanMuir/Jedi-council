@@ -26,6 +26,18 @@ function outcomeHtml(row) {
     : `<span class="outcome down">✗ Wrong <span class="num">${fmtMove(row.realised_move_pct)}</span></span>`;
 }
 
+// Under the direction: the price target, and once scored, whether the
+// price ended inside its range.
+function targetLine(row) {
+  const t = row.price_target;
+  if (!t) return '';
+  if (row.in_range === null || row.in_range === undefined) {
+    return `<span class="target-line faint">Target ${fmtPrice(t.target)} <span class="num">(${fmtPrice(t.low, false, t.target)}–${fmtPrice(t.high, false, t.target)})</span></span>`;
+  }
+  const where = row.in_range ? '✓ In range' : row.final_price > t.high ? 'Above range' : 'Below range';
+  return `<span class="target-line ${row.in_range ? 'up' : 'faint'}">${where} <span class="num">${fmtPrice(row.final_price, true)}</span></span>`;
+}
+
 function termCell(run, term) {
   let row = run.terms[term];
   let label = '';
@@ -39,7 +51,7 @@ function termCell(run, term) {
   const p = rowP(row);
   const dir = dirOf(p);
   const lean = isExpert() ? `${arrowOf(p)} ${dir === 'even' ? '50/50' : pct(p)}` : `${arrowOf(p)} ${leanWords(p)}`;
-  return `<td><div class="term-cell">${label}<span class="${dir}">${lean}</span>${outcomeHtml(row)}</div></td>`;
+  return `<td><div class="term-cell">${label}<span class="${dir}">${lean}</span>${outcomeHtml(row)}${targetLine(row)}</div></td>`;
 }
 
 function runTags(run) {
@@ -99,6 +111,12 @@ function renderScoreboard(bench) {
     stat(rate(final.hit_rate), 'Council right', `${final.n} scored calls`),
     stat(rate(always?.hit_rate), 'Always saying "up"', 'the simplest rival'),
   ];
+  // How often the price ended inside its range, over the runs listed here.
+  const ranged = runs.flatMap(r => Object.values(r.terms)).filter(x => x.in_range !== null && x.in_range !== undefined);
+  if (ranged.length) {
+    const held = ranged.filter(x => x.in_range).length;
+    stats.push(stat(rate(held / ranged.length), 'Ended in the price range', `${held} of ${ranged.length} scored ranges`));
+  }
   if (bench.buy_and_hold_avg_return_pct !== null && bench.buy_and_hold_avg_return_pct !== undefined) {
     stats.push(stat(fmtMove(bench.buy_and_hold_avg_return_pct), 'Average move', 'buying and holding'));
   }

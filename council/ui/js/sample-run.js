@@ -8,6 +8,16 @@ const SAMPLE_RUN = {
    "window": "the next week",
    "p_bullish": 0.541,
    "summary": "Slightly more likely up than down. The price trend and what traders are betting on point up a little, but a single week is hard to call, so treat it as close to a toss-up.",
+   "price_target": {
+    "price_now": 162.07,
+    "target": 162.8,
+    "low": 155.62,
+    "high": 170.3,
+    "chance_pct": 70,
+    "nominal_pct": 70,
+    "scored_ranges": 0,
+    "sigma_pct": 4.35
+   },
    "ticks": [
     {
      "seat_id": "technician",
@@ -75,6 +85,16 @@ const SAMPLE_RUN = {
    "window": "the next 3 months",
    "p_bullish": 0.537,
    "summary": "Leaning up. Analysts keep raising their expectations for the company's profits and their price targets, which often carries on for a few months.",
+   "price_target": {
+    "price_now": 162.07,
+    "target": 163.24,
+    "low": 150.67,
+    "high": 176.85,
+    "chance_pct": 70,
+    "nominal_pct": 70,
+    "scored_ranges": 0,
+    "sigma_pct": 7.73
+   },
    "ticks": [
     {
      "seat_id": "technician",
@@ -142,6 +162,16 @@ const SAMPLE_RUN = {
    "window": "the next year and beyond",
    "p_bullish": 0.543,
    "summary": "Leaning up. The business is growing and making more money, and analysts expect more. The stock is already priced high compared with similar companies, which is the main reason for caution.",
+   "price_target": {
+    "price_now": 162.07,
+    "target": 164.8,
+    "low": 140.41,
+    "high": 193.43,
+    "chance_pct": 70,
+    "nominal_pct": 70,
+    "scored_ranges": 0,
+    "sigma_pct": 15.46
+   },
    "ticks": [
     {
      "seat_id": "technician",

@@ -30,7 +30,7 @@ from council.calibration import releases
 from council.calibration.officer import compute_seat_calibration, rank_for_seat
 from council.config import Settings, as_lite, get_settings, settings_for_account
 from council.crypt.db import connect, effective_run_mode, owner_filter
-from council.engine import model_settings
+from council.engine import model_settings, price_target
 from council.engine.cost_estimate import estimate_deliberation_cost
 from council.engine.horizons import COMPETENCE_MATRIX, TERMS
 from council.engine.llm_client import RunStopped
@@ -351,6 +351,27 @@ def _group_runs(predictions: list[dict]) -> list[dict]:
     return list(runs.values())
 
 
+def _attach_price_targets(conn, runs: list[dict]) -> None:
+    """Each term row gets its price target (saved in the run's synthesis),
+    and once scored, where the price ended and whether that was in range."""
+    for run in runs:
+        if run["legacy"]:
+            continue
+        row = conn.execute(
+            "SELECT synthesis_json FROM predictions WHERE run_id = ? AND synthesis_json IS NOT NULL LIMIT 1",
+            (run["run_id"],),
+        ).fetchone()
+        try:
+            terms = (json.loads(row["synthesis_json"]).get("terms") or {}) if row else {}
+        except ValueError:
+            terms = {}
+        for key, prediction in run["terms"].items():
+            target = (terms.get(key) or {}).get("price_target")
+            prediction["price_target"] = target
+            prediction["final_price"] = price_target.final_price(target, prediction.get("realised_move_pct"))
+            prediction["in_range"] = price_target.landed_in_range(target, prediction.get("realised_move_pct"))
+
+
 @app.get("/api/predictions")
 async def list_predictions(
     request: Request,
@@ -387,6 +408,7 @@ async def list_predictions(
         params.append(limit * 3)
         predictions = [_prediction_row(row) for row in conn.execute(query, params).fetchall()]
         runs = _group_runs(predictions)[:limit]
+        _attach_price_targets(conn, runs)
         kept = {run["run_id"] for run in runs}
         return {
             "runs": runs,

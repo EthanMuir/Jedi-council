@@ -50,6 +50,7 @@ def trim(run: dict) -> dict:
                 "window": t["window"],
                 "p_bullish": t["p_bullish"],
                 "summary": synth[f"plain_{key}"],
+                "price_target": t.get("price_target"),
                 "ticks": [{"seat_id": x["seat_id"], "p_bullish": x["p_bullish"], "weight": x["weight"]} for x in t["ticks"]],
             }
             for key, t in synth["terms"].items()

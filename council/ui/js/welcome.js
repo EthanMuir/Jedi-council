@@ -52,6 +52,7 @@ function sampleBars() {
       <div class="sample-term">
         <div class="sample-term-head"><b>${escapeHtml(t.window[0].toUpperCase() + t.window.slice(1))}</b><span class="${dirOf(t.p_bullish)}">${leanWords(t.p_bullish)}</span></div>
         ${leanBarHtml(t.p_bullish, { dots, expert: false, small: term !== 'short' })}
+        ${priceTargetHtml(t.price_target, { compact: true })}
       </div>`;
   }).join('');
 }
@@ -134,7 +135,7 @@ const TOUR_STEPS = [
     id: 'bars',
     group: 'intro',
     title: 'One verdict for each period',
-    body: 'Left is down, right is up, the middle is a toss-up. The knob is the Council\'s position and the dots are the twelve seats. A knob near the middle means the Council isn\'t sure, and it shows that on purpose.',
+    body: 'Left is down, right is up, the middle is a toss-up; the dots are the twelve seats. Under each bar: the most likely price, and a range with the chance the price ends inside it. A knob near the middle means the Council isn\'t sure, and it shows that on purpose.',
     art: () => `<div class="tour-art sample-terms">${sampleBars()}</div>`,
   },
   {

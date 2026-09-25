@@ -65,6 +65,9 @@
         <p>Each period gets a bar. Left is down, right is up, and the middle is a 50/50 toss-up. The knob is the Council's position; the dots under it are the seats, fainter when a seat counts for less on that period.</p>
         <div class="demo-bar" id="demo-bar"></div>
         <p>The words put the lean in plain terms, from weakest to strongest: <b>Barely</b>, <b>Leaning</b>, plain <b>Up</b> or <b>Down</b>, and <b>Strongly</b>. A knob near the middle is close to a coin flip and is shown that way on purpose.</p>
+        <h3>Price targets</h3>
+        <p>Under each bar is a <b>price target</b>: the single most likely price at the end of the period, and a <b>range</b> with the chance the price ends inside it, for example "about $165 · 70% chance $150 to $180".</p>
+        <p>They're worked out from the run, not guessed by the AI: how much this stock usually moves over that period, and the Council's own chance of it rising. So a near toss-up puts the target close to today's price, and a jumpy stock gets a wider range. The chance is calculated from the record: once enough past ranges have been scored, it's how often they actually held the final price.</p>
         <h3>What each seat can say</h3>
         <dl class="kv legend">
           <dt><span class="chip up">▲ up</span></dt><dd>Expects the price to rise over that period.</dd>
@@ -99,7 +102,7 @@
 
       <section class="page-section" data-section="history" data-title="History and scoring">
         <h2>History and scoring</h2>
-        <p>Every finished run is saved and can't be changed afterwards. Each period is scored once its time is up: the next week after 7 days, the next 3 months after 91 days, the next year after a year. A call is right if the price moved the way the Council leaned.</p>
+        <p>Every finished run is saved and can't be changed afterwards. Each period is scored once its time is up: the next week after 7 days, the next 3 months after 91 days, the next year after a year. A call is right if the price moved the way the Council leaned. That's the score that matters most; each period's price range is scored too, by whether the final price landed inside it.</p>
         <p>Press <b>Score finished runs</b> on the <a href="/history.html">History</a> page to check prices for anything that's due. The track record at the top compares the Council with simply always saying "up".</p>
         <p>Your History is private: only you (and the site's owner) can see your runs. Runs on free models and sample runs are labelled, and paid and free runs are scored apart, so a weaker model never drags down a seat's paid record.</p>
       </section>

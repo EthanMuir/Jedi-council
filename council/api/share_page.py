@@ -9,6 +9,7 @@ from html import escape
 
 from council.api.auth_pages import _EMU, _FAVICON
 from council.api.run_views import direction, seat_leans, term_leans
+from council.engine import price_target
 from council.engine.horizons import TERMS
 
 # Mirrors council/ui/js/app.js SEATS (the clean look's plain names).
@@ -79,6 +80,31 @@ def _score(run: dict, term: str) -> str:
     return f'<div class="score wrong">Scored: wrong{moved}</div>'
 
 
+def _price(v: float, like: float | None = None) -> str:
+    """Whole dollars from $100 up, cents below; `like` keeps a line's prices
+    in step (a $95-$108 range reads "$95-$108", not "$95.00-$108")."""
+    return f"${v:,.0f}" if (like if like is not None else v) >= 100 else f"${v:,.2f}"
+
+
+def _target(run: dict, term: str) -> str:
+    """The term's price target and likely range (price_target.py), and once
+    scored, where the price ended."""
+    target = ((run.get("synthesis") or {}).get("terms") or {}).get(term, {}).get("price_target")
+    if not target:
+        return ""
+    res = (run["terms"].get(term) or {}).get("resolution") or {}
+    ended = price_target.final_price(target, res.get("realised_move_pct"))
+    landed = price_target.landed_in_range(target, res.get("realised_move_pct"))
+    end_line = (
+        f'<span>Ended at {_price(ended, target["target"])}: {"inside" if landed else "outside"} the range</span>' if ended is not None else ""
+    )
+    return (
+        f'<div class="target"><span>Price target <b>about {_price(target["target"])}</b></span>'
+        f'<span>{target["chance_pct"]}% chance {_price(target["low"], target["target"])}–{_price(target["high"], target["target"])}</span>'
+        f'<span>Then {_price(target["price_now"], target["target"])}</span>{end_line}</div>'
+    )
+
+
 def _term_row(run: dict, term: str, p: float | None) -> str:
     dir_ = direction(p)
     if p is None:
@@ -100,6 +126,7 @@ def _term_row(run: dict, term: str, p: float | None) -> str:
         <div class="scale"><span>◀ Down</span><span>Even</span><span>Up ▶</span></div>
         {f'<p class="note">{escape(note)}</p>' if note else ''}
         {_score(run, term)}
+        {_target(run, term) if p is not None else ''}
       </div>"""
 
 
@@ -172,6 +199,8 @@ _STYLE = """
   .score { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; border-radius: 99px; padding: 3px 10px; }
   .score.right { color: var(--up); background: var(--up-soft); }
   .score.wrong { color: var(--down); background: var(--down-soft); }
+  .target { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .target b { color: var(--ink); }
   .seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .seat { background: var(--surface-2); border-radius: 14px; padding: 10px 12px; }
   .seat b { display: block; font-size: 14px; margin-bottom: 6px; }
