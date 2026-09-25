@@ -20,35 +20,41 @@
 <body>
 
 <main class="page">
-  <!-- First sign-in: Getting started checklist (js/welcome.js) -->
-  <section class="card onboard-card" id="onboard" aria-label="Getting started" hidden></section>
-
-  <!-- Start a run -->
-  <section class="card composer" id="composer" aria-labelledby="composer-title">
-    <div class="composer-head">
-      <h1 id="composer-title">Run the Council</h1>
-      <p class="muted">Twelve seats each read one kind of data about a stock, then the Council takes a position on the next week, the next 3 months and the next year.</p>
+  <!-- Start a run: centred, with the twelve seats in a ring around the box -->
+  <section class="hero" id="composer" aria-labelledby="composer-title">
+    <div class="hero-head">
+      <h1 id="composer-title">Ask the Council about a stock</h1>
+      <p>Twelve AI analysts debate it and give one verdict for the next week, the next 3 months and the next year.</p>
     </div>
-    <form class="composer-form" id="run-form" autocomplete="off">
-      <div class="field ticker-field">
-        <label for="ticker-input">Ticker</label>
-        <input class="input input-ticker" id="ticker-input" placeholder="NVDA" maxlength="8" spellcheck="false" autocapitalize="characters" required />
+    <form class="hero-form" id="run-form" autocomplete="off">
+      <div class="hero-core">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <div class="hero-ring" id="hero-ring" aria-hidden="true"></div>
+        <div class="hero-box">
+          <label class="visually-hidden" for="ticker-input">Ticker</label>
+          <input class="hero-input" id="ticker-input" placeholder="e.g. NVDA" maxlength="8" spellcheck="false" autocapitalize="characters" enterkeyhint="go" required />
+          <button class="btn btn-primary hero-run" id="run-btn" type="submit">Run</button>
+        </div>
       </div>
-      <div class="field">
-        <span class="label" id="shape-label">Run</span>
-        <div class="seg" role="group" aria-labelledby="shape-label" id="shape-seg">
+      <div class="hero-options">
+        <div class="seg" role="group" aria-label="Run" id="shape-seg">
           <button type="button" data-shape="full" aria-pressed="true">Full</button>
           <button type="button" data-shape="lite" aria-pressed="false">Lite</button>
         </div>
+        <button class="linklike" type="button" id="question-toggle" aria-expanded="false" aria-controls="question-field">+ Add a question</button>
       </div>
-      <button class="btn btn-primary run-btn" id="run-btn" type="submit">Run</button>
-      <div class="field question-field">
-        <label for="context-input">Question <span class="faint">(optional)</span></label>
+      <div class="field hero-question" id="question-field" hidden>
+        <label for="context-input">Your question <span class="faint">(optional)</span></label>
         <input class="input" id="context-input" placeholder="e.g. Is the new product launch already priced in?" />
       </div>
     </form>
     <p class="faint shape-hint" id="shape-hint"></p>
+    <div class="hero-picks" id="hero-picks" hidden></div>
+    <p class="hero-record" id="hero-record" hidden></p>
   </section>
+
+  <!-- First sign-in: Getting started checklist (js/welcome.js) -->
+  <section class="card onboard-card" id="onboard" aria-label="Getting started" hidden></section>
 
   <!-- A run: live, finished, or reopened from History -->
   <section class="run" id="run" hidden>

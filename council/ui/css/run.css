@@ -1,18 +1,72 @@
 /* The Run page (clean look). */
 
-/* ---------- composer ---------- */
-.composer { padding: 26px 24px 20px; display: grid; gap: 18px; }
-.composer-head { display: grid; gap: 6px; }
-.composer-head p { max-width: 64ch; }
-.composer-form { display: grid; grid-template-columns: minmax(140px, 200px) auto auto 1fr; gap: 14px 16px; align-items: end; }
-.composer-form .run-btn { padding: 12px 28px; font-size: 15px; }
-.question-field { grid-column: 1 / -1; }
-.shape-hint { font-size: 13px; }
+/* ---------- start a run: the centred hero ---------- */
+/* Centred in the space under the nav; the Getting started checklist
+   sits below it. overflow: clip keeps the ring from ever widening the page. */
+.hero {
+  min-height: calc(100svh - 150px); display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; justify-items: center;
+  gap: 18px; padding: 24px 0 32px; text-align: center; overflow: clip;
+}
+.hero-head { display: grid; gap: 10px; width: 100%; max-width: 34rem; }
+.hero-head h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.025em; line-height: 1.08; }
+.hero-head p { color: var(--muted); font-size: 16px; line-height: 1.5; }
+.hero-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; justify-items: center; width: min(560px, 100%); }
+.hero-core { position: relative; width: 100%; padding: 38px 30px; }
+.hero-box {
+  position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 8px;
+  background: var(--surface); border-radius: 18px;
+  box-shadow: 0 0 0 1px var(--line), 0 10px 30px rgba(20, 30, 60, .10);
+  transition: box-shadow .2s ease;
+}
+.hero-box:focus-within { box-shadow: 0 0 0 2px var(--accent), 0 12px 36px color-mix(in srgb, var(--accent) 22%, transparent); }
+.hero-input {
+  flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink);
+  font-family: var(--mono); font-size: 22px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase;
+  padding: 10px 12px;
+}
+.hero-input::placeholder { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-size: 17px; color: var(--faint); }
+.hero-run { padding: 13px 26px; font-size: 16px; border-radius: 12px; }
+/* A soft accent halo that breathes slowly. */
+.hero-glow {
+  position: absolute; z-index: 0; inset: 18% 14%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 34%, transparent), transparent);
+  filter: blur(24px); opacity: .7; animation: hero-breathe 6s ease-in-out infinite;
+}
+/* The twelve seats, one dot each, on an ellipse around the box (placed by run.js). */
+.hero-ring { position: absolute; z-index: 1; inset: 0; pointer-events: none; }
+.hero-seat {
+  position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%;
+  background: var(--accent); opacity: .28; animation: hero-seat 4.8s ease-in-out infinite;
+}
+.hero-options { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.hero-question { width: 100%; text-align: left; }
+.shape-hint { font-size: 13px; width: 100%; max-width: 34rem; }
+.hero-picks { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; font-size: 14px; }
+.hero-picks > span { color: var(--faint); }
+.hero-pick {
+  font: inherit; font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: .03em; cursor: pointer;
+  color: var(--ink); background: var(--surface); border: 0; border-radius: 99px; padding: 6px 12px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.hero-pick:hover, .hero-pick:focus-visible { box-shadow: 0 0 0 1px var(--accent); color: var(--accent); outline: none; }
+.hero-record { font-size: 14px; color: var(--muted); }
+.hero-record b { color: var(--ink); }
+/* Pressing Run: the seats light up one by one and the halo swells. */
+.hero.launch .hero-seat { animation: hero-seat-on .5s ease-out forwards; background: var(--up); }
+.hero.launch .hero-glow { animation: hero-swell .6s ease-out forwards; }
+@keyframes hero-breathe { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: .85; transform: scale(1.04); } }
+@keyframes hero-seat { 0%, 100% { opacity: .22; transform: scale(.9); } 50% { opacity: .6; transform: scale(1.15); } }
+@keyframes hero-seat-on { from { opacity: .3; transform: scale(1); } to { opacity: 1; transform: scale(1.5); box-shadow: 0 0 12px var(--up); } }
+@keyframes hero-swell { to { opacity: 1; transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) {
+  .hero-glow, .hero-seat, .hero.launch .hero-seat, .hero.launch .hero-glow { animation: none; }
+  .hero-seat { opacity: .4; }
+}
 @media (max-width: 640px) {
-  .composer { padding: 20px 16px 16px; }
-  .composer-form { grid-template-columns: 1fr auto; }
-  .ticker-field { grid-column: 1 / -1; }
-  .composer-form .run-btn { justify-self: end; }
+  .hero { min-height: calc(100svh - 120px); padding-top: 8px; }
+  .hero-core { padding: 30px 14px; }
+  .hero-input { font-size: 19px; padding: 8px 8px; }
+  .hero-run { padding: 12px 20px; }
 }
 
 /* ---------- run header ---------- */

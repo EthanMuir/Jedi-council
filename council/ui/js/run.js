@@ -185,6 +185,7 @@ async function startRun(e) {
   const ticker = document.getElementById('ticker-input').value.trim().toUpperCase();
   if (!ticker) return;
   const context = document.getElementById('context-input').value.trim();
+  await launchHero();
   if (listening) listening.abort();
   Object.keys(waitTicks).forEach(stopWait);
   state = emptyState({ ticker, shape, context, created_at: new Date().toISOString() });
@@ -244,6 +245,10 @@ function newRun() {
   const input = document.getElementById('ticker-input');
   input.value = '';
   document.getElementById('context-input').value = '';
+  document.getElementById('question-field').hidden = true;
+  document.getElementById('question-toggle').textContent = '+ Add a question';
+  document.getElementById('question-toggle').setAttribute('aria-expanded', 'false');
+  loadHeroPicks();
   input.focus();
   window.scrollTo({ top: 0 });
 }
@@ -1042,6 +1047,76 @@ function renderSections() {
     ${risk?.concentration_warning ? `<div class="pos-warn">${aiText(risk.concentration_warning)}</div>` : ''}`;
 }
 
+// ---- the hero: the centred Run box -------------------------------------------------
+
+const POPULAR = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN'];
+
+// The twelve seats as dots on an ellipse around the box, idling out of step.
+function buildHeroRing() {
+  const ring = document.getElementById('hero-ring');
+  if (!ring) return;
+  ring.innerHTML = SEATS.map((seat, i) => {
+    const a = (i / SEATS.length) * Math.PI * 2 - Math.PI / 2;
+    const x = 50 + 48 * Math.cos(a);
+    const y = 50 + 44 * Math.sin(a);
+    return `<span class="hero-seat" style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;animation-delay:${(i * 0.4).toFixed(1)}s"></span>`;
+  }).join('');
+}
+
+// Pressing Run: the seats light up one by one, then the run screen opens.
+async function launchHero() {
+  const hero = document.getElementById('composer');
+  if (hero.hidden || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  hero.querySelectorAll('.hero-seat').forEach((dot, i) => { dot.style.animationDelay = `${i * 40}ms`; });
+  hero.classList.add('launch');
+  await new Promise(r => setTimeout(r, 720));
+  hero.classList.remove('launch');
+  buildHeroRing();
+}
+
+// "Your recent" tickers to tap, or popular ones before there are any.
+async function loadHeroPicks() {
+  const box = document.getElementById('hero-picks');
+  let tickers = [];
+  try {
+    const data = await fetchJSON('/api/predictions?limit=30');
+    tickers = [...new Set(data.runs.map(r => r.ticker))].slice(0, 5);
+  } catch (e) { /* fall back to popular ones */ }
+  const recent = tickers.length > 0;
+  if (!recent) tickers = POPULAR;
+  box.innerHTML = `<span>${recent ? 'Recent:' : 'Try:'}</span>${tickers.map(t => `<button class="hero-pick" type="button" data-ticker="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}`;
+  box.hidden = false;
+  box.querySelectorAll('.hero-pick').forEach(b => {
+    b.onclick = () => {
+      const input = document.getElementById('ticker-input');
+      input.value = b.dataset.ticker;
+      document.getElementById('run-btn').focus();
+    };
+  });
+}
+
+// One quiet line with the Council's record on your scored calls.
+async function loadHeroRecord() {
+  const line = document.getElementById('hero-record');
+  try {
+    const final = (await fetchJSON('/api/archives')).benchmark?.council_final;
+    if (!final?.n || final.hit_rate === null || final.hit_rate === undefined) return;
+    const right = Math.round(final.hit_rate * final.n);
+    line.innerHTML = `The Council has been right on <b>${right} of ${final.n}</b> of your scored calls.`;
+    line.hidden = false;
+  } catch (e) { /* no line */ }
+}
+
+function toggleQuestion() {
+  const field = document.getElementById('question-field');
+  const btn = document.getElementById('question-toggle');
+  field.hidden = !field.hidden;
+  btn.setAttribute('aria-expanded', String(!field.hidden));
+  btn.textContent = field.hidden ? '+ Add a question' : '− No question';
+  if (field.hidden) document.getElementById('context-input').value = '';
+  else document.getElementById('context-input').focus();
+}
+
 // ---- controls ------------------------------------------------------------------------
 
 async function loadShapeHints() {
@@ -1076,6 +1151,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const paint = await loadShapeHints();
   document.querySelectorAll('#shape-seg button').forEach(b => { b.onclick = () => setShape(b.dataset.shape, paint); });
   document.getElementById('run-form').addEventListener('submit', startRun);
+  document.getElementById('question-toggle').onclick = toggleQuestion;
+  buildHeroRing();
+  loadHeroPicks();
+  loadHeroRecord();
   document.getElementById('new-run-btn').onclick = newRun;
   document.getElementById('share-btn').onclick = toggleShare;
   document.querySelectorAll('#detail-seg button').forEach(b => { b.onclick = () => setDetailMode(b.dataset.detail); });
