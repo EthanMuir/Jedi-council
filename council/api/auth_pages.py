@@ -102,7 +102,13 @@ _SCRIPT = """
 """
 
 _EMU = '<svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M2.6 20.4C2.4 14.6 7 10.6 12.6 10.6c4.4 0 7.9 2.3 8.2 5.6.2 2.6-1.8 4.2-4.8 4.4l-9.4.2c-1.6 0-3.2.5-4 1.6z"/><path fill="none" stroke-width="2.7" d="M18.2 13.4c1.5-2.6 2.7-5.3 3.1-8.3"/><circle stroke="none" cx="22" cy="4.4" r="2.3"/><path stroke="none" d="M23.6 3.5l3 1.1-3 .9z"/><path fill="none" stroke-width="1.8" d="M10.8 20.4l-1 9.2M14.6 20.4l1.6 9.2"/></g></svg>'
-_FAVICON = '<link rel="icon" href="/favicon.svg" type="image/svg+xml" />'
+# Tab icon, plus what lets phones install the site like an app (Add to Home Screen).
+_FAVICON = """<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Ticker Council" />"""
 
 _GOOGLE_ICON = (
     '<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">'
@@ -183,7 +189,7 @@ def signup_page(google_enabled: bool) -> str:
     <div class="error" id="error" role="alert"></div>
     <button type="submit">Ask for an account</button>
   </form>
-  <p style="margin:14px 0 0;font-size:13px">By signing up you agree to how your data is handled (<a href="/privacy">privacy</a>), and that Ticker Council is a research tool, not financial advice.</p>
+  <p style="margin:14px 0 0;font-size:13px">By signing up you agree to the <a href="/terms">terms</a> (it's a research tool, not financial advice) and to how your data is handled (<a href="/privacy">privacy</a>).</p>
   <div class="links"><a href="/login">Already have an account? Sign in</a></div>"""
     script = "wire('signup-form', '/api/auth/signup', ['name', 'email', 'password'], () => { location.href = '/pending'; });"
     return _page("Create an account", body, script)
@@ -293,6 +299,10 @@ def privacy_page() -> str:
     <li>If you sign in with Google: your Google account ID, name and email. Nothing else from Google.</li>
     <li>Your runs, settings and keys, and when you last signed in.</li>
   </ul>
+  <h2>Shared links</h2>
+  <p>If you share a result, anyone with its link can see that one run: the call, the summary and how each seat leaned. Never your name, email or other runs. You can stop sharing at any time and the link stops working.</p>
+  <h2>Backups</h2>
+  <p>The databases are backed up nightly so nothing is lost if the server fails. Backups never include the key that unlocks saved API keys.</p>
   <h2>Emails</h2>
   <p>You'll only get emails about your account: approval and password resets.</p>
   <h2>The AI providers</h2>
@@ -302,6 +312,41 @@ def privacy_page() -> str:
   </div>
   <a class="btn" href="/" style="margin-top:18px">Back</a>"""
     return _page("Privacy", body, wide=True)
+
+
+def terms_page() -> str:
+    body = """
+  <div class="prose">
+  <h1>Terms of use</h1>
+  <p>The short version: Ticker Council is a research tool. Its calls can be wrong, you make your own decisions, and you use it at your own risk.</p>
+  <h2>Not financial advice</h2>
+  <ul>
+    <li>Nothing on Ticker Council is financial, investment, tax or legal advice, or a recommendation to buy, sell or hold anything.</li>
+    <li>Every stock gets the same kind of read for everyone. It doesn't know your finances, goals or how much risk suits you.</li>
+    <li>The calls come from AI models reading public data. They can be wrong, out of date or based on bad data, and past accuracy doesn't predict future results.</li>
+    <li>Decide for yourself, talk to a licensed professional if you need advice, and only invest what you can afford to lose.</li>
+  </ul>
+  <h2>Your account</h2>
+  <ul>
+    <li>Accounts are approved by hand, and can be paused or removed, for example for misuse.</li>
+    <li>Keep your password to yourself. You're responsible for what happens under your account.</li>
+    <li>One person per account.</li>
+  </ul>
+  <h2>Your API keys and costs</h2>
+  <p>Runs use the AI keys you add, and your AI provider bills you for them under its own terms. Ticker Council shows cost estimates, but they're estimates: check your provider's dashboard for what you're actually charged.</p>
+  <h2>Fair use</h2>
+  <ul>
+    <li>Don't try to break, overload or get around the site's limits or sign-in.</li>
+    <li>Don't scrape the site or resell its output as your own service.</li>
+    <li>Sharing individual results you've made, with a link back, is fine.</li>
+  </ul>
+  <h2>No guarantees</h2>
+  <p>The site is provided as it is. It may be down, slow, change or stop, and data may be lost. As far as the law allows, Ticker Council isn't liable for any loss, including trading losses, that comes from using it or relying on it.</p>
+  <h2>Changes</h2>
+  <p>These terms may change as the site grows. If they change in a way that matters, you'll hear about it by email or in the app. Your data is handled as described on the <a href="/privacy">Privacy</a> page.</p>
+  </div>
+  <a class="btn" href="/" style="margin-top:18px">Back</a>"""
+    return _page("Terms", body, wide=True)
 
 
 # ---- the landing page ---------------------------------------------------------------------
@@ -617,7 +662,7 @@ _FAQ = [
 ]
 
 
-def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
+def landing_page(google_enabled: bool, signed_in: bool = False, base_url: str = "") -> str:
     ctas = (
         '<a class="btn btn-primary" href="/index.html">Open the app</a>'
         if signed_in else
@@ -649,6 +694,12 @@ def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
 {_FAVICON}
 <title>Ticker Council · Twelve AIs debate every stock</title>
 <meta name="description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and give you one clear verdict for the next week, 3 months and year." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Ticker Council" />
+<meta property="og:title" content="Ticker Council · Twelve AIs debate every stock" />
+<meta property="og:description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and give you one clear verdict." />
+<meta property="og:image" content="{escape(base_url)}/icons/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <script>{_LANDING_HEAD_SCRIPT}</script>
 <style>{_LANDING_STYLE}</style>
 </head>
@@ -710,7 +761,7 @@ def landing_page(google_enabled: bool, signed_in: bool = False) -> str:
 </main>
 
 <footer><div class="wrap">
-  <nav aria-label="Footer"><a href="/privacy">Privacy</a><a href="/login">Sign in</a><a href="/signup">Request access</a></nav>
+  <nav aria-label="Footer"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/login">Sign in</a><a href="/signup">Request access</a></nav>
   <p>Not financial advice. Ticker Council is a research tool: its calls can be wrong, and past accuracy doesn't guarantee future results. Decide for yourself, and only invest what you can afford to lose.</p>
 </div></footer>
 <script>{_LANDING_SCRIPT}</script>

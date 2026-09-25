@@ -130,3 +130,29 @@
 .drawer-section { display: grid; gap: 8px; }
 .drawer-section h3 { font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; }
 .drawer-section p { font-size: 14px; line-height: 1.6; }
+
+/* Share panel */
+.share-card { padding: 16px 20px; }
+.share-body { display: grid; gap: 12px; }
+.share-body p { margin: 4px 0 0; font-size: 14px; }
+.share-link { display: flex; gap: 8px; }
+.share-link .input { flex: 1; min-width: 0; font-size: 14px; }
+.share-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.share-error { color: var(--down); font-size: 13px; margin: 0; }
+
+/* What changed since the last run of this ticker */
+.chg-body { padding: 8px 20px 18px; }
+.chg-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.chg-row:first-child { border-top: 0; }
+.chg-move { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; }
+.chg-arrow { color: var(--faint); font-weight: 400; }
+.chg-delta { color: var(--muted); font-weight: 500; font-size: 13px; }
+.chg-sub { font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: 0.05em; text-transform: uppercase; margin: 14px 0 6px; }
+.chg-flips { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.chg-none { margin: 0; font-size: 14px; }
+@media (max-width: 640px) {
+  .share-card { padding: 14px 16px; }
+  .chg-body { padding: 6px 16px 16px; }
+  .chg-row { grid-template-columns: 1fr auto; gap: 6px 10px; }
+  .chg-row .chg-move { grid-column: 1 / -1; grid-row: 2; }
+}

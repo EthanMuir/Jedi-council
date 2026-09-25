@@ -43,7 +43,13 @@ OAUTH_COOKIE = "council_oauth"
 SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * accounts.SESSION_DAYS
 
 _PUBLIC_PAGES = {"/welcome", "/login", "/signup", "/setup", "/pending", "/forgot", "/reset", "/privacy",
-                 "/logout", "/auth/google", "/auth/google/callback", "/favicon.svg"}
+                 "/terms", "/logout", "/auth/google", "/auth/google/callback", "/favicon.svg",
+                 "/manifest.webmanifest"}
+# App icons (for Add to Home Screen) and shared verdicts (/s/<token>) are
+# open to anyone -- a share link is its own permission.
+_PUBLIC_PREFIXES = ("/icons/", "/s/")
+# Still reachable before the owner's account exists.
+_BEFORE_SETUP = {"/setup", "/api/auth/setup", "/privacy", "/terms", "/favicon.svg", "/manifest.webmanifest"}
 # Signed-out visitors to the front door see the landing page, not sign-in.
 _FRONT_DOOR = {"/", "/index.html"}
 _PUBLIC_API = {"/api/auth/login", "/api/auth/signup", "/api/auth/setup", "/api/auth/forgot",
@@ -174,7 +180,10 @@ def _auth_off() -> bool:
 
 @router.get("/welcome", response_class=HTMLResponse)
 async def welcome_page(request: Request):
-    return auth_pages.landing_page(google_enabled(), signed_in=getattr(request.state, "user", None) is not None)
+    base = get_settings().public_url.rstrip("/") or str(request.base_url).rstrip("/")
+    return auth_pages.landing_page(
+        google_enabled(), signed_in=getattr(request.state, "user", None) is not None, base_url=base
+    )
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -222,6 +231,11 @@ async def reset_page(token: str = ""):
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page():
     return auth_pages.privacy_page()
+
+
+@router.get("/terms", response_class=HTMLResponse)
+async def terms_page():
+    return auth_pages.terms_page()
 
 
 @router.post("/api/auth/login")
@@ -531,7 +545,8 @@ async def _auth_gate(request: Request, call_next):
 
     conn = _conn()
     try:
-        if accounts.count_users(conn) == 0 and path not in ("/setup", "/api/auth/setup", "/privacy", "/favicon.svg"):
+        if (accounts.count_users(conn) == 0 and path not in _BEFORE_SETUP
+                and not path.startswith("/icons/")):
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "the owner's account needs setting up first"}, status_code=401)
             return RedirectResponse("/setup", status_code=307)
@@ -540,7 +555,7 @@ async def _auth_gate(request: Request, call_next):
         conn.close()
     request.state.user = user
 
-    if path in _PUBLIC_PAGES or path in _PUBLIC_API:
+    if path in _PUBLIC_PAGES or path in _PUBLIC_API or path.startswith(_PUBLIC_PREFIXES):
         return await call_next(request)
     if user is None:
         if path.startswith("/api/"):

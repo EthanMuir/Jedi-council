@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Ticker Council" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="theme-color" content="#f3f5f8" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0d1015" media="(prefers-color-scheme: dark)" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Run · Ticker Council</title>
 <script>try{var t=localStorage.getItem('council_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
@@ -51,6 +59,7 @@
           <button type="button" data-detail="plain" aria-pressed="true">Plain</button>
           <button type="button" data-detail="expert" aria-pressed="false">Expert</button>
         </div>
+        <button class="btn btn-small" id="share-btn" type="button" aria-expanded="false" hidden>Share</button>
         <button class="btn btn-small" id="new-run-btn" type="button">New run</button>
       </div>
     </div>
@@ -66,12 +75,16 @@
 
     <div class="stack" id="alerts"></div>
 
+    <div class="card share-card" id="share-card" hidden></div>
+
     <p class="headline" id="headline" hidden></p>
 
     <div class="card positions" id="positions">
       <div class="card-head"><h2>The Council's position</h2><small id="positions-sub">Chance the price is higher at the end of each period</small></div>
       <div id="positions-body"></div>
     </div>
+
+    <div class="card changes-card" id="changes" hidden></div>
 
     <div class="card seats-card">
       <div class="card-head"><h2>Seats</h2><small>Tap a seat for its full reasoning</small></div>

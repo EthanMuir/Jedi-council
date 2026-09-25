@@ -303,11 +303,27 @@ def main(argv: list[str] | None = None) -> None:
         "the full dump routinely exceeds a terminal's scrollback.",
     )
 
+    backup = sub.add_parser(
+        "backup",
+        help="Snapshot council.db + settings.db into a .tar.gz (and upload it if "
+        "BACKUP_UPLOAD_URL is set). scripts/setup-backups.sh runs this nightly.",
+    )
+    backup.add_argument("--dir", default=None, help="Where to keep backups (default BACKUP_DIR, ./backups)")
+    backup.add_argument("--keep", type=int, default=14, help="How many local backups to keep (default 14)")
+
     args = parser.parse_args(argv)
     settings = get_settings()
     settings.ensure_dirs()
 
-    if args.command == "deliberate":
+    if args.command == "backup":
+        from council.backup import make_backup
+
+        result = make_backup(settings, dest_dir=args.dir, keep=args.keep)
+        print(f"Backup written: {result.path} ({result.size_bytes / 1024:.0f} KB)")
+        print("Uploaded off the VM." if result.uploaded else "Not uploaded (BACKUP_UPLOAD_URL is blank).")
+        for path in result.removed:
+            print(f"Removed old backup: {path.name}")
+    elif args.command == "deliberate":
         _print_llm_mode(settings)
         if args.dry_run_cost:
             estimate_settings = as_lite(settings) if args.lite else settings

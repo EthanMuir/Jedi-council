@@ -426,6 +426,34 @@ class YFinanceProvider:
             "recent_changes": changes,
         }
 
+    # ---- earnings calendar -------------------------------------------------
+
+    async def fetch_earnings_calendar(self, ticker: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._fetch_earnings_calendar_sync, ticker)
+
+    def _fetch_earnings_calendar_sync(self, ticker: str) -> dict[str, Any]:
+        import yfinance as yf
+
+        calendar = yf.Ticker(ticker).calendar
+        raw: Any = []
+        if isinstance(calendar, dict):
+            raw = calendar.get("Earnings Date") or []
+        elif calendar is not None and not getattr(calendar, "empty", True):
+            # Older yfinance returned a DataFrame with the dates in a row.
+            try:
+                raw = list(calendar.loc["Earnings Date"].values)
+            except (KeyError, AttributeError):
+                raw = []
+        if not isinstance(raw, (list, tuple)):
+            raw = [raw]
+        dates = []
+        for value in raw:
+            try:
+                dates.append(str(value)[:10])
+            except Exception:  # noqa: BLE001
+                continue
+        return {"earnings_dates": dates}
+
     # ---- analyst estimates -------------------------------------------------
 
     async def fetch_analyst_estimates(self, ticker: str) -> dict[str, Any]:

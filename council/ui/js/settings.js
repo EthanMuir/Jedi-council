@@ -379,7 +379,7 @@ function renderAccount(me) {
   info.innerHTML = `
     <b style="color:var(--ink)">${escapeHtml(u.name)}</b> · ${escapeHtml(u.email)} <span class="pill">${role}</span><br />
     You sign in with ${escapeHtml(how || 'email')}. Member since ${fmtDate(u.created_at)}.<br />
-    <a href="/logout">Sign out</a> · <a href="/privacy">Privacy</a>`;
+    <a href="/logout">Sign out</a> · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>`;
   pwCard.hidden = false;
   document.getElementById('current-field').hidden = !u.has_password;
   document.getElementById('password-title').textContent = u.has_password ? 'Change password' : 'Add a password';

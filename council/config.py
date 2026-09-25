@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # Google sign-in. Blank = the "Continue with Google" button is hidden.
     google_client_id: str = ""
     google_client_secret: str = ""
+    # Nightly backups (council/backup.py): where local copies go, and an
+    # optional off-VM upload URL (an Oracle Object Storage pre-authenticated
+    # request ending in /o/). Blank = local copies only.
+    backup_dir: str = "./backups"
+    backup_upload_url: str = ""
     # Which person's keys, models and runs this Settings object is for:
     # 0 is the owner (and the only account when sign-in is off). Set per
     # request by settings_for_account(), never from .env.

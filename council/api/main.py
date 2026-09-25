@@ -12,12 +12,15 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from council import key_store
 from council.api.admin import install_admin
 from council.api.auth import install_auth
+from council import shares
+from council.api import share_page
+from council.api.run_views import compare_runs, load_run, previous_run_id
 from council.api.serialize import to_jsonable
 from council.api.ui_files import UIFiles
 from council.calibration.benchmark import compute_benchmark
@@ -298,43 +301,96 @@ async def get_run(run_id: str, request: Request):
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
-        preds = conn.execute(
-            "SELECT * FROM predictions WHERE run_id = ? OR (run_id IS NULL AND id = ?) "
-            "ORDER BY rowid ASC",
-            (run_id, run_id),
-        ).fetchall()
-        if not preds or not _can_see(request, preds[0]["user_id"]):
+        run = load_run(conn, run_id)
+        if not run or not _can_see(request, run["user_id"]):
             raise HTTPException(404, "run not found")
-        terms = {}
-        for pred in preds:
-            votes = conn.execute(
-                "SELECT * FROM seat_votes WHERE prediction_id = ?", (pred["id"],)
-            ).fetchall()
-            resolution = conn.execute(
-                "SELECT * FROM resolutions WHERE prediction_id = ?", (pred["id"],)
-            ).fetchone()
-            prediction = dict(pred)
-            prediction.pop("synthesis_json", None)
-            terms[pred["horizon"]] = {
-                "prediction": prediction,
-                "seat_votes": [
-                    {**dict(v), "verdict": json.loads(v["verdict_json"])} for v in votes
-                ],
-                "resolution": dict(resolution) if resolution else None,
-            }
-        first = preds[0]
-        return {
-            "run_id": run_id,
-            "ticker": first["ticker"],
-            "created_at": first["created_at"],
-            "run_mode": effective_run_mode(first["run_mode"], first["total_cost_usd"]),
-            "run_shape": first["run_shape"] or "full",
-            "legacy": first["run_id"] is None,
-            "synthesis": json.loads(first["synthesis_json"]) if first["synthesis_json"] else None,
-            "terms": terms,
-        }
+        run.pop("user_id")
+        return run
     finally:
         conn.close()
+
+
+@app.get("/api/runs/{run_id}/changes")
+async def run_changes(run_id: str, request: Request):
+    """What moved since the same person's previous run of this ticker:
+    each term's lean and every seat that flipped. previous is null for a
+    first run."""
+    settings = _settings(request)
+    settings.ensure_dirs()
+    conn = connect(settings.council_db_path)
+    try:
+        run = load_run(conn, run_id)
+        if not run or not _can_see(request, run["user_id"]):
+            raise HTTPException(404, "run not found")
+        # Compare within the run's own owner's History (an admin looking at
+        # someone else's run sees that person's previous run, not their own).
+        prev_id = previous_run_id(conn, run, run["user_id"] or 0)
+        previous = load_run(conn, prev_id) if prev_id else None
+        if previous is None:
+            return {"previous": None, "terms": {}, "flips": []}
+        return compare_runs(previous, run)
+    finally:
+        conn.close()
+
+
+def _share_url(request: Request, token: str) -> str:
+    base = get_settings().public_url.rstrip("/") or str(request.base_url).rstrip("/")
+    return f"{base}/s/{token}"
+
+
+def _run_owner(request: Request, run_id: str) -> dict:
+    settings = _settings(request)
+    settings.ensure_dirs()
+    conn = connect(settings.council_db_path)
+    try:
+        run = load_run(conn, run_id)
+    finally:
+        conn.close()
+    if not run or not _can_see(request, run["user_id"]):
+        raise HTTPException(404, "run not found")
+    return run
+
+
+@app.get("/api/runs/{run_id}/share")
+async def share_status(run_id: str, request: Request):
+    _run_owner(request, run_id)
+    token = shares.active_token(get_settings().settings_db_path, run_id)
+    return {"shared": bool(token), "url": _share_url(request, token) if token else None}
+
+
+@app.post("/api/runs/{run_id}/share")
+async def share_run(run_id: str, request: Request):
+    """A public read-only link to this run. Anyone with it can see the
+    result, never who ran it or anything else of theirs."""
+    run = _run_owner(request, run_id)
+    token = shares.create(get_settings().settings_db_path, run["run_id"], _account(request))
+    return {"shared": True, "url": _share_url(request, token)}
+
+
+@app.delete("/api/runs/{run_id}/share")
+async def unshare_run(run_id: str, request: Request):
+    _run_owner(request, run_id)
+    shares.revoke(get_settings().settings_db_path, run_id)
+    return {"shared": False, "url": None}
+
+
+@app.get("/s/{token}", response_class=HTMLResponse)
+async def shared_run_page(token: str, request: Request):
+    settings = get_settings()
+    run_id = shares.run_for_token(settings.settings_db_path, token)
+    run = None
+    if run_id:
+        settings.ensure_dirs()
+        conn = connect(settings.council_db_path)
+        try:
+            run = load_run(conn, run_id)
+        finally:
+            conn.close()
+    signed_in = getattr(request.state, "user", None) is not None
+    if run is None:
+        return HTMLResponse(share_page.missing_page(), status_code=404)
+    base = settings.public_url.rstrip("/") or str(request.base_url).rstrip("/")
+    return HTMLResponse(share_page.render(run, base_url=base, url=f"{base}/s/{token}", signed_in=signed_in))
 
 
 @app.get("/api/archives")

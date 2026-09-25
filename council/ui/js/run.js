@@ -23,6 +23,7 @@ function emptyState(meta) {
     debate: [],
     positions: null,
     warnings: null,
+    earnings: null,
     risk: null,
     synthesis: null,
     alerts: [],
@@ -95,6 +96,9 @@ function onEvent(event, payload) {
     case 'phase_d_weighted_vote':
       s.positions = payload;
       s.step = 'Checking the result';
+      break;
+    case 'earnings_soon':
+      s.earnings = payload;
       break;
     case 'phase_e_warnings':
       s.warnings = payload;
@@ -214,6 +218,10 @@ async function startRun(e) {
 }
 
 function newRun() {
+  extrasFor = null;
+  document.getElementById('share-btn').hidden = true;
+  document.getElementById('share-card').hidden = true;
+  document.getElementById('changes').hidden = true;
   if (listening) listening.abort();
   listening = null;
   Object.keys(waitTicks).forEach(stopWait);
@@ -289,6 +297,7 @@ function stateFromSaved(run) {
   s.reality = replay.reality_anchor || null;
   s.debate = replay.debate || [];
   s.risk = replay.risk || null;
+  s.earnings = replay.earnings || null;
   if (synth?.terms) {
     s.synthesis = synth;
     s.positions = { terms: synth.terms };
@@ -331,6 +340,9 @@ function renderAll() {
   renderPositions();
   for (const seat of SEATS) updateSeatCard(seat.id);
   renderSections();
+  renderShare();
+  renderChanges();
+  loadRunExtras();
   if (openSeatId) renderDrawer(openSeatId);
 }
 
@@ -388,6 +400,9 @@ function renderProgress() {
 function renderAlerts() {
   const box = document.getElementById('alerts');
   const extra = [];
+  if (state.earnings) {
+    extra.push({ kind: 'warn', title: 'Earnings soon.', message: state.earnings.message });
+  }
   if (state.status === 'detached') {
     extra.push({ kind: 'info', title: 'Still running.', message: 'You left this page while the run was going. It carries on without you and will be in History when it finishes.' });
   }
@@ -457,6 +472,132 @@ function renderPositions() {
   document.getElementById('positions-sub').textContent = isExpert()
     ? 'Chance the price is higher at the end of each period · dots are seats'
     : 'Which way the price is likely to go · dots are seats';
+}
+
+// ---- sharing and "what changed" ------------------------------------------------
+
+// Loaded once per finished run: whether it already has a share link, and
+// how it compares with the same ticker's previous run.
+let extrasFor = null;
+
+function loadRunExtras() {
+  const id = state?.meta?.run_id;
+  if (!id || state.status !== 'done' || extrasFor === id) return;
+  extrasFor = id;
+  const base = `/api/runs/${encodeURIComponent(id)}`;
+  fetchJSON(`${base}/share`).then(r => { state.share = r; renderShare(); }).catch(() => {});
+  fetchJSON(`${base}/changes`).then(r => { state.changes = r; renderChanges(); }).catch(() => {});
+}
+
+function toggleShare() {
+  state.shareOpen = !state.shareOpen;
+  renderShare();
+  if (state.shareOpen) document.getElementById('share-card').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+async function setShared(on) {
+  const url = `/api/runs/${encodeURIComponent(state.meta.run_id)}/share`;
+  try {
+    state.share = await fetchJSON(url, { method: on ? 'POST' : 'DELETE' });
+  } catch (err) {
+    state.share = { ...(state.share || {}), error: 'Couldn\'t change sharing. Try again.' };
+  }
+  renderShare();
+}
+
+function renderShare() {
+  const btn = document.getElementById('share-btn');
+  const card = document.getElementById('share-card');
+  const ready = !!(state && state.status === 'done' && state.meta.run_id);
+  btn.hidden = !ready;
+  btn.setAttribute('aria-expanded', String(!!state?.shareOpen));
+  if (!ready || !state.shareOpen) { card.hidden = true; return; }
+  card.hidden = false;
+  const sh = state.share || {};
+  const note = 'It shows the call, the summary and how each seat leaned. Never your name, your other runs or your keys.';
+  const error = sh.error ? `<p class="share-error">${escapeHtml(sh.error)}</p>` : '';
+  if (!sh.shared) {
+    card.innerHTML = `
+      <div class="share-body">
+        <div><b>Share this result with a link</b><p class="faint">${note}</p></div>
+        ${error}
+        <div class="share-actions">
+          <button class="btn btn-primary btn-small" type="button" id="share-make">Create link</button>
+          <button class="btn btn-small btn-quiet" type="button" id="share-close">Close</button>
+        </div>
+      </div>`;
+    document.getElementById('share-make').onclick = () => setShared(true);
+  } else {
+    card.innerHTML = `
+      <div class="share-body">
+        <div><b>Anyone with this link can see this result</b><p class="faint">${note}</p></div>
+        <div class="share-link">
+          <input class="input" type="text" readonly value="${escapeHtml(sh.url)}" id="share-url" aria-label="Share link" />
+          <button class="btn btn-primary btn-small" type="button" id="share-copy">Copy</button>
+        </div>
+        ${error}
+        <div class="share-actions">
+          ${navigator.share ? '<button class="btn btn-small" type="button" id="share-native">Share…</button>' : ''}
+          <a class="btn btn-small" href="${escapeHtml(sh.url)}" target="_blank" rel="noopener">Preview</a>
+          <button class="btn btn-small btn-quiet" type="button" id="share-stop">Stop sharing</button>
+          <button class="btn btn-small btn-quiet" type="button" id="share-close">Close</button>
+        </div>
+      </div>`;
+    const input = document.getElementById('share-url');
+    input.onfocus = () => input.select();
+    document.getElementById('share-copy').onclick = async (e) => {
+      try { await navigator.clipboard.writeText(sh.url); } catch (err) { input.select(); document.execCommand('copy'); }
+      e.target.textContent = 'Copied';
+      setTimeout(() => { e.target.textContent = 'Copy'; }, 1600);
+    };
+    const nativeBtn = document.getElementById('share-native');
+    if (nativeBtn) {
+      nativeBtn.onclick = () => navigator.share({
+        title: `${state.meta.ticker} · Ticker Council`,
+        text: `Twelve AIs debated ${state.meta.ticker}. Here's the verdict:`,
+        url: sh.url,
+      }).catch(() => {});
+    }
+    document.getElementById('share-stop').onclick = () => setShared(false);
+  }
+  document.getElementById('share-close').onclick = toggleShare;
+}
+
+function renderChanges() {
+  const card = document.getElementById('changes');
+  const c = state?.changes;
+  if (!c || !c.previous) { card.hidden = true; return; }
+  card.hidden = false;
+  const expert = isExpert();
+  const rows = TERMS.filter(t => c.terms[t]).map(t => {
+    const { before, after, change, flipped } = c.terms[t];
+    const delta = expert && change !== null
+      ? `<span class="chg-delta num">${change > 0 ? '+' : ''}${(change * 100).toFixed(1)} pts</span>` : '';
+    return `
+      <div class="chg-row">
+        <b>${TERM_LABEL[t]}</b>
+        <span class="chg-move">
+          <span class="${dirOf(before)}">${arrowOf(before)} ${leanWords(before)}</span>
+          <span class="chg-arrow" aria-hidden="true">→</span>
+          <span class="${dirOf(after)}">${arrowOf(after)} ${leanWords(after)}</span>
+          ${delta}
+        </span>
+        ${flipped ? '<span class="pill pill-warn">Changed direction</span>' : '<span class="pill">Same direction</span>'}
+      </div>`;
+  }).join('');
+  const flips = c.flips.length
+    ? `<ul class="chg-flips">${c.flips.map(f => `
+        <li><b>${escapeHtml(seatName(f.seat_id))}</b> <span class="faint">· ${TERM_LABEL[f.term]}</span>
+          <span class="${dirOf(f.before)}">${leanWords(f.before)}</span> → <span class="${dirOf(f.after)}">${leanWords(f.after)}</span></li>`).join('')}</ul>`
+    : '<p class="faint chg-none">No seat changed direction.</p>';
+  card.innerHTML = `
+    <div class="card-head"><h2>What changed</h2>
+      <small>Since your last ${escapeHtml(state.meta.ticker)} run, <a href="/index.html?run=${encodeURIComponent(c.previous.run_id)}">${fmtDate(c.previous.created_at, true)}</a></small></div>
+    <div class="chg-body">
+      ${rows}
+      <h3 class="chg-sub">Seats that changed their mind</h3>
+      ${flips}
+    </div>`;
 }
 
 // ---- seat cards --------------------------------------------------------------
@@ -708,6 +849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('#shape-seg button').forEach(b => { b.onclick = () => setShape(b.dataset.shape, paint); });
   document.getElementById('run-form').addEventListener('submit', startRun);
   document.getElementById('new-run-btn').onclick = newRun;
+  document.getElementById('share-btn').onclick = toggleShare;
   document.querySelectorAll('#detail-seg button').forEach(b => { b.onclick = () => setDetailMode(b.dataset.detail); });
   document.addEventListener('detailchange', renderAll);
   document.getElementById('drawer-close').onclick = closeDrawer;

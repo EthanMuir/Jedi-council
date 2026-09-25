@@ -59,6 +59,7 @@ _TTL_SECONDS = {
     "transcripts": 86400,
     "filings": 3600,
     "profile": 7 * 86400,  # a company's sector/industry peers rarely change
+    "earnings_calendar": 21600,
 }
 
 # The SPDR sector fund for each Yahoo sector key -- the "sector ETF" the
@@ -469,6 +470,32 @@ class DataService:
             )
         except RuntimeError:
             return {}
+
+    async def get_next_earnings(self, ticker: str, as_of: datetime) -> date | None:
+        """The next scheduled earnings date on or after as_of, or None when
+        unknown. The calendar only knows today's schedule, so a run backdated
+        by more than a day gets None rather than a date it couldn't have known."""
+        as_of_naive = as_of.replace(tzinfo=None)
+        if abs((datetime.utcnow() - as_of_naive).total_seconds()) > 86400:
+            return None
+        try:
+            raw = await self._fetch_with_fallback(
+                "fetch_earnings_calendar",
+                f"earnings_calendar:{ticker}",
+                _TTL_SECONDS["earnings_calendar"],
+                ticker,
+            )
+        except RuntimeError:
+            return None
+        upcoming = []
+        for value in (raw or {}).get("earnings_dates", []):
+            try:
+                day = date.fromisoformat(str(value)[:10])
+            except ValueError:
+                continue
+            if day >= as_of_naive.date():
+                upcoming.append(day)
+        return min(upcoming) if upcoming else None
 
     async def get_cross_market_snapshot(
         self,

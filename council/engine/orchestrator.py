@@ -30,7 +30,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Awaitable, Callable
 
 from council.calibration.releases import live_weights
@@ -121,8 +121,30 @@ class SeatResult:
 
 @dataclass
 class TermWarning:
-    kind: str  # "participation" | "base_rate" | "cost" | "prosecutor"
+    kind: str  # "participation" | "base_rate" | "cost" | "prosecutor" | "earnings"
     message: str
+
+
+EARNINGS_WARNING_DAYS = 7
+
+
+def earnings_notice(next_earnings: date | None, today: date) -> dict | None:
+    """The "earnings are due" banner, when they're within a week of the run."""
+    if next_earnings is None:
+        return None
+    days = (next_earnings - today).days
+    if not 0 <= days <= EARNINGS_WARNING_DAYS:
+        return None
+    when = "today" if days == 0 else "tomorrow" if days == 1 else f"in {days} days"
+    label = f"{next_earnings:%a %b} {next_earnings.day}"
+    return {
+        "date": next_earnings.isoformat(),
+        "days": days,
+        "message": (
+            f"Earnings are due {when} ({label}). The price often jumps on the report in a way "
+            "no one can call, so treat next week's lean with extra caution."
+        ),
+    }
 
 
 @dataclass
@@ -377,7 +399,7 @@ async def run_deliberation(
 
     # What the live page showed, kept so a saved run can be reopened in
     # full later (the History page) -- not only its positions and notes.
-    replay: dict = {"seats": [], "debate": [], "reality_anchor": None, "risk": None}
+    replay: dict = {"seats": [], "debate": [], "reality_anchor": None, "risk": None, "earnings": None}
 
     async def emit(event: str, payload: dict) -> None:
         if event == "seat_result":
@@ -388,6 +410,8 @@ async def run_deliberation(
             replay["reality_anchor"] = payload
         elif event == "risk_warden":
             replay["risk"] = payload
+        elif event == "earnings_soon":
+            replay["earnings"] = payload
         if progress:
             await progress(event, payload)
 
@@ -430,6 +454,13 @@ async def run_deliberation(
             "run or charged."
         )
     price_at_prediction = price_series.bars[-1].close
+
+    # Earnings in the next week make the short term close to a coin flip:
+    # the price jumps on the report in a way no seat can call.
+    next_earnings = await data_service.get_next_earnings(ticker, as_of)
+    earnings_soon = earnings_notice(next_earnings, as_of.date())
+    if earnings_soon:
+        await emit("earnings_soon", earnings_soon)
 
     semaphore = asyncio.Semaphore(settings.max_concurrent_llm_calls)
     conn = connect(settings.council_db_path)
@@ -741,6 +772,9 @@ async def run_deliberation(
                     f"~{cost_audits[t].round_trip_cost_pct}% cost of trading in and out.",
                 )
             )
+
+        if earnings_soon and t == "short":
+            warnings[t].append(TermWarning("earnings", earnings_soon["message"]))
 
         objections = [pv for pv in prosecutor_verdicts if pv.vetoes(t)]
         if objections:

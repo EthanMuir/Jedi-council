@@ -380,3 +380,37 @@ get scored -- a cron entry, run via `crontab -e`:
 ```
 0 6 * * * cd /path/to/jedi-council && .venv/bin/python -m council resolve >> /tmp/council-resolve.log 2>&1
 ```
+
+## Backups
+
+The Crypt (`data/council.db`, every run and its score) and `data/settings.db`
+(accounts, saved keys, weight releases) can't be rebuilt, so back them up
+nightly. On the VM, from the repo folder:
+
+```bash
+bash scripts/setup-backups.sh
+```
+
+That installs a daily timer (around 03:30 UTC) running
+`python -m council backup`, which takes a safe snapshot of both databases
+while the server keeps running and keeps the newest 14 in `./backups`.
+
+Copies on the VM don't help if the VM itself is lost, so also send them off
+it. In Oracle Cloud: Storage -> Buckets -> Create Bucket (e.g.
+`council-backups`), then in the bucket, Pre-Authenticated Requests -> Create:
+target **Bucket**, access **Permit object writes**, and a far-off expiry.
+Copy the URL it shows (it ends in `/o/`) into `.env`:
+
+```
+BACKUP_UPLOAD_URL=https://objectstorage.<region>.oraclecloud.com/p/<token>/n/<namespace>/b/council-backups/o/
+```
+
+Each night's backup is then uploaded there as well. Add a lifecycle rule on
+the bucket to delete objects older than 30 days if you want to cap it.
+
+Backups never include the encryption key (`data/secret.key`, or `SECRET_KEY`),
+so a leaked backup can't reveal anyone's API keys. Keep your own copy of that
+key, e.g. in a password manager: `cat data/secret.key`. To restore, stop the
+service, unpack a backup into `data/`, put the key back, and start it again.
+Without the key everything still works, but people have to re-enter their
+API keys.
