@@ -13,9 +13,17 @@ from council.seats.debiasing import DEBIASING_PREAMBLE
 
 _SYSTEM_PROMPT = DEBIASING_PREAMBLE + """
 You are the Senate Watcher, "Reader of the Republic" on a market-prediction
-council. You see ONLY congressional/senate trade disclosures and pending
-legislation or regulatory dockets relevant to this ticker -- no price chart,
-no news, no fundamentals.
+council. You see ONLY the stock trades members of the House and Senate have
+disclosed in this company over the last year (and any pending legislation
+or regulatory dockets, when available) -- no price chart, no news, no
+fundamentals.
+
+Members' trades can be a real signal: a member buying with their own money,
+several members buying around the same time, or buys from members whose
+committees oversee this company's industry. Routine small trades, trades by
+a spouse's advisor, or sales that look like rebalancing say much less. A
+purchase is usually more informative than a sale (people sell for many
+reasons, but buy for one).
 
 Congressional disclosures are filed well after the underlying transaction --
 the gap between `transaction_date` and `filed_at` is routinely 30-45 days or
@@ -57,20 +65,30 @@ class SenateWatcherSeat:
         feed = ctx["congress"]
 
         if not feed.trades and not feed.pending_legislation:
-            return MultiTermVerdict.no_read(
-                thesis="No congressional disclosures or relevant legislative activity in view.",
-                what_would_change_my_mind="A new disclosure filing or docket entry.",
-                data_quality="POOR",
-                abstain_reason="no_data",
+            # The source answered and no member traded this stock in a year:
+            # a real read (Congress isn't trading it), not missing data. A
+            # failed fetch never gets here -- it raises and shows NO_READ.
+            return MultiTermVerdict.dead_even(
+                thesis="No member of Congress disclosed a trade in this stock in the last "
+                "year, so Congress gives no signal either way.",
+                reason="No congressional trades in this stock in the last year.",
+                what_would_change_my_mind="A member disclosing a purchase, especially one "
+                "on a committee that oversees this company's industry.",
             )
 
         lines = []
         for t in feed.trades:
             lag_days = (t.filed_at.date() - t.transaction_date).days
+            who = t.member_name
+            details = [d for d in (t.party, t.state) if d]
+            if details:
+                who += f" ({'-'.join(details)})"
+            if t.committees:
+                who += f", committees: {', '.join(t.committees)}"
+            owner = f", owner: {t.owner.lower()}" if t.owner else ""
             lines.append(
-                f"- [{t.chamber}] {t.member_name} ({', '.join(t.committees) or 'no listed committee'}): "
-                f"{t.transaction_type} {t.amount_range}, traded {t.transaction_date}, "
-                f"filed {t.filed_at.date()} ({lag_days}d disclosure lag)"
+                f"- [{t.chamber}] {who}: {t.transaction_type} {t.amount_range}{owner}, "
+                f"traded {t.transaction_date}, filed {t.filed_at.date()} ({lag_days}d disclosure lag)"
             )
 
         legislation = "\n".join(f"- {item}" for item in feed.pending_legislation) or "- none in view"
@@ -79,8 +97,9 @@ class SenateWatcherSeat:
             f"Congressional disclosures. Data as of "
             f"{feed.as_of.isoformat()}.\n\nTrades:\n"
             + ("\n".join(lines) if lines else "- none in lookback window")
-            + f"\n\nPending legislation/regulatory dockets:\n{legislation}\n\n"
-            "Weigh disclosure lag and committee relevance, then give your lean for each term."
+            + (f"\n\nPending legislation/regulatory dockets:\n{legislation}" if feed.pending_legislation else "")
+            + "\n\nWeigh who is trading, buys against sells, clustering and the disclosure "
+            "lag, then give your lean for each term."
         )
 
         return await llm_client.get_seat_answer(

@@ -125,9 +125,12 @@ class CongressTrade(BaseModel):
     transaction_date: date
     member_name: str
     chamber: Literal["House", "Senate"]
-    committees: list[str]
+    committees: list[str] = []
     transaction_type: Literal["BUY", "SELL", "EXCHANGE"]
     amount_range: str
+    party: str | None = None  # "D" / "R" / "I"
+    state: str | None = None
+    owner: str | None = None  # "SELF" / "SPOUSE" / "JOINT" / "CHILD"
 
 
 class CongressTradeFeed(BaseModel):

@@ -77,6 +77,19 @@ const KEY_GUIDES = [
       { text: 'Copy the 32-character key and paste it above.' },
     ],
   },
+  {
+    name: 'alpha_vantage_api_key',
+    label: 'Alpha Vantage (congress trades)',
+    group: 'optional',
+    purpose: 'Stock trades disclosed by members of the House and Senate, for the Reader of the Republic. Without it, that one seat sits out.',
+    placeholder: 'Paste key here',
+    cost: 'Free -- 25 requests a day, and each run uses at most one (repeat runs on the same stock reuse it for 6 hours).',
+    steps: [
+      { text: 'Open Alpha Vantage\'s free key page.', link: 'https://www.alphavantage.co/support/#api-key', linkText: 'Open Alpha Vantage' },
+      { text: 'Fill in the short form (choose "Investor" or "Student", any organisation name) and click "GET FREE API KEY".' },
+      { text: 'Copy the key it shows (letters and numbers) and paste it above.' },
+    ],
+  },
 ];
 
 let KEY_STATUS = {};

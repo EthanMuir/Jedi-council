@@ -38,6 +38,7 @@ from council.config import Settings, as_lite
 from council.crypt.db import connect, get_open_tickers
 from council.crypt.ledger import write_prediction, write_seat_vote
 from council.data.cache import DiskCache
+from council.data.providers.alpha_vantage import AlphaVantageCongressProvider
 from council.data.providers.fixtures import FixtureProvider
 from council.data.providers.fred import FREDProvider
 from council.data.providers.sec_edgar import SECEdgarProvider
@@ -197,38 +198,37 @@ def _run_mode(settings: Settings, call_log: list) -> str:
     return "paid"
 
 
-# The congress seat has no implemented data source for its domain (Task
-# #69): congressional trading disclosures have no solid free/official API
-# -- researched directly, not assumed. (FMP, the only provider that ever
-# carried them, was removed: its free plan never covered them.) The seat is
-# still called every run and still gets a logged, real abstain_reason --
-# but it returns NO_READ on every call until it gets a working provider, so
+# The congress seat's only source is Alpha Vantage's CONGRESS_TRADES (free
+# key, #106). Without that key it returns NO_READ on every call, so
 # counting it toward the participation warning would make every run's real
-# evidence look thinner than it is. Remove a seat from this set the moment
-# it has a working data source (as insider_reader and structure_archivist's
-# own gaps already were, via SEC EDGAR).
+# evidence look thinner than it is.
 _STRUCTURALLY_NO_DATA_SEATS = frozenset({"senate_watcher"})
 
 
-def _eligible_weight(seat_ids, term: str) -> float:
+def _no_data_seats(settings: Settings) -> frozenset[str]:
+    """Seats that can't possibly read on this server, given its keys."""
+    return frozenset() if settings.alpha_vantage_api_key else _STRUCTURALLY_NO_DATA_SEATS
+
+
+def _eligible_weight(seat_ids, term: str, no_data=_STRUCTURALLY_NO_DATA_SEATS) -> float:
     """Competence-weighted denominator for the participation warning (Task
     #76): a seat that barely counts on this term (the Fundamentalist on the
     short term) missing its data matters less than one that counts fully
-    (the Technician on the short term). Excludes
-    _STRUCTURALLY_NO_DATA_SEATS -- they can't contribute regardless."""
-    return round(
-        sum(competence(sid, term) for sid in seat_ids if sid not in _STRUCTURALLY_NO_DATA_SEATS), 4
-    )
+    (the Technician on the short term). Excludes `no_data` seats -- they
+    can't contribute regardless."""
+    return round(sum(competence(sid, term) for sid in seat_ids if sid not in no_data), 4)
 
 
-def _read_weight(verdicts_by_id: dict[str, SeatVerdict], term: str) -> float:
+def _read_weight(
+    verdicts_by_id: dict[str, SeatVerdict], term: str, no_data=_STRUCTURALLY_NO_DATA_SEATS
+) -> float:
     """Competence-weighted numerator: every seat that could read its data
     on this term -- a dead-even lean is still a read."""
     return round(
         sum(
             competence(sid, term)
             for sid, v in verdicts_by_id.items()
-            if v.vote != "NO_READ" and sid not in _STRUCTURALLY_NO_DATA_SEATS
+            if v.vote != "NO_READ" and sid not in no_data
         ),
         4,
     )
@@ -334,6 +334,9 @@ def build_data_service(settings: Settings) -> DataService:
         # fred.stlouisfed.org, no daily cap, 120 req/min.
         if settings.fred_api_key:
             providers.append(FREDProvider(settings.fred_api_key))
+        # Congressional trades only -- see AlphaVantageCongressProvider.
+        if settings.alpha_vantage_api_key:
+            providers.append(AlphaVantageCongressProvider(settings.alpha_vantage_api_key))
     return DataService(providers=providers, cache=cache)
 
 
@@ -671,8 +674,9 @@ async def run_deliberation(
     warnings: dict[str, list[TermWarning]] = {t: [] for t in TERMS}
     cost_audits: dict[str, CostAuditResult] = {}
     for t in TERMS:
-        eligible = _eligible_weight(seat_ids, t)
-        read = _read_weight(term_verdicts(t), t)
+        no_data = _no_data_seats(settings)
+        eligible = _eligible_weight(seat_ids, t, no_data)
+        read = _read_weight(term_verdicts(t), t, no_data)
         if eligible > 0 and read < eligible * settings.min_participating_seats_pct:
             warnings[t].append(
                 TermWarning(

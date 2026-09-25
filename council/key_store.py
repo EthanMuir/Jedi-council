@@ -21,6 +21,7 @@ KEY_NAMES = (
     "groq_api_key",
     "openai_api_key",
     "fred_api_key",
+    "alpha_vantage_api_key",
 )
 
 _MAX_KEY_LENGTH = 500

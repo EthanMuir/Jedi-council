@@ -49,7 +49,9 @@ _TTL_SECONDS = {
     "options": 300,
     "fundamentals": 21600,
     "insider": 3600,
-    "congress": 3600,
+    # Alpha Vantage's free key allows 25 requests a day and filings only
+    # change daily -- repeat runs on a ticker shouldn't spend more.
+    "congress": 21600,
     "institutional": 21600,
     "macro": 21600,
     "estimates": 21600,
@@ -355,6 +357,11 @@ class DataService:
     async def get_congress_trades(
         self, ticker: str, as_of: datetime, lookback_days: int = 365
     ) -> CongressTradeFeed:
+        if not any(hasattr(p, "fetch_congress_data") for p in self._providers):
+            raise RuntimeError(
+                "No source for congressional trades -- add a free Alpha Vantage key "
+                "under Settings -> API Keys."
+            )
         start = (as_of - timedelta(days=lookback_days)).date()
         end = as_of.date()
         cache_key = f"congress:{ticker}:{start}:{end}"

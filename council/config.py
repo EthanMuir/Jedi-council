@@ -15,13 +15,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     anthropic_api_key: str = ""
-    # Task #77 -- no longer wired into the live provider chain
-    # (build_data_service): its free tier's 25-requests/day cap made it
-    # structurally unusable, and its options endpoints require a paid
-    # ($199.99+/month) plan regardless of quota. Kept here (and the
-    # provider class itself kept in council/data/providers/alpha_vantage.py)
-    # only so a premium key could be wired back in later; setting this now
-    # does nothing.
+    # Free (alphavantage.co, 25 requests/day). Used ONLY for congressional
+    # trades (CONGRESS_TRADES -- House and Senate), one request per run:
+    # its other endpoints were pulled from the chain in Task #77 (the daily
+    # cap, and options needing a paid plan). Without it the congress seat
+    # has no data source and shows NO READ.
     alpha_vantage_api_key: str = ""
     # Free (https://fred.stlouisfed.org/docs/api/api_key.html), 120
     # req/min with no hard daily cap -- now the only source for macro data

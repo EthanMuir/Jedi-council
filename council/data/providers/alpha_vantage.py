@@ -171,3 +171,66 @@ class AlphaVantageProvider:
             "wti_crude": _latest(wti),
             "dollar_index": float(rate.get("5. Exchange Rate", 0.0) or 0.0) * 100,
         }
+
+
+def _amount_range(low: str | None, high: str | None) -> str:
+    def money(v: str | None) -> str | None:
+        try:
+            return f"${float(v):,.0f}"
+        except (TypeError, ValueError):
+            return None
+
+    lo, hi = money(low), money(high)
+    if lo and hi:
+        return f"{lo}-{hi}"
+    if lo:
+        return f"over {lo}"
+    return "amount not given"
+
+
+_CHAMBERS = {"HOUSE": "House", "SENATE": "Senate"}
+_TRANSACTION_TYPES = {"BUY": "BUY", "PURCHASE": "BUY", "SELL": "SELL", "SALE": "SELL", "EXCHANGE": "EXCHANGE"}
+
+
+class AlphaVantageCongressProvider:
+    """Congressional trades only (House and Senate, from the STOCK Act
+    disclosures), via CONGRESS_TRADES -- available on the free key.
+
+    Deliberately exposes nothing else (it wraps AlphaVantageProvider rather
+    than subclassing it): DataService tries providers in order for every
+    data domain, and letting a failed yfinance call fall through to Alpha
+    Vantage's other endpoints would spend the free key's 25 requests a day
+    -- and several of those endpoints need a paid plan anyway."""
+
+    name = "alpha_vantage"
+
+    def __init__(self, api_key: str):
+        self._av = AlphaVantageProvider(api_key)
+
+    async def fetch_congress_data(self, ticker: str, start: date, end: date) -> dict[str, Any]:
+        data = await self._av._get({"function": "CONGRESS_TRADES", "symbol": ticker})
+        trades = []
+        for row in data.get("trades", []) if isinstance(data, dict) else []:
+            filed = row.get("filed_date") or row.get("notification_date")
+            traded = row.get("transaction_date")
+            chamber = _CHAMBERS.get(str(row.get("chamber", "")).upper())
+            txn = _TRANSACTION_TYPES.get(str(row.get("transaction_type", "")).upper())
+            if not (filed and traded and chamber and txn):
+                continue  # a malformed row shouldn't sink the whole feed
+            if not (start.isoformat() <= filed[:10] <= end.isoformat()):
+                continue
+            trades.append(
+                {
+                    "filed_at": datetime.fromisoformat(filed[:10]).isoformat(),
+                    "transaction_date": traded[:10],
+                    "member_name": row.get("politician_canonical") or row.get("politician") or "Unknown member",
+                    "chamber": chamber,
+                    "committees": [],
+                    "transaction_type": txn,
+                    "amount_range": _amount_range(row.get("amount_min"), row.get("amount_max")),
+                    "party": row.get("party"),
+                    "state": row.get("state"),
+                    "owner": row.get("owner_code"),
+                }
+            )
+        return {"trades": trades, "pending_legislation": []}
