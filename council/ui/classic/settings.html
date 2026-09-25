@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The High Council -- Settings</title>
+<link rel="stylesheet" href="/classic/css/theme.css" />
+<link rel="stylesheet" href="/classic/css/chamber.css" />
+<link rel="stylesheet" href="/classic/css/settings.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1 style="margin: 0 0 20px;">Settings</h1>
+
+  <div class="sectioned">
+    <nav class="section-nav" aria-label="Settings sections"></nav>
+
+    <div>
+      <!-- ================= API KEYS ================= -->
+      <section class="page-section" data-section="keys" data-title="API Keys">
+        <div class="panel">
+          <h2 style="margin-top:0;">API Keys</h2>
+          <p class="section-lede">
+            An API key is like a password that lets the Council use a service on
+            your account. Paste each one in once and it's saved -- you won't need
+            to do it again. Stock market data is free and needs no key.
+          </p>
+          <div id="keys-summary" class="keys-summary mono" role="status"></div>
+        </div>
+
+        <h3 class="key-group-label">Add at least one of these</h3>
+        <div id="keys-required" class="key-list"></div>
+
+        <h3 class="key-group-label">Optional</h3>
+        <div id="keys-optional" class="key-list"></div>
+      </section>
+
+      <!-- ================= MODELS & COST ================= -->
+      <section class="page-section" data-section="models" data-title="Models &amp; Cost">
+        <div class="panel free-mode-panel" id="free-mode-panel">
+          <h2 style="margin-top:0;">Free Mode</h2>
+          <p class="section-lede">
+            Runs every seat on free AI models -- Google's Gemini, with Groq taking
+            over if Gemini's free daily limit runs out mid-run. Costs nothing.
+          </p>
+          <div class="free-tradeoff">
+            <div class="free-tradeoff-title">The honest trade-off</div>
+            <ul>
+              <li><b>Weaker answers.</b> Free models miss more nuance than Claude and follow the Council's rules less reliably, so more seats may sit a run out.</li>
+              <li><b>Less independent.</b> Every seat runs on the same kind of model, so their disagreements mean less than on a mixed council.</li>
+              <li><b>Limits.</b> Free Gemini allows only about 15 requests a minute, so runs are slower and seats sometimes pause to wait (they show a countdown). There's also a daily cap per model, which Google sets and changes -- the Rate limits page in Google AI Studio shows yours. Lite runs use about a third of the requests, and a free Groq key adds more.</li>
+              <li><b>Privacy.</b> On its free tier, Google may use what you send to improve its products.</li>
+              <li><b>Scored separately.</b> Free runs are labeled in the Crypt and kept apart in the Archives, so they never mix with paid results.</li>
+            </ul>
+          </div>
+          <div class="free-mode-row">
+            <button class="btn" id="free-mode-toggle" disabled>Turn on Free Mode</button>
+            <span id="free-mode-status" class="mono free-mode-status dim" role="status"></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 style="margin-top:0;">Estimated Cost Per Run</h2>
+          <div class="cost-header">
+            <div class="cost-summary" id="cost-summary">
+              <span class="dim">Loading...</span>
+            </div>
+          </div>
+          <details class="cost-breakdown">
+            <summary>Per-seat breakdown</summary>
+            <table class="cost-lineitems mono" id="cost-lineitems"></table>
+          </details>
+        </div>
+
+        <div class="panel">
+          <h2 style="margin-top:0;">Model For Each Seat</h2>
+          <p class="section-lede">
+            Options run most to least expensive; &#9733; marks the recommended one.
+            A seat set to a service you have no key for uses one you do have a
+            key for instead.
+          </p>
+          <div id="model-status" class="mono model-status" role="status"></div>
+          <table class="settings-table mono" id="settings-table">
+            <thead>
+              <tr>
+                <th>Seat</th><th>Provider</th><th>Model</th><th>Est. $/call</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="settings-tbody">
+              <tr><td colspan="5" class="dim">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ================= APPEARANCE ================= -->
+      <section class="page-section" data-section="appearance" data-title="Appearance">
+        <div class="panel">
+          <h2 style="margin-top:0;">Look</h2>
+          <p class="section-lede" style="margin-bottom:14px;">You're using the High Council look. The Clean look is plainer, like a finance app, with plain names for everything. Saved to this browser only.</p>
+          <div class="toggle-row">
+            <button class="toggle-option" id="look-clean">Clean</button>
+            <button class="toggle-option active" id="look-classic" aria-pressed="true">High Council</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 style="margin-top:0;">Centerpiece</h2>
+          <p class="section-lede" style="margin-bottom:14px;">What spins in the middle of the Chamber. Saved to this browser only.</p>
+          <div class="appearance-grid" id="centerpiece-grid"></div>
+        </div>
+
+        <div class="panel">
+          <h2 style="margin-top:0;">Seat Chair</h2>
+          <p class="section-lede" style="margin-bottom:14px;">How each of the twelve seats looks. Saved to this browser only.</p>
+          <div class="appearance-grid" id="chair-grid"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="/classic/js/common.js"></script>
+<script src="/classic/js/centerpiece.js"></script>
+<script src="/classic/js/settings.js"></script>
+</body>
+</html>

@@ -116,6 +116,18 @@ def test_predictions_list_and_detail_round_trip(client):
         assert len(body["seat_votes"]) == 12
         assert "synthesis_json" not in body["prediction"]
 
+    # A saved run reopens in full: the Summary in plain words too, and a
+    # replay of what the live page showed.
+    synth = detail["synthesis"]
+    assert all(synth[f"plain_{k}"] for k in ("headline", "short", "medium", "long"))
+    replay = synth["replay"]
+    assert len(replay["seats"]) == 12
+    assert {s["seat_id"] for s in replay["seats"]} == {s["seat_id"] for s in detail["terms"]["short"]["seat_votes"]}
+    assert all("key_evidence" in s for s in replay["seats"])
+    assert replay["debate"] and replay["debate"][0]["round_n"] == 1
+    assert set(replay["reality_anchor"]["terms"]) == {"short", "medium", "long"}
+    assert "position_size_pct_of_book" in replay["risk"]
+
     one = test_client.get(f"/api/predictions/{prediction_ids['short']}").json()
     assert one["prediction"]["horizon"] == "short"
     assert one["seat_votes"][0]["verdict"]["vote"] in ("BULLISH", "BEARISH", "NO_CONVICTION", "NO_READ")
@@ -141,6 +153,12 @@ def test_archives_endpoint_shape(client):
     assert len(body["seats"]) == 12
     assert all(s["rank"] == "YOUNGLING" for s in body["seats"])  # no resolutions yet
     assert body["benchmark"] == {"n_resolutions": 0}
+    # Each seat's record per term, with the say it currently has there.
+    for seat in body["seats"]:
+        assert set(seat["terms"]) == {"short", "medium", "long"}
+        for term in seat["terms"].values():
+            assert term["n_resolutions"] == 0 and term["weight"] == 1.0
+            assert 0 < term["competence"] <= 1
 
 
 # --- Task #74: Settings API -------------------------------------------

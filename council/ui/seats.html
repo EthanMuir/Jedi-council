@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Seat record · High Council</title>
+<script>try{var t=localStorage.getItem('council_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="/css/clean.css" />
+<link rel="stylesheet" href="/css/pages.css" />
+</head>
+<body>
+
+<main class="page">
+  <div class="page-head">
+    <h1>Seat record</h1>
+    <p>How often each seat's call turned out right, per period. Once a seat has 20 scored calls on a period, its say there starts to move: up to twice as much for the most accurate seats, down to a quarter for the least, and the worst can be left out.</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Which runs" id="mode-seg">
+      <button type="button" data-mode="" aria-pressed="true">All runs</button>
+      <button type="button" data-mode="paid" aria-pressed="false">Paid</button>
+      <button type="button" data-mode="free" aria-pressed="false">Free</button>
+    </div>
+    <div class="seg" role="group" aria-label="Detail" id="detail-seg">
+      <button type="button" data-detail="plain" aria-pressed="true">Plain</button>
+      <button type="button" data-detail="expert" aria-pressed="false">Expert</button>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="table-wrap">
+      <table class="data" id="seats-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="name">Seat<span class="sort-arrow"></span></th>
+            <th class="sortable num" data-sort="short">Next week<span class="sort-arrow"></span></th>
+            <th class="sortable num" data-sort="medium">Next 3 months<span class="sort-arrow"></span></th>
+            <th class="sortable num" data-sort="long">Next year<span class="sort-arrow"></span></th>
+            <th class="sortable num" data-sort="overall">Overall<span class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="seats-body"><tr><td colspan="5" class="faint">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="faint table-foot" id="table-foot"></p>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/seats.js"></script>
+</body>
+</html>

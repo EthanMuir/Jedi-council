@@ -2,118 +2,113 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>The High Council -- Settings</title>
-<link rel="stylesheet" href="/css/theme.css" />
-<link rel="stylesheet" href="/css/chamber.css" />
-<link rel="stylesheet" href="/css/settings.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Settings · High Council</title>
+<script>try{var t=localStorage.getItem('council_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="/css/clean.css" />
+<link rel="stylesheet" href="/css/pages.css" />
 </head>
 <body>
 
-<div class="container">
-  <h1 style="margin: 0 0 20px;">Settings</h1>
+<main class="page">
+  <div class="page-head"><h1>Settings</h1></div>
 
   <div class="sectioned">
-    <nav class="section-nav" aria-label="Settings sections"></nav>
+    <nav class="section-menu" aria-label="Settings sections"></nav>
 
-    <div>
-      <!-- ================= API KEYS ================= -->
-      <section class="page-section" data-section="keys" data-title="API Keys">
-        <div class="panel">
-          <h2 style="margin-top:0;">API Keys</h2>
-          <p class="section-lede">
-            An API key is like a password that lets the Council use a service on
-            your account. Paste each one in once and it's saved -- you won't need
-            to do it again. Stock market data is free and needs no key.
-          </p>
-          <div id="keys-summary" class="keys-summary mono" role="status"></div>
+    <div class="section-panes">
+      <!-- API keys -->
+      <section class="page-section" data-section="keys" data-title="API keys">
+        <div class="pane-head">
+          <h2>API keys</h2>
+          <p class="muted">An API key lets the Council use a service on your account, like a password. Paste each one in once and it's saved. Stock market data is free and needs no key.</p>
+          <div class="keys-summary" id="keys-summary" role="status"></div>
         </div>
-
-        <h3 class="key-group-label">Add at least one of these</h3>
-        <div id="keys-required" class="key-list"></div>
-
-        <h3 class="key-group-label">Optional</h3>
-        <div id="keys-optional" class="key-list"></div>
+        <h3 class="group-label">Add at least one of these</h3>
+        <div class="stack" id="keys-required"></div>
+        <h3 class="group-label">Optional</h3>
+        <div class="stack" id="keys-optional"></div>
       </section>
 
-      <!-- ================= MODELS & COST ================= -->
-      <section class="page-section" data-section="models" data-title="Models &amp; Cost">
-        <div class="panel free-mode-panel" id="free-mode-panel">
-          <h2 style="margin-top:0;">Free Mode</h2>
-          <p class="section-lede">
-            Runs every seat on free AI models -- Google's Gemini, with Groq taking
-            over if Gemini's free daily limit runs out mid-run. Costs nothing.
-          </p>
-          <div class="free-tradeoff">
-            <div class="free-tradeoff-title">The honest trade-off</div>
+      <!-- Models & cost -->
+      <section class="page-section" data-section="models" data-title="Models and cost">
+        <div class="card card-pad stack free-mode" id="free-mode-panel">
+          <div class="row" style="justify-content:space-between">
+            <h2>Free Mode</h2>
+            <span class="pill" id="free-mode-pill">Off</span>
+          </div>
+          <p class="muted">Runs every seat on free AI models: Google's Gemini, with Groq taking over if Gemini's free daily limit runs out mid-run. Costs nothing.</p>
+          <details class="tradeoffs">
+            <summary>What you give up</summary>
             <ul>
               <li><b>Weaker answers.</b> Free models miss more nuance than Claude and follow the Council's rules less reliably, so more seats may sit a run out.</li>
-              <li><b>Less independent.</b> Every seat runs on the same kind of model, so their disagreements mean less than on a mixed council.</li>
-              <li><b>Limits.</b> Free Gemini allows only about 15 requests a minute, so runs are slower and seats sometimes pause to wait (they show a countdown). There's also a daily cap per model, which Google sets and changes -- the Rate limits page in Google AI Studio shows yours. Lite runs use about a third of the requests, and a free Groq key adds more.</li>
+              <li><b>Less independent.</b> Every seat runs on the same kind of model, so their disagreements mean less.</li>
+              <li><b>Limits.</b> Free Gemini allows about 15 requests a minute, so runs are slower and seats sometimes pause with a countdown. There's also a daily cap per model, set by Google (the Rate limits page in Google AI Studio shows yours). Lite runs use about a third of the requests, and a free Groq key adds more.</li>
               <li><b>Privacy.</b> On its free tier, Google may use what you send to improve its products.</li>
-              <li><b>Scored separately.</b> Free runs are labeled in the Crypt and kept apart in the Archives, so they never mix with paid results.</li>
+              <li><b>Scored separately.</b> Free runs are labelled in History and kept apart in the Seat record.</li>
             </ul>
-          </div>
-          <div class="free-mode-row">
-            <button class="btn" id="free-mode-toggle" disabled>Turn on Free Mode</button>
-            <span id="free-mode-status" class="mono free-mode-status dim" role="status"></span>
+          </details>
+          <div class="row">
+            <button class="btn" id="free-mode-toggle" type="button" disabled>Turn on Free Mode</button>
+            <span class="muted" id="free-mode-status" role="status"></span>
           </div>
         </div>
 
-        <div class="panel">
-          <h2 style="margin-top:0;">Estimated Cost Per Run</h2>
-          <div class="cost-header">
-            <div class="cost-summary" id="cost-summary">
-              <span class="dim">Loading...</span>
-            </div>
-          </div>
-          <details class="cost-breakdown">
-            <summary>Per-seat breakdown</summary>
-            <table class="cost-lineitems mono" id="cost-lineitems"></table>
+        <div class="card card-pad stack">
+          <h2>Cost of a run</h2>
+          <div id="cost-summary" class="cost-summary"><span class="faint">Loading…</span></div>
+          <details class="tradeoffs">
+            <summary>Cost for each part</summary>
+            <div class="table-wrap"><table class="data compact" id="cost-lineitems"></table></div>
           </details>
         </div>
 
-        <div class="panel">
-          <h2 style="margin-top:0;">Model For Each Seat</h2>
-          <p class="section-lede">
-            Options run most to least expensive; &#9733; marks the recommended one.
-            A seat set to a service you have no key for uses one you do have a
-            key for instead.
-          </p>
-          <div id="model-status" class="mono model-status" role="status"></div>
-          <table class="settings-table mono" id="settings-table">
-            <thead>
-              <tr>
-                <th>Seat</th><th>Provider</th><th>Model</th><th>Est. $/call</th><th></th>
-              </tr>
-            </thead>
-            <tbody id="settings-tbody">
-              <tr><td colspan="5" class="dim">Loading...</td></tr>
-            </tbody>
-          </table>
+        <div class="card">
+          <div class="card-head"><h2>Model for each seat</h2></div>
+          <p class="muted pane-note">Ordered from most to least expensive; ★ marks the recommended one. A seat set to a service you have no key for uses one you do have a key for instead.</p>
+          <p class="pane-note" id="model-status" role="status"></p>
+          <div class="table-wrap">
+            <table class="data" id="models-table">
+              <thead><tr><th>Seat</th><th>Model</th><th class="num">Per call</th><th></th></tr></thead>
+              <tbody id="models-body"><tr><td colspan="4" class="faint">Loading…</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
-      <!-- ================= APPEARANCE ================= -->
+      <!-- Appearance -->
       <section class="page-section" data-section="appearance" data-title="Appearance">
-        <div class="panel">
-          <h2 style="margin-top:0;">Centerpiece</h2>
-          <p class="section-lede" style="margin-bottom:14px;">What spins in the middle of the Chamber. Saved to this browser only.</p>
-          <div class="appearance-grid" id="centerpiece-grid"></div>
+        <div class="card card-pad stack">
+          <h2>Detail</h2>
+          <p class="muted">Plain describes each result in everyday words. Expert shows every number: chances, how much each seat counts, expected moves and scores.</p>
+          <div class="seg" role="group" aria-label="Detail" id="detail-seg">
+            <button type="button" data-detail="plain" aria-pressed="true">Plain</button>
+            <button type="button" data-detail="expert" aria-pressed="false">Expert</button>
+          </div>
         </div>
-
-        <div class="panel">
-          <h2 style="margin-top:0;">Seat Chair</h2>
-          <p class="section-lede" style="margin-bottom:14px;">How each of the twelve seats looks. Saved to this browser only.</p>
-          <div class="appearance-grid" id="chair-grid"></div>
+        <div class="card card-pad stack">
+          <h2>Colours</h2>
+          <p class="muted">Light or dark. "Device" follows your phone or computer.</p>
+          <div class="seg" role="group" aria-label="Colours" id="theme-seg">
+            <button type="button" data-theme-choice="" aria-pressed="true">Device</button>
+            <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+            <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+          </div>
+        </div>
+        <div class="card card-pad stack">
+          <h2>Look</h2>
+          <p class="muted">High Council is the original 8-bit look, with the Council's full names (Keeper of the Charts, the Grand Master and so on), a spinning centerpiece and a ring of seats. Saved to this browser only.</p>
+          <div class="seg" role="group" aria-label="Look">
+            <button type="button" aria-pressed="true">Clean</button>
+            <button type="button" aria-pressed="false" id="look-classic">High Council (8-bit)</button>
+          </div>
         </div>
       </section>
     </div>
   </div>
-</div>
+</main>
 
-<script src="/js/common.js"></script>
-<script src="/js/centerpiece.js"></script>
+<script src="/js/app.js"></script>
 <script src="/js/settings.js"></script>
 </body>
 </html>

@@ -305,6 +305,20 @@ def _fallback_synthesis(
         correlated_evidence_warning="; ".join(correlated_evidence) if correlated_evidence else None,
         reasoning="The Grand Master's own synthesis failed after retries, so these notes "
         "are built directly from the council's positions.",
+        plain_headline="; ".join(f"{TERM_NAMES[t]}: {plain_lean(positions[t])}" for t in TERMS) + ".",
+        plain_short=f"{plain_lean(positions['short'])}.",
+        plain_medium=f"{plain_lean(positions['medium'])}.",
+        plain_long=f"{plain_lean(positions['long'])}.",
+    )
+
+
+def plain_lean(position: CouncilPosition) -> str:
+    """'Leaning up', 'Barely down', 'Even' -- a position in everyday words."""
+    if position.seats_counted == 0 or position.lean_label.lower() in ("dead even", "no conviction"):
+        return "Even: no lean either way"
+    return (
+        position.lean_label.replace("bullish", "up").replace("Bullish", "Up")
+        .replace("bearish", "down").replace("Bearish", "Down")
     )
 
 
@@ -361,7 +375,19 @@ async def run_deliberation(
     spectacle instead of a spinner: seats illuminate as they actually
     finish, not all at once when the whole pipeline returns."""
 
+    # What the live page showed, kept so a saved run can be reopened in
+    # full later (the History page) -- not only its positions and notes.
+    replay: dict = {"seats": [], "debate": [], "reality_anchor": None, "risk": None}
+
     async def emit(event: str, payload: dict) -> None:
+        if event == "seat_result":
+            replay["seats"].append(payload)
+        elif event == "debate_round":
+            replay["debate"].append(payload)
+        elif event == "phase_b_reality_anchor":
+            replay["reality_anchor"] = payload
+        elif event == "risk_warden":
+            replay["risk"] = payload
         if progress:
             await progress(event, payload)
 
@@ -505,6 +531,11 @@ async def run_deliberation(
                 "lean_p_bullish": lean_p,
                 "data_quality": verdicts.short.data_quality,
                 "thesis": verdicts.short.thesis,
+                "key_evidence": [
+                    {"claim": e.claim, "source": e.source, "as_of": e.as_of}
+                    for e in verdicts.short.key_evidence
+                ],
+                "what_would_change_my_mind": verdicts.short.what_would_change_my_mind,
                 "terms": {
                     t: {
                         "vote": verdicts.term(t).vote,
@@ -828,7 +859,9 @@ async def run_deliberation(
     # What each seat's answer actually came from -- the concrete free-tier
     # model, or Groq after an overflow, not just what routing intended.
     model_used = {c.seat_id: (c.model, c.provider) for c in llm_client.call_log if c.success}
-    synthesis_json = json.dumps({**synthesis.model_dump(), "terms": terms_payload}, default=str)
+    synthesis_json = json.dumps(
+        {**synthesis.model_dump(), "terms": terms_payload, "replay": replay}, default=str
+    )
     prosecutor_json = json.dumps([pv.model_dump() for pv in prosecutor_verdicts])
 
     prediction_ids: dict[str, str] = {}

@@ -138,53 +138,54 @@ _LOGIN_PAGE_HTML = """<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>The High Council -- Sign In</title>
+<title>Sign in · High Council</title>
 <style>
   :root {
-    --navy: #0a0e1a; --navy-deep: #05070d; --slate: #1a2030;
-    --bevel-hi: rgba(255,255,255,0.10); --bevel-lo: rgba(0,0,0,0.55);
-    --cyan: #4fd6e8; --cyan-dim: #2a6b75; --bone: #e8e4d8; --bone-dim: #8b8779;
-    --crimson: #d6453f;
+    color-scheme: light;
+    --bg: #f3f5f8; --surface: #ffffff; --ink: #141820; --muted: #5a6475; --line: #cfd5de;
+    --accent: #2c56c9; --accent-ink: #ffffff; --accent-soft: #e6ecfb; --down: #c23b35;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0d1015; --surface: #151a21; --ink: #e5e8ed; --muted: #9aa3b2; --line: #323b48;
+      --accent: #7597f2; --accent-ink: #0d1015; --accent-soft: #1c2640; --down: #ec6b64;
+    }
   }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; padding: 0; min-height: 100vh; background: var(--navy);
-    color: var(--bone); font-family: ui-monospace, 'SF Mono', Consolas, monospace;
-    display: flex; align-items: center; justify-content: center;
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
   }
   .panel {
-    background: var(--slate); border: 2px solid #2a3348; border-radius: 2px;
-    box-shadow: inset 2px 2px 0 var(--bevel-hi), inset -2px -2px 0 var(--bevel-lo),
-      4px 4px 0 rgba(0,0,0,0.35);
-    padding: 32px; width: 320px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(20, 24, 32, 0.08); padding: 32px 28px; width: 100%; max-width: 340px;
   }
-  h1 {
-    font-family: 'Courier New', monospace; font-size: 15px; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--bone); margin: 0 0 20px; text-align: center;
-  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
   input[type="password"] {
-    width: 100%; font-family: inherit; font-size: 14px; background: var(--navy-deep);
-    border: 2px solid #131722; box-shadow: inset 2px 2px 0 rgba(0,0,0,0.6);
-    color: var(--bone); padding: 10px 12px; margin-bottom: 14px;
+    width: 100%; font: inherit; font-size: 15px; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; margin-bottom: 10px;
   }
-  input[type="password"]:focus { outline: none; border-color: var(--cyan-dim); }
+  input[type="password"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   button {
-    width: 100%; font-family: inherit; font-size: 13px; text-transform: uppercase;
-    background: #242c42; color: var(--bone); border: 2px solid #3a4560;
-    box-shadow: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
-    padding: 10px; cursor: pointer;
+    width: 100%; font: inherit; font-size: 15px; font-weight: 600; background: var(--accent); color: var(--accent-ink);
+    border: 0; border-radius: 10px; padding: 11px; cursor: pointer;
   }
-  button:hover { color: var(--cyan); border-color: var(--cyan-dim); }
-  .error { color: var(--crimson); font-size: 12px; min-height: 16px; margin-bottom: 10px; }
+  button:hover { filter: brightness(1.07); }
+  .error { color: var(--down); font-size: 13px; min-height: 18px; margin-bottom: 8px; }
 </style>
 </head>
 <body>
 <div class="panel">
-  <h1>The High Council</h1>
+  <h1>High <span>Council</span></h1>
+  <p>Enter the password to continue.</p>
   <form id="login-form">
-    <input type="password" id="password" placeholder="Password" autofocus autocomplete="current-password" />
-    <div class="error" id="error"></div>
-    <button type="submit">Enter</button>
+    <input type="password" id="password" placeholder="Password" aria-label="Password" autofocus autocomplete="current-password" />
+    <div class="error" id="error" role="alert"></div>
+    <button type="submit">Sign in</button>
   </form>
 </div>
 <script>

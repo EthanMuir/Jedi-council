@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The High Council -- The Chamber</title>
+<link rel="stylesheet" href="/classic/css/theme.css" />
+<link rel="stylesheet" href="/classic/css/chamber.css" />
+</head>
+<body>
+
+<div class="container">
+  <h1 style="text-align:center; margin-bottom: 24px;">The High Council Chamber</h1>
+
+  <div class="panel" style="margin-bottom: 20px;">
+    <div class="row control-row" style="align-items:flex-end; justify-content: center; gap: 24px;">
+      <div>
+        <h3>Ticker</h3>
+        <input type="text" id="ticker-input" placeholder="NVDA" maxlength="8" />
+      </div>
+      <div>
+        <h3>Run</h3>
+        <div class="toggle-row" id="shape-toggle">
+          <button class="toggle-option active" data-shape="full" title="Every seat answers 3 times and the debate runs 2 rounds -- 43 model calls.">Full</button>
+          <button class="toggle-option" data-shape="lite" title="Every seat answers once and the debate runs 1 round -- 16 model calls. Faster, cheaper, a little less thorough.">Lite</button>
+        </div>
+      </div>
+      <div>
+        <button class="btn btn-lever" id="convene-btn">Convene the Council</button>
+      </div>
+    </div>
+    <div class="question-field">
+      <h3>Question <span class="dim" style="font-weight:normal;">(optional)</span></h3>
+      <input type="text" id="context-input" placeholder="e.g. Is the recent capex guidance already priced in?" />
+      <div class="dim" style="font-size:12px; margin-top:6px;">Only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker.</div>
+    </div>
+    <div class="dim" style="font-size:12px; margin-top:10px; text-align:center;">Every run reads the short term (next week), medium term (next 3 months) and long term (next year and beyond) at once.</div>
+    <div id="shape-hint" class="dim" style="font-size:12px; margin-top:6px; text-align:center;"></div>
+    <div id="status-line" class="dim mono" style="text-align:center; margin-top: 12px; min-height: 18px;"></div>
+    <div id="run-alerts" class="run-alerts"></div>
+  </div>
+
+  <div class="chamber-ring-wrap panel">
+    <div class="ring-meta" id="ring-meta" hidden>
+      <div class="ring-ticker" id="ring-ticker"></div>
+      <div class="ring-horizon" id="ring-shape"></div>
+    </div>
+    <div class="chamber-ring" id="chamber-ring">
+      <div class="holocron" id="holocron"></div>
+      <!-- seat chairs injected by chamber.js -->
+    </div>
+    <div class="ring-spoken" id="ring-spoken" hidden>
+      <div class="ring-spoken-title">The Council has spoken</div>
+      <button class="btn" id="view-synthesis-btn">View the Grand Master's Synthesis</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top: 20px;" id="positions-panel">
+    <h2>The Council's Position</h2>
+    <div id="positions" class="dim">No deliberation yet.</div>
+  </div>
+
+  <div class="row" style="margin-top: 20px; align-items: stretch;">
+    <div class="panel col">
+      <h2>Reality Anchor</h2>
+      <div id="reality-anchor" class="mono dim">No deliberation yet.</div>
+    </div>
+    <div class="panel col">
+      <h2>Who Leaned Which Way</h2>
+      <div id="dissent-map" class="mono dim">No deliberation yet.</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top: 20px;" id="debate-panel">
+    <h2>The Adversarial Chamber</h2>
+    <div id="debate-transcript" class="mono dim">No debate yet.</div>
+  </div>
+
+  <div class="row" style="margin-top: 20px; align-items: stretch;">
+    <div class="panel col">
+      <h2>Risk Warden</h2>
+      <div id="audit-panel" class="mono dim">--</div>
+    </div>
+    <div class="panel col-2" id="verdict-panel">
+      <h2>Grand Master Synthesis</h2>
+      <div id="grand-master-verdict" class="mono dim">The council has not yet convened.</div>
+    </div>
+  </div>
+</div>
+
+<div class="holo-modal-backdrop" id="holo-backdrop">
+  <div class="panel holo-modal" id="holo-modal"></div>
+</div>
+
+<script src="/classic/js/common.js"></script>
+<script src="/classic/js/centerpiece.js"></script>
+<script src="/classic/js/chamber.js"></script>
+</body>
+</html>

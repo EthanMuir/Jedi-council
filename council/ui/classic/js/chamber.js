@@ -669,7 +669,7 @@ async function convene() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const path = window.location.pathname === '/' ? '/index.html' : window.location.pathname;
+  const path = window.location.pathname.endsWith('/') ? '/classic/index.html' : window.location.pathname;
   renderNav(path);
   layoutRing();
   buildHolocronInto(document.getElementById('holocron'), getCenterpieceStyle(), {

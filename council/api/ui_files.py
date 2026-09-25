@@ -9,6 +9,12 @@ a page with new HTML but old JS renders half-built. So:
   gets a new URL the browser has never cached;
 - every other file is sent with no-cache, so the browser checks with the
   server (a cheap 304 when nothing changed) before reusing its copy.
+
+It also picks the look. The clean look lives at the root; the original
+8-bit High Council look lives under /classic/ with its own page names.
+The council_look cookie (set from Settings -> Appearance) says which one
+this browser wants, and a page request for the other look is redirected to
+its counterpart, so an old bookmark or link still lands somewhere sensible.
 """
 from __future__ import annotations
 
@@ -17,13 +23,52 @@ import re
 from pathlib import Path
 
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import HTMLResponse, Response
+from starlette.requests import HTTPConnection
+from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.types import Scope
 
-_ASSET_LINK = re.compile(r'(\s(?:src|href)=")(/(?:js|css)/[^"?#]+)(")')
+_ASSET_LINK = re.compile(r'(\s(?:src|href)=")(/(?:classic/)?(?:js|css)/[^"?#]+)(")')
+
+LOOK_COOKIE = "council_look"
+CLASSIC = "classic"
+# Clean page -> its 8-bit counterpart.
+_CLASSIC_PAGES = {
+    "index.html": "index.html",
+    "history.html": "crypt.html",
+    "seats.html": "archives.html",
+    "settings.html": "settings.html",
+    "guide.html": "guide.html",
+}
+_CLEAN_PAGES = {v: k for k, v in _CLASSIC_PAGES.items()}
+
+
+def look_redirect(path: str, look: str | None) -> str | None:
+    """Where a page request should go for this look, or None to serve it.
+    `path` is relative to the UI root ("", "index.html", "classic/crypt.html")."""
+    page = path.strip("/")
+    if page == ".":  # how StaticFiles passes the site root
+        page = ""
+    if page in ("", CLASSIC):
+        page = f"{page}/index.html".lstrip("/")
+    if page.startswith(f"{CLASSIC}/"):
+        name = page[len(CLASSIC) + 1:]
+        if look != CLASSIC and name in _CLEAN_PAGES:
+            return "/" + _CLEAN_PAGES[name]
+        return None
+    if look == CLASSIC and page in _CLASSIC_PAGES:
+        return f"/{CLASSIC}/{_CLASSIC_PAGES[page]}"
+    return None
 
 
 class UIFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        look = HTTPConnection(scope).cookies.get(LOOK_COOKIE)
+        target = look_redirect(path, look)
+        if target:
+            query = scope.get("query_string", b"").decode()
+            return RedirectResponse(target + (f"?{query}" if query else ""), status_code=307)
+        return await super().get_response(path, scope)
+
     def file_response(
         self,
         full_path: os.PathLike,

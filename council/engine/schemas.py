@@ -176,6 +176,21 @@ class GrandMasterSynthesis(BaseModel):
         "the leans. Otherwise null.",
     )
     reasoning: str = Field(description="150 words or fewer.")
+    # The same picture for someone new to investing, shown when the reader
+    # picks Plain over Expert in Settings. Written in the same call so
+    # switching works on every saved run with no second AI call.
+    plain_headline: str = Field(
+        description="The headline again for someone new to investing: no jargon, no "
+        "percentages, 25 words or fewer, e.g. 'Slightly more likely to go up than down "
+        "over the next year; next week is a toss-up.'"
+    )
+    plain_short: str = Field(
+        description=f"{TERM_NAMES['short']} for someone new to investing: which way it "
+        "leans, the main reason in everyday words, and how sure the council is. No jargon "
+        f"(no 'bullish', 'options', 'estimates revisions', 'base rate'). {_NOTE_WORDS} words or fewer."
+    )
+    plain_medium: str = Field(description=f"{TERM_NAMES['medium']}, same plain style. {_NOTE_WORDS} words or fewer.")
+    plain_long: str = Field(description=f"{TERM_NAMES['long']}, same plain style. {_NOTE_WORDS} words or fewer.")
 
     def note(self, term: str) -> str:
         return getattr(self, term)

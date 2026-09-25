@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>History · High Council</title>
+<script>try{var t=localStorage.getItem('council_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="/css/clean.css" />
+<link rel="stylesheet" href="/css/pages.css" />
+</head>
+<body>
+
+<main class="page">
+  <div class="page-head">
+    <h1>History</h1>
+    <p>Every run, and whether each period's call was right once its time was up. The next week is scored 7 days after a run, the next 3 months after 3 months, the next year after a year.</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" role="group" aria-label="Which runs" id="mode-seg">
+      <button type="button" data-mode="" aria-pressed="true">All</button>
+      <button type="button" data-mode="paid" aria-pressed="false">Paid</button>
+      <button type="button" data-mode="free" aria-pressed="false">Free</button>
+      <button type="button" data-mode="sample" aria-pressed="false">Sample</button>
+    </div>
+    <input class="input toolbar-search" id="ticker-filter" placeholder="Filter by ticker" aria-label="Filter by ticker" autocapitalize="characters" spellcheck="false" />
+    <div class="seg" role="group" aria-label="Detail" id="detail-seg">
+      <button type="button" data-detail="plain" aria-pressed="true">Plain</button>
+      <button type="button" data-detail="expert" aria-pressed="false">Expert</button>
+    </div>
+    <button class="btn btn-small toolbar-end" id="score-btn" type="button">Score finished runs</button>
+  </div>
+  <p class="faint" id="score-status" role="status"></p>
+
+  <section class="card scoreboard" id="scoreboard" aria-label="Track record"></section>
+
+  <section class="card">
+    <div class="table-wrap">
+      <table class="data" id="runs-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="ticker">Ticker<span class="sort-arrow"></span></th>
+            <th class="sortable" data-sort="date">Date<span class="sort-arrow"></span></th>
+            <th>Next week</th>
+            <th>Next 3 months</th>
+            <th>Next year</th>
+            <th>Run</th>
+            <th class="sortable num" data-sort="cost">Cost<span class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody id="runs-body"><tr><td colspan="7" class="faint">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/js/app.js"></script>
+<script src="/js/history.js"></script>
+</body>
+</html>

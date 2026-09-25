@@ -1,38 +1,19 @@
-// THE GUIDE -- mostly static content; the one dynamic piece is the
-// seats-by-term table, built from common.js's shared COMPETENCE_MATRIX
-// (also used by chamber.js) so there's exactly one copy of this data to
-// keep in sync with council/engine/horizons.py::COMPETENCE_MATRIX.
-
-const SEAT_TITLES = {
-  technician: 'Keeper of the Charts',
-  fundamentalist: 'Keeper of the Ledgers',
-  catalyst_seer: 'Watcher of Omens',
-  insider_reader: 'Student of the Inner Circle',
-  senate_watcher: 'Reader of the Republic',
-  flow_cartographer: 'Reader of Great Tides',
-  oracle_options: 'Reader of Probabilities',
-  macro_sage: 'Keeper of the Outer Rim',
-  cross_market: 'Reader of Distant Stars',
-  estimate_scribe: 'Keeper of Expectations',
-  analyst_ratings: "Reader of the Guild's Targets",
-  structure_archivist: 'Keeper of Charters',
-};
-
-function renderCompetenceTable() {
-  const tbody = document.getElementById('competence-tbody');
-  tbody.innerHTML = Object.entries(COMPETENCE_MATRIX).map(([seatId, byTerm]) => `
-    <tr>
-      <td>${SEAT_TITLES[seatId]}<div class="dim" style="font-size:10px;">${seatId}</div></td>
-      ${TERMS.map(t => {
-        const v = byTerm[t];
-        return `<td class="${v >= 0.5 ? 'active-cell' : 'low-cell'}">${v.toFixed(1)}</td>`;
-      }).join('')}
-    </tr>
-  `).join('');
-}
+// Guide: a sample bar, and the seats table built from the same lists the
+// rest of the app uses so it can't drift.
 
 document.addEventListener('DOMContentLoaded', () => {
   renderNav('/guide.html');
   initSections();
-  renderCompetenceTable();
+
+  document.getElementById('demo-bar').innerHTML = leanBarHtml(0.556, {
+    dots: [0.61, 0.58, 0.57, 0.55, 0.5, 0.5, 0.47, 0.6, 0.54, 0.53, 0.45, 0.56]
+      .map((p, i) => ({ p, weight: 0.4 + (i % 3) * 0.3, name: SEATS[i].name })),
+  });
+
+  const cell = w => `<td class="num"><span class="weight" style="--w:${w}">${w.toFixed(1)}</span></td>`;
+  document.getElementById('seats-table').innerHTML = `
+    <thead><tr><th>Seat</th><th>Reads</th><th class="num">Week</th><th class="num">3 mo</th><th class="num">Year</th></tr></thead>
+    <tbody>${SEATS.map(s => `
+      <tr><td><b>${s.name}</b></td><td class="wrap muted">${s.reads}</td>${TERMS.map(t => cell(COMPETENCE[s.id][t])).join('')}</tr>`).join('')}
+    </tbody>`;
 });

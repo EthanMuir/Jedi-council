@@ -2,11 +2,11 @@
 // small SSE consumption helper.
 
 const NAV_LINKS = [
-  { href: '/index.html', label: 'The Chamber' },
-  { href: '/crypt.html', label: 'The Crypt' },
-  { href: '/archives.html', label: 'The Archives' },
-  { href: '/settings.html', label: 'Settings' },
-  { href: '/guide.html', label: 'The Guide' },
+  { href: '/classic/index.html', label: 'The Chamber' },
+  { href: '/classic/crypt.html', label: 'The Crypt' },
+  { href: '/classic/archives.html', label: 'The Archives' },
+  { href: '/classic/settings.html', label: 'Settings' },
+  { href: '/classic/guide.html', label: 'The Guide' },
 ];
 
 // Every run covers all three terms. Mirrored from council/engine/horizons.py.

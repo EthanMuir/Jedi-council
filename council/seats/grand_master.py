@@ -50,6 +50,13 @@ inflated by correlated evidence). If correlated evidence was flagged,
 correlated_evidence_warning must describe what it means for trust, not just
 echo that it exists. Where the Prosecutor objected to a term, weigh that
 objection in the term's note.
+
+Write everything twice: once for an experienced investor (headline and the
+short/medium/long notes) and once for someone new to investing (the plain_
+fields). The plain versions say the same thing in everyday words -- "more
+likely to go up", "a toss-up", "analysts expect higher profits" -- with no
+jargon and no percentages, and never sound more certain than the expert
+versions.
 """
 
 

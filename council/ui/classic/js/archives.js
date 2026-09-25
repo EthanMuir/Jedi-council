@@ -57,7 +57,7 @@ function setMode(mode) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  renderNav('/archives.html');
+  renderNav('/classic/archives.html');
   for (const btn of document.querySelectorAll('#mode-toggle .toggle-option')) {
     btn.onclick = () => setMode(btn.dataset.mode);
   }

@@ -2,346 +2,88 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>The High Council -- The Guide</title>
-<link rel="stylesheet" href="/css/theme.css" />
-<link rel="stylesheet" href="/css/guide.css" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Guide · High Council</title>
+<script>try{var t=localStorage.getItem('council_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="/css/clean.css" />
+<link rel="stylesheet" href="/css/pages.css" />
 </head>
 <body>
 
-<div class="container">
-  <h1 style="margin: 0 0 20px;">The Guide</h1>
+<main class="page">
+  <div class="page-head"><h1>Guide</h1></div>
 
   <div class="sectioned">
-    <nav class="section-nav" aria-label="Guide sections"></nav>
+    <nav class="section-menu" aria-label="Guide sections"></nav>
 
-    <div>
-    <!-- ================= GETTING STARTED ================= -->
-    <section class="page-section" data-section="start" data-title="Getting Started">
-  <div class="panel">
-    <h2>Getting Started</h2>
-    <p class="section-lede">The Council is a panel of AI analysts that each study one slice of a stock's data, argue it out, and say which way they lean on the stock over the next week, the next 3 months and the next year -- and how sure they are.</p>
-    <ol class="step-list mono start-steps">
-      <li><b>Add a key.</b> Go to <a href="/settings.html#keys">Settings &rarr; API Keys</a> and add either an Anthropic key (best answers, paid) or a free Gemini key. Each comes with step-by-step instructions -- no technical knowledge needed. Stock data is free and needs no key.</li>
-      <li><b>Going free?</b> After adding the Gemini key, turn on <a href="/settings.html#models">Free Mode</a> under Settings &rarr; Models &amp; Cost. Read its trade-offs first: free answers are weaker than Claude's.</li>
-      <li><b>Ask about a stock.</b> In the Chamber, type a ticker (like NVDA) and press <b>Convene the Council</b>. Every run covers all three terms at once.</li>
-      <li><b>Watch the Council work.</b> Each seat reads its own data and leans a way on each term. Tap any seat to see its reasoning.</li>
-      <li><b>Read the result.</b> Three bars -- short, medium and long term -- show where the Council leans and how strongly, with any warnings under them. The Grand Master explains each one. Every run is saved in the Crypt.</li>
-    </ol>
-  </div>
-    </section>
+    <div class="section-panes prose">
+      <section class="page-section" data-section="start" data-title="Getting started">
+        <h2>Getting started</h2>
+        <p>The Council is a panel of twelve AI analysts. Each one reads a single kind of data about a stock, then they debate, and the Council says which way it leans over the next week, the next 3 months and the next year, and how sure it is.</p>
+        <ol class="steps">
+          <li><b>Add a key.</b> Go to <a href="/settings.html#keys">Settings → API keys</a> and add an Anthropic key (best answers, paid) or a free Google Gemini key. Each has step-by-step instructions. Stock data is free and needs no key.</li>
+          <li><b>Going free?</b> After adding the Gemini key, turn on Free Mode under <a href="/settings.html#models">Settings → Models and cost</a>. Read what you give up first: free answers are weaker.</li>
+          <li><b>Run a stock.</b> On the <a href="/index.html">Run</a> page, type a ticker (like NVDA) and press Run. Full runs are the most thorough; Lite runs are about a third of the cost.</li>
+          <li><b>Watch it work.</b> Each seat's card fills in as it finishes. Tap any card for its full reasoning and evidence.</li>
+          <li><b>Read the result.</b> The Council's position on each period is at the top, with the Summary explaining it. Everything else (the debate, the reality check, risk and cost) is in the sections underneath. Every run is saved in <a href="/history.html">History</a>.</li>
+        </ol>
+      </section>
 
-    <!-- ================= READING A VERDICT ================= -->
-    <section class="page-section" data-section="verdicts" data-title="Reading a Verdict">
-  <div class="panel">
-    <h2>Reading a Verdict</h2>
-    <div class="legend-row">
-      <div class="legend-item">
-        <div class="legend-swatch sw-bullish"></div>
-        <div><b class="green">BULLISH</b><div class="dim" style="font-size:12px;">expects the price to rise</div></div>
-      </div>
-      <div class="legend-item">
-        <div class="legend-swatch sw-bearish"></div>
-        <div><b class="crimson">BEARISH</b><div class="dim" style="font-size:12px;">expects the price to fall</div></div>
-      </div>
-      <div class="legend-item">
-        <div class="legend-swatch sw-noread"></div>
-        <div><b class="yellow">DEAD EVEN</b><div class="dim" style="font-size:12px;">read its data and found it genuinely cancels out (shown as NO_CONVICTION in the Crypt)</div></div>
-      </div>
-      <div class="legend-item">
-        <div class="legend-swatch sw-noread"></div>
-        <div><b class="yellow">NO_READ</b><div class="dim" style="font-size:12px;">couldn't form a read at all -- the AI call failed, its answer came back malformed, or the seat had no data</div></div>
-      </div>
-    </div>
-    <p class="dim" style="margin-top:14px; margin-bottom:0; font-size:13px;">
-      This mapping is the same everywhere -- seat chairs, the centerpiece, the
-      bars, and every seat's lean in the Crypt. Seats are asked to lean one way
-      whenever the evidence tilts at all, and to be honest about how much: a
-      weak lean sits close to 50%. Dead even is only for evidence that truly
-      cancels out, and it pulls the Council's position toward the middle. NO_READ
-      means something kept the seat from reading at all -- it's left out of the
-      position entirely; tap the seat to see why.
-    </p>
-  </div>
+      <section class="page-section" data-section="reading" data-title="Reading a result">
+        <h2>Reading a result</h2>
+        <p>Each period gets a bar. Left is down, right is up, and the middle is a 50/50 toss-up. The knob is the Council's position; the dots under it are the seats, fainter when a seat counts for less on that period.</p>
+        <div class="demo-bar" id="demo-bar"></div>
+        <p>The words put the lean in plain terms, from weakest to strongest: <b>Barely</b>, <b>Leaning</b>, plain <b>Up</b> or <b>Down</b>, and <b>Strongly</b>. A knob near the middle is close to a coin flip and is shown that way on purpose.</p>
+        <h3>What each seat can say</h3>
+        <dl class="kv legend">
+          <dt><span class="chip up">▲ up</span></dt><dd>Expects the price to rise over that period.</dd>
+          <dt><span class="chip down">▼ down</span></dt><dd>Expects it to fall.</dd>
+          <dt><span class="chip even">● even</span></dt><dd>Read its data and found it genuinely cancels out. Pulls the Council toward the middle.</dd>
+          <dt><span class="chip">– no read</span></dt><dd>Couldn't read at all: no data, or the AI call failed. Left out of the position entirely; tap the seat to see why.</dd>
+        </dl>
+        <h3>Warnings</h3>
+        <p>Amber notes under a bar are warnings, never overrides: too few seats could read their data, most seats expect a bigger move than the stock usually makes, the expected move doesn't cover the cost of trading, or the Challenger objected to that period's case.</p>
+        <h3>Plain and Expert</h3>
+        <p>Plain (the default) describes everything in everyday words, and the Summary is written for someone new to investing. Expert shows the numbers: the chance of rising, how many seats agree, expected moves, how much each seat counts, and scores. Switch on the Run page or in <a href="/settings.html#appearance">Settings → Appearance</a>.</p>
+      </section>
 
-  <div class="panel">
-    <h2>Three Terms, Three Bars</h2>
-    <p class="dim" style="font-size:13px;">
-      One piece of news can point different ways over different spans -- an
-      acquisition can weigh on a stock this week and help it next year -- so
-      every run covers three terms at once:
-    </p>
-    <ul class="step-list mono">
-      <li><b>Short term</b> -- the next week. Checked in the Crypt after 7 days.</li>
-      <li><b>Medium term</b> -- the next 3 months. Checked after 91 days.</li>
-      <li><b>Long term</b> -- the next year and beyond. Seats may reason years out; the Crypt checks it after a year.</li>
-    </ul>
-    <p class="dim" style="font-size:13px;">
-      Each term gets a bar running from bearish to bullish. The glowing marker
-      is the Council's position: the average of every seat's lean, weighted by
-      how much that seat's data says about that term (see
-      <a href="#terms">Seats by Term</a>). The thin ticks are the seats
-      themselves -- taller ticks count for more. The label above the bar puts
-      the lean in words: <i>Barely</i>, <i>Leaning</i>, plain, or <i>Strongly</i>
-      bullish or bearish, or <i>Dead even</i>. A marker near the middle is close
-      to a coin flip, and is drawn that way on purpose.
-    </p>
-    <p class="dim" style="font-size:13px; margin-bottom:0;">
-      Amber notes under a bar are warnings, never overrides: too few seats could
-      read their data, most seats expect a bigger move than the stock usually
-      makes, the expected move doesn't clear trading costs, or the Prosecutor
-      objected to that term's case.
-    </p>
-  </div>
+      <section class="page-section" data-section="run" data-title="How a run works">
+        <h2>How a run works</h2>
+        <ol class="steps">
+          <li><b>The seats read.</b> Each seat sees only its own kind of data, so their views stay independent. In a Full run each answers three times and the answers are combined.</li>
+          <li><b>Reality check.</b> Each seat's expected move is compared with how much the stock usually moves over that period. Seats expecting a much bigger move count for less.</li>
+          <li><b>The debate.</b> A Bull case and a Bear case argue from the seats' views. The Challenger looks for weak spots, like several seats leaning on the same evidence, and can object to a period.</li>
+          <li><b>The position.</b> Each period's position is the average of the seats' leans, weighted by how much that seat's data says about that period and by its track record.</li>
+          <li><b>The Summary.</b> Explains the three positions and who disagreed. It never changes them.</li>
+          <li><b>Saved.</b> The run goes into History, and each period is scored once its time is up.</li>
+        </ol>
+      </section>
 
-    </section>
+      <section class="page-section" data-section="seats" data-title="The seats">
+        <h2>The seats</h2>
+        <p>What each seat reads, and how much it counts on each period (1.0 is full weight). A seat reading quarterly earnings says little about next week, so it counts for less there.</p>
+        <div class="card"><div class="table-wrap"><table class="data" id="seats-table"></table></div></div>
+        <p>On top of this, a seat's say on each period moves with its track record once it has 20 scored calls there. See <a href="/seats.html">Seat record</a>.</p>
+      </section>
 
-    <!-- ================= THE SCREENS ================= -->
-    <section class="page-section" data-section="screens" data-title="The Screens">
-  <div class="panel screen-panel">
-    <h3 class="cyan">The Chamber</h3>
-    <ol class="step-list mono">
-      <li>Type a stock ticker, e.g. <b>NVDA</b>.</li>
-      <li>Pick <b>Full</b> or <b>Lite</b>. Full has every seat answer three times and runs two debate rounds (43 model calls); Lite has each seat answer once with one debate round (16 calls) -- faster and cheaper, a little less thorough. Lite is the default in Free Mode, since free daily limits go about 2.5&times; further.</li>
-      <li>Optionally, ask a question (e.g. "Is the recent capex guidance already priced in?"). It only shapes the Grand Master's final summary -- every seat still reads its own data for the ticker and votes independently.</li>
-      <li>Press <b>Convene the Council</b>. Each seat's bar fills as it gathers its data and works through its samples, then settles into the colour of its overall lean -- brighter the stronger the lean. The three pips on each seat (S, M, L) show its lean on each term. Click or tap any seat to read its reasoning per term.</li>
-      <li>Once every seat has reported: the Reality Anchor appears, then the Bull/Bear debate with the Prosecutor's rulings, then the three bars with any warnings, and finally the Grand Master's notes. The centerpiece shows all three terms at a glance. The whole run is saved to the Crypt automatically.</li>
-    </ol>
-    <p class="guide-callout mono">
-      <b>No keys added yet?</b> The Council still runs, but only replays
-      built-in sample answers about NVDA. Add a key in
-      <a href="/settings.html#keys">Settings &rarr; API Keys</a> to analyze any stock for real.
-    </p>
-    <p class="guide-callout mono">
-      <b>Out of free runs or credit?</b> In Free Mode, when Gemini's daily limit
-      runs out mid-run the Council switches to Groq on its own (if you've added
-      a Groq key) and tells you. If nothing is left -- or a paid account runs
-      out of credit -- the run stops, says when the limit resets or links to
-      where to add credit, and nothing from that run is saved.
-    </p>
-  </div>
+      <section class="page-section" data-section="history" data-title="History and scoring">
+        <h2>History and scoring</h2>
+        <p>Every finished run is saved and can't be changed afterwards. Each period is scored once its time is up: the next week after 7 days, the next 3 months after 91 days, the next year after a year. A call is right if the price moved the way the Council leaned.</p>
+        <p>Press <b>Score finished runs</b> on the <a href="/history.html">History</a> page to check prices for anything that's due. The track record at the top compares the Council with simply always saying "up".</p>
+        <p>Runs on free models and sample runs are labelled, and the Seat record can show paid and free runs separately, so a weaker model never drags down a seat's paid record.</p>
+      </section>
 
-  <div class="panel screen-panel">
-    <h3 class="cyan">The Crypt</h3>
-    <ol class="step-list mono">
-      <li>Every run ever made lives here, permanently -- the ledger is append-only and hash-chained, so nothing can be edited or quietly deleted after the fact.</li>
-      <li>Each card is one run with a line per term. Each term is scored on its own: the short term a week after the run, the medium term after 3 months, the long term after a year.</li>
-      <li>Free Mode runs are tagged <b>FREE</b> and Lite runs <b>LITE</b>. Filter by ticker, term and/or run type, then click <b>Update the Crypt</b> to score every term whose window has passed against what actually happened.</li>
-      <li>Click a card to see the three bars, the Grand Master's notes, and every seat's lean on each term.</li>
-      <li>The scoreboard compares the Council's blind vote, final (weighted) vote, and extremized vote against two baselines: buy-and-hold and always-bullish.</li>
-    </ol>
-  </div>
-
-  <div class="panel screen-panel">
-    <h3 class="cyan">The Archives</h3>
-    <ol class="step-list mono">
-      <li>Once real resolutions accumulate in the Crypt, this shows each seat's actual track record: hit rate, Brier score, log loss, and a calibration curve (predicted probability vs. how often that was actually right).</li>
-      <li>Paid and Free Mode runs are scored separately -- pick <b>Paid runs</b>, <b>Free runs</b> or <b>All</b> at the top -- so cheaper free-model runs never drag down, or prop up, the paid Council's record.</li>
-      <li>Rank (Youngling &rarr; Grand Master) requires at least 20 resolved predictions before it can move at all -- a lucky streak cannot mint a Grand Master, and a seat's Crypt-derived weight in future votes only starts shifting once it clears that same floor.</li>
-    </ol>
-  </div>
-
-  <div class="panel screen-panel">
-    <h3 class="cyan">Settings</h3>
-    <ol class="step-list mono">
-      <li><b>API Keys</b> -- connect the Council to the AI services it uses. Each key comes with step-by-step instructions for getting it.</li>
-      <li><b>Models &amp; Cost</b> -- turn Free Mode on or off, choose the AI model each seat runs on, and see the estimated cost of a Full or Lite run. Saved on the server, so it applies to every deliberation on this copy of the Council.</li>
-      <li><b>Appearance</b> -- pick the centerpiece and the seat-chair style (including the pixel-art Seat Wizards). Purely visual, saved to your browser only.</li>
-    </ol>
-  </div>
-
-    </section>
-
-    <!-- ================= SEATS BY TERM ================= -->
-    <section class="page-section" data-section="terms" data-title="Seats by Term">
-  <div class="panel">
-    <h2>How Much Each Seat Counts, by Term</h2>
-    <p class="dim" style="font-size:13px;">
-      Every seat leans on every term -- none is ever left out -- but some data
-      says more about some spans than others: charts, options and news are
-      short-term evidence, fundamentals and macro are long-term. This weight
-      (0-1) sets how much each seat's lean counts toward each term's position,
-      before data-quality and track-record adjustments are applied on top.
-    </p>
-    <div class="table-scroll">
-    <table class="guide-table mono" style="margin-top: 12px;">
-      <thead>
-        <tr><th>Seat</th><th>Short</th><th>Medium</th><th>Long</th></tr>
-      </thead>
-      <tbody id="competence-tbody">
-        <!-- filled by guide.js from the same matrix the backend uses -->
-      </tbody>
-    </table>
+      <section class="page-section" data-section="costs" data-title="Costs and free runs">
+        <h2>Costs and free runs</h2>
+        <p>A run's cost depends on the models each seat uses. <a href="/settings.html#models">Settings → Models and cost</a> shows the estimate for a Full and a Lite run and lets you pick each seat's model. Every saved run shows what it actually cost.</p>
+        <p>Free Mode runs every seat on Google's free Gemini models, with Groq as a backup. It costs nothing but the answers are weaker, runs are slower, and Google may use what you send on its free tier.</p>
+        <p>With no AI key at all, runs replay sample answers about NVDA so you can see how everything works.</p>
+      </section>
     </div>
   </div>
+</main>
 
-    </section>
-
-    <!-- ================= THE COUNCIL ================= -->
-    <section class="page-section" data-section="council" data-title="The Council">
-  <p class="section-lede">
-    Four tiers, in the order a deliberation runs them. Open a tier to see
-    each member, what it's allowed to see, and what it does.
-  </p>
-
-  <details class="tier" open>
-  <summary>Tier I -- The Twelve Seats</summary>
-  <p class="dim tier-note">
-    Every seat below deliberates in total isolation -- it is constructed with
-    only the data fields listed, enforced in code (not by prompting), and is
-    sampled several times (three by default) to measure its own run-to-run
-    consistency before its votes are combined with anyone else's.
-  </p>
-  <div class="seat-grid">
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of the Charts</div>
-      <div class="seat-card-id mono">technician</div>
-      <div class="seat-card-field"><b>Sees:</b> price/volume (OHLCV) only. The ticker itself is anonymised to "Instrument A" so the model can't pattern-match the real name from training data.</div>
-      <div class="seat-card-field"><b>Does:</b> its short-term lean is decided by a deterministic family-vote engine (trend, breakout, oscillator, volume), never by the LLM, which only narrates the setup and places entry/exit/invalidation from ATR and structure. Its medium and long-term leans are its read of the longer trend, and count for less.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of the Ledgers</div>
-      <div class="seat-card-id mono">fundamentalist</div>
-      <div class="seat-card-field"><b>Sees:</b> financial statements, margins, growth, and valuation multiples vs. sector. No price action at all.</div>
-      <div class="seat-card-field"><b>Does:</b> a fundamentals read. Counts most on the long term and very little on the short term.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Watcher of Omens</div>
-      <div class="seat-card-id mono">catalyst_seer</div>
-      <div class="seat-card-field"><b>Sees:</b> the news/sentiment feed only.</div>
-      <div class="seat-card-field"><b>Does:</b> classifies each catalyst SCHEDULED vs SURPRISE and must justify why a headline isn't already priced in.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Student of the Inner Circle</div>
-      <div class="seat-card-id mono">insider_reader</div>
-      <div class="seat-card-field"><b>Sees:</b> Form 4 insider transactions only.</div>
-      <div class="seat-card-field"><b>Does:</b> weighs cluster buys over single buys, C-suite over directors, open-market purchases far over option exercises; treats routine 10b5-1 sales as near-zero signal.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Reader of the Republic</div>
-      <div class="seat-card-id mono">senate_watcher</div>
-      <div class="seat-card-field"><b>Sees:</b> the stock trades House and Senate members disclosed in this company over the last year -- who, party and state, buy or sell, the dollar range, and whose account. Needs a free Alpha Vantage key (Settings &rarr; API Keys).</div>
-      <div class="seat-card-field"><b>Does:</b> weighs buys over sells, several members trading together, and the disclosure lag -- trades are filed up to 45 days after they happen.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Reader of Great Tides</div>
-      <div class="seat-card-id mono">flow_cartographer</div>
-      <div class="seat-card-field"><b>Sees:</b> 13F institutional holdings, ETF inclusion, short interest, days-to-cover.</div>
-      <div class="seat-card-field"><b>Does:</b> must note the quarterly lag on 13F data and discount its own confidence accordingly.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Reader of Probabilities</div>
-      <div class="seat-card-id mono">oracle_options</div>
-      <div class="seat-card-field"><b>Sees:</b> the option chain / IV surface / put-call ratio only.</div>
-      <div class="seat-card-field"><b>Does:</b> its most valuable output is the implied expected move, not direction -- every other seat's price target gets checked against this seat's distribution downstream.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of the Outer Rim</div>
-      <div class="seat-card-id mono">macro_sage</div>
-      <div class="seat-card-field"><b>Sees:</b> yields, curve shape, Fed path proxies, CPI, employment, the dollar, oil, and the ticker's historical beta to the market -- never the ticker's own price series.</div>
-      <div class="seat-card-field"><b>Does:</b> a macro backdrop read. Counts most on the medium and long terms; its short-term lean is usually weak.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Reader of Distant Stars</div>
-      <div class="seat-card-id mono">cross_market</div>
-      <div class="seat-card-field"><b>Sees:</b> the sector ETF, a peer basket, an index-futures proxy, and an overseas-session proxy -- never the ticker's own price series.</div>
-      <div class="seat-card-field"><b>Does:</b> looks for confirmation (or contradiction) from a genuinely different market, on the theory that same-asset data is already priced in.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of Expectations</div>
-      <div class="seat-card-id mono">estimate_scribe</div>
-      <div class="seat-card-field"><b>Sees:</b> analyst earnings estimates, revision history, guidance vs. consensus, historical surprise pattern.</div>
-      <div class="seat-card-field"><b>Does:</b> weighs revision momentum more heavily than the raw estimate level.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Reader of the Guild's Targets</div>
-      <div class="seat-card-id mono">analyst_ratings</div>
-      <div class="seat-card-field"><b>Sees:</b> Wall Street's published price targets (as upside from today's price, never the price itself), how many analysts cover the stock, the buy/hold/sell split now and three months ago, and recent upgrades and downgrades.</div>
-      <div class="seat-card-field"><b>Does:</b> discounts analysts' usual optimism, weighs changes over levels, and treats a rare downgrade as stronger news than a routine upgrade. Targets are 12-month calls, so it counts most on the medium and long terms.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of Charters</div>
-      <div class="seat-card-id mono">structure_archivist</div>
-      <div class="seat-card-field"><b>Sees:</b> SEC filings (8-K, S-1, S-3, 13D/G), buybacks, dilution, debt maturities, covenants, ESG/litigation flags.</div>
-      <div class="seat-card-field"><b>Does:</b> low frequency, high impact -- its leans are often weak, and that's correct behaviour for this seat, not a failure.</div>
-    </div>
-  </div>
-
-  </details>
-
-  <!-- ================= TIER II ================= -->
-  <details class="tier">
-  <summary>Tier II -- The Adversarial Chamber</summary>
-  <div class="seat-grid">
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Bull Advocate &amp; Bear Advocate</div>
-      <div class="seat-card-id mono">bull_advocate / bear_advocate</div>
-      <div class="seat-card-field"><b>Sees:</b> all twelve seats' leans on each term, their theses and data quality -- never the raw underlying data.</div>
-      <div class="seat-card-field"><b>Does:</b> each builds the strongest possible case for its assigned side regardless of personal read, saying which terms each point bears on. The assignment is fixed, not chosen -- they are advocates, not analysts.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">The Devil's Advocate</div>
-      <div class="seat-card-id mono">prosecutor</div>
-      <div class="seat-card-field"><b>Sees:</b> everything -- every seat's leans, the debate so far, and which way the council currently leans on each term.</div>
-      <div class="seat-card-field"><b>Does:</b> attacks those leans, whichever way they point. Hunts for evidence cited by multiple seats (counted once, not once per seat), expected moves outside the plausible range, and theses that don't actually depend on the data shown. Its veto appears as a warning under the bars of the terms it objects to.</div>
-    </div>
-  </div>
-
-  </details>
-
-  <!-- ================= TIER III ================= -->
-  <details class="tier">
-  <summary>Tier III -- Quality Control</summary>
-  <p class="dim tier-note">
-    None of these four are an LLM call -- pure computation, deterministic, no token cost.
-  </p>
-  <div class="seat-grid">
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of What Usually Happens</div>
-      <div class="seat-card-id mono">base_rate_keeper</div>
-      <div class="seat-card-field"><b>Computes:</b> the ticker's unconditional historical return distribution -- hit rate of "up," realised volatility, ATR-implied range, max plausible move.</div>
-      <div class="seat-card-field"><b>Used for:</b> the Reality Anchor, per term -- every seat's expected move is checked against it; moves far outside it are flagged IMPLAUSIBLE and count for less.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of the Toll</div>
-      <div class="seat-card-id mono">cost_auditor</div>
-      <div class="seat-card-field"><b>Computes:</b> spread as a percentage of expected move, round-trip cost, break-even move.</div>
-      <div class="seat-card-field"><b>Does:</b> if a term's expected move is smaller than the cost of trading it, that term gets a warning under its bar.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of the Shields</div>
-      <div class="seat-card-id mono">risk_warden</div>
-      <div class="seat-card-field"><b>Computes:</b> ATR/IV-based position size for a fixed risk budget, with a fractional-Kelly cap and a concentration check against other open Crypt positions.</div>
-      <div class="seat-card-field"><b>Does:</b> sizing only, never direction -- its own function signature takes no vote or probability as input, so it is structurally incapable of sizing based on conviction.</div>
-    </div>
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Keeper of the Crypt's Memory</div>
-      <div class="seat-card-id mono">calibration_officer</div>
-      <div class="seat-card-field"><b>Computes:</b> from the resolved Crypt, per-seat hit rate, Brier score, log loss, and a calibration curve (what The Archives page displays).</div>
-      <div class="seat-card-field"><b>Does:</b> outputs a weight vector for the next deliberation's vote -- every seat starts at 1.0, and weight can only move once a seat has at least 20 resolved predictions, so a lucky streak can't buy influence early.</div>
-    </div>
-  </div>
-
-  </details>
-
-  <!-- ================= TIER IV ================= -->
-  <details class="tier">
-  <summary>Tier IV -- Synthesis</summary>
-  <div class="seat-grid">
-    <div class="panel-inset seat-card">
-      <div class="seat-card-title">Master of the Order</div>
-      <div class="seat-card-id mono">grand_master</div>
-      <div class="seat-card-field"><b>Sees:</b> everything -- every seat's leans, the full Bull/Bear debate, every Prosecutor ruling, the Reality Anchors and each term's warnings.</div>
-      <div class="seat-card-field"><b>Does:</b> explains the three positions -- a headline and a note per term on what drives the lean and how much to trust it. It never moves a position: those come from the seats' weighted leans, so a weak lean stays visibly weak. Must report the <i>structure</i> of disagreement, not just a consensus number -- unanimity among seats that all leaned on the same correlated evidence is treated as a warning sign, not a green light.</div>
-    </div>
-  </div>
-  </details>
-    </section>
-    </div>
-  </div>
-</div>
-
-<script src="/js/common.js"></script>
+<script src="/js/app.js"></script>
 <script src="/js/guide.js"></script>
 </body>
 </html>

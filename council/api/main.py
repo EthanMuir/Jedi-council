@@ -20,11 +20,12 @@ from council.api.auth import install_auth
 from council.api.serialize import to_jsonable
 from council.api.ui_files import UIFiles
 from council.calibration.benchmark import compute_benchmark
-from council.calibration.officer import compute_seat_calibration, rank_for_seat
+from council.calibration.officer import compute_seat_calibration, compute_weights, rank_for_seat
 from council.config import as_lite, get_settings
 from council.crypt.db import connect, effective_run_mode
 from council.engine import model_settings
 from council.engine.cost_estimate import estimate_deliberation_cost
+from council.engine.horizons import COMPETENCE_MATRIX, TERMS
 from council.engine.llm_client import RunStopped
 from council.engine.model_catalog import ALL_ROLES, FREE_MODELS, RECOMMENDED, models_sorted_by_cost
 from council.engine.orchestrator import TIER_I_SEATS, TickerNotFound, run_deliberation
@@ -314,9 +315,23 @@ async def archives(mode: str | None = None):
     settings.ensure_dirs()
     conn = connect(settings.council_db_path)
     try:
+        seat_ids = [seat.id for seat in TIER_I_SEATS]
+        # The track-record multiplier each seat's lean gets on each term
+        # (1.0 until it has enough scored calls to move).
+        weights = {t: compute_weights(conn, seat_ids, settings, horizon=t) for t in TERMS}
         seats_summary = []
         for seat in TIER_I_SEATS:
             calib = compute_seat_calibration(conn, seat.id, run_mode=mode)
+            by_term = {}
+            for t in TERMS:
+                term_calib = compute_seat_calibration(conn, seat.id, t, run_mode=mode)
+                by_term[t] = {
+                    "n_resolutions": term_calib.n_resolutions,
+                    "hit_rate": term_calib.hit_rate,
+                    "brier_score": term_calib.brier_score,
+                    "weight": weights[t].get(seat.id, 1.0),
+                    "competence": COMPETENCE_MATRIX[seat.id][t],
+                }
             seats_summary.append(
                 {
                     "seat_id": seat.id,
@@ -329,6 +344,7 @@ async def archives(mode: str | None = None):
                     "calibration_curve": [
                         dataclasses.asdict(b) for b in calib.calibration_curve
                     ],
+                    "terms": by_term,
                 }
             )
         benchmark = compute_benchmark(conn, run_mode=mode)

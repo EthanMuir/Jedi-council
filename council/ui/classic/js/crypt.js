@@ -221,7 +221,7 @@ async function updateCrypt() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  renderNav('/crypt.html');
+  renderNav('/classic/crypt.html');
   document.getElementById('update-crypt-btn').onclick = updateCrypt;
   document.getElementById('refresh-btn').onclick = refresh;
   document.getElementById('filter-ticker').addEventListener('keydown', (e) => {
