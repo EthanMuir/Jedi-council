@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from council import key_store
 from council.api.admin import install_admin
 from council.api.auth import install_auth
+from council.api.reports import install_reports
 from council import shares
 from council.api import share_page
 from council.api.run_views import compare_runs, load_run, previous_run_id
@@ -54,6 +55,7 @@ if not _council_log.handlers:
 app = FastAPI(title="Ticker Council")
 install_auth(app)
 install_admin(app)
+install_reports(app)
 
 _UI_DIR = Path(__file__).resolve().parents[1] / "ui"
 _SEAT_TITLES = {seat.id: seat.title for seat in TIER_I_SEATS}

@@ -316,6 +316,61 @@ async function publishDraft() {
 
 // ---- wiring ---------------------------------------------------------------------------------
 
+// ---- Problem reports ---------------------------------------------------------------------
+
+let reportStatus = 'open';
+
+async function loadReports() {
+  const list = document.getElementById('report-list');
+  try {
+    const data = await fetchJSON(`/api/admin/reports?status=${reportStatus}`);
+    document.getElementById('reports-sub').textContent = data.open_count
+      ? `${data.open_count} open` : 'Nothing open';
+    list.innerHTML = data.reports.length ? data.reports.map(r => {
+      const who = r.email
+        ? `<b>${escapeHtml(r.name)}</b> <a href="mailto:${escapeHtml(r.email)}">${escapeHtml(r.email)}</a>`
+        : `<b>${escapeHtml(r.name || 'Owner')}</b>`;
+      const about = [
+        r.ticker ? `<span class="pill">${escapeHtml(r.ticker)}</span>` : '',
+        r.run_id ? `<a class="pill pill-accent" href="/index.html?run=${encodeURIComponent(r.run_id)}">Open the run</a>` : '',
+        r.page ? `<span class="faint">from ${escapeHtml(r.page)}</span>` : '',
+      ].filter(Boolean).join(' ');
+      const resolved = r.status === 'resolved';
+      return `
+        <article class="card report${resolved ? ' is-resolved' : ''}">
+          <div class="report-head">
+            <span class="pill ${r.kind === 'broken' ? 'pill-warn' : r.kind === 'idea' ? 'pill-free' : ''}">${escapeHtml(r.kind_label)}</span>
+            <span class="faint">${fmtDate(r.created_at, true)}</span>
+            ${resolved ? `<span class="pill">Resolved ${fmtDate(r.resolved_at)}</span>` : ''}
+          </div>
+          <p class="report-message">${escapeHtml(r.message)}</p>
+          <div class="report-meta">${who}${about ? ` · ${about}` : ''}</div>
+          ${r.user_agent ? `<div class="report-device faint">${escapeHtml(r.user_agent)}</div>` : ''}
+          <div class="report-actions">
+            <button class="btn btn-small ${resolved ? '' : 'btn-primary'}" type="button" data-report="${r.id}" data-to="${resolved ? 'open' : 'resolved'}">
+              ${resolved ? 'Reopen' : 'Mark resolved'}</button>
+          </div>
+        </article>`;
+    }).join('') : `<p class="empty">${reportStatus === 'open' ? 'No open reports.' : 'No reports here yet.'}</p>`;
+  } catch (err) {
+    list.innerHTML = `<p class="empty">Couldn't load reports: ${escapeHtml(friendlyError(err))}</p>`;
+  }
+}
+
+async function onReportAction(e) {
+  const btn = e.target.closest('button[data-report]');
+  if (!btn) return;
+  btn.disabled = true;
+  try {
+    await post(`/api/admin/reports/${btn.dataset.report}`, { status: btn.dataset.to });
+    await loadReports();
+    refreshNavBadge('/admin.html');
+  } catch (err) {
+    btn.disabled = false;
+    alert(friendlyError(err));
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderNav('/admin.html');
   initSections();
@@ -337,6 +392,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('compute-btn').onclick = computeDraft;
   document.getElementById('publish-btn').onclick = publishDraft;
+  document.querySelectorAll('#report-seg button').forEach(b => {
+    b.onclick = () => {
+      reportStatus = b.dataset.status;
+      document.querySelectorAll('#report-seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      loadReports();
+    };
+  });
+  document.getElementById('report-list').addEventListener('click', onReportAction);
+  loadReports();
   loadPeople().then(loadRuns);
   loadAnalytics();
   loadWeights();

@@ -50,6 +50,19 @@
         </div>
       </section>
 
+      <!-- Problem reports -->
+      <section class="page-section" data-section="reports" data-title="Reports">
+        <div class="toolbar">
+          <div class="seg" role="group" aria-label="Show reports" id="report-seg">
+            <button type="button" data-status="open" aria-pressed="true">Open</button>
+            <button type="button" data-status="resolved" aria-pressed="false">Resolved</button>
+            <button type="button" data-status="all" aria-pressed="false">All</button>
+          </div>
+          <span class="faint" id="reports-sub"></span>
+        </div>
+        <div class="report-list" id="report-list"><p class="empty">Loading…</p></div>
+      </section>
+
       <!-- Master Crypt -->
       <section class="page-section" data-section="runs" data-title="All runs">
         <div class="toolbar">

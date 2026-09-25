@@ -30,7 +30,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from council import accounts, emailer, key_store, secrets_box
+from council import accounts, emailer, key_store, reports, secrets_box
 from council.api import auth_pages
 from council.config import get_settings
 from council.engine import model_settings
@@ -348,16 +348,21 @@ async def reset_submit(body: _ResetRequest):
 async def me(request: Request):
     user = getattr(request.state, "user", None)
     pending = 0
+    open_reports = 0
+    if user is None and _auth_off():
+        open_reports = reports.open_count(get_settings().settings_db_path)
     if user and user.is_admin:
         conn = _conn()
         try:
             pending = sum(1 for u in accounts.list_users(conn) if u.status == "pending")
         finally:
             conn.close()
+        open_reports = reports.open_count(get_settings().settings_db_path)
     return {
         "auth": not _auth_off(),
         "user": user.public() if user else None,
         "pending_count": pending,
+        "open_reports": open_reports,
         "email_enabled": emailer.email_configured(get_settings()),
     }
 

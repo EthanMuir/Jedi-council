@@ -103,6 +103,35 @@
         <p>Your History is private: only you (and the site's owner) can see your runs. Runs on free models and sample runs are labelled, and paid and free runs are scored apart, so a weaker model never drags down a seat's paid record.</p>
       </section>
 
+      <section class="page-section" data-section="report" data-title="Report a problem">
+        <h2>Report a problem</h2>
+        <p>Something broken, a result that looks wrong, or an idea? Tell us here. It goes straight to the site's owner, along with your account email so they can reply.</p>
+        <form class="card card-pad report-form" id="report-form" novalidate>
+          <div class="field">
+            <label for="report-kind">What kind of problem?</label>
+            <select class="input" id="report-kind">
+              <option value="broken">Something's broken</option>
+              <option value="result">A result looks wrong</option>
+              <option value="idea">Idea or request</option>
+              <option value="other">Something else</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="report-message">What happened?</label>
+            <textarea class="input" id="report-message" rows="6" maxlength="4000" placeholder="What you were doing, what you expected, and what happened instead."></textarea>
+          </div>
+          <div class="field">
+            <label for="report-ticker">Ticker (optional)</label>
+            <input class="input report-ticker" id="report-ticker" maxlength="12" autocapitalize="characters" spellcheck="false" placeholder="NVDA" />
+          </div>
+          <p class="faint report-run" id="report-run" hidden></p>
+          <div class="report-actions">
+            <button class="btn btn-primary" type="submit" id="report-send">Send report</button>
+            <span class="report-msg" id="report-msg" role="status"></span>
+          </div>
+        </form>
+      </section>
+
       <section class="page-section" data-section="costs" data-title="Costs and free runs">
         <h2>Costs and free runs</h2>
         <p>A run's cost depends on the models each seat uses. <a href="/settings.html#models">Settings → Models and cost</a> shows the estimate for a Full and a Lite run and lets you pick each seat's model. Every saved run shows what it actually cost.</p>

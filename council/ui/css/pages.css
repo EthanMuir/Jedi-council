@@ -84,3 +84,13 @@ table.data.compact td.num { white-space: nowrap; padding-left: 12px; }
 
 .release-line { font-size: 14px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
 .release-line:empty { display: none; }
+
+/* Report a problem (Guide) */
+.report-form { display: grid; gap: 14px; max-width: 640px; }
+.report-form textarea.input { resize: vertical; min-height: 120px; font: inherit; line-height: 1.5; }
+.report-ticker { max-width: 12em; text-transform: uppercase; font-family: var(--mono); }
+.report-run { margin: 0; font-size: 13px; }
+.report-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.report-msg { font-size: 14px; color: var(--muted); }
+.report-msg.ok { color: var(--up); }
+.report-msg.error { color: var(--down); }

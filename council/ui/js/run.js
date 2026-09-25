@@ -403,6 +403,13 @@ function renderProgress() {
   document.getElementById('progress-fill').style.width = `${progressPct().toFixed(1)}%`;
 }
 
+function reportLink() {
+  const q = new URLSearchParams({ kind: 'broken', from: '/index.html' });
+  if (state?.meta?.ticker && !state.invalid) q.set('ticker', state.meta.ticker);
+  if (state?.meta?.run_id) q.set('run', state.meta.run_id);
+  return `/guide.html?${q}#report`;
+}
+
 function renderAlerts() {
   const box = document.getElementById('alerts');
   const extra = [];
@@ -418,6 +425,7 @@ function renderAlerts() {
     <div class="alert ${a.kind === 'stop' ? 'alert-stop' : a.kind === 'warn' ? 'alert-warn' : ''}" role="${a.kind === 'stop' ? 'alert' : 'status'}">
       ${a.title ? `<b>${escapeHtml(a.title)}</b> ` : ''}${aiText(a.message)}
       ${a.link ? ` <a href="${escapeHtml(a.link)}" target="_blank" rel="noopener noreferrer">Add credit ↗</a>` : ''}
+      ${a.kind === 'stop' ? ` <a href="${reportLink()}">Report this problem</a>` : ''}
     </div>`).join('');
 }
 

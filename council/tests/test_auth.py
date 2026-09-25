@@ -33,8 +33,9 @@ def make_app(tmp_path, monkeypatch):
         import council.api.admin as admin_module
         import council.api.auth as auth_module
         import council.api.main as main_module
+        import council.api.reports as reports_module
 
-        for module in (main_module, auth_module, admin_module):
+        for module in (main_module, auth_module, admin_module, reports_module):
             monkeypatch.setattr(module, "get_settings", lambda: settings)
         auth_module._FAILS.clear()
         return TestClient(main_module.app), settings
@@ -116,7 +117,7 @@ def test_sessions_are_stored_only_as_hashes(tmp_path):
 def test_no_password_set_means_no_auth_required(make_app):
     client, _ = make_app(app_password="")
     assert client.get("/api/archives").status_code == 200
-    assert client.get("/api/me").json() == {"auth": False, "user": None, "pending_count": 0, "email_enabled": False}
+    assert client.get("/api/me").json() == {"auth": False, "user": None, "pending_count": 0, "open_reports": 0, "email_enabled": False}
 
 
 def test_login_400s_when_auth_is_not_enabled(make_app):

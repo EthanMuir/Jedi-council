@@ -41,3 +41,13 @@ table.compact-table th, table.compact-table td { padding: 9px 12px; }
 .draft-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 20px 18px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .draft-actions p { font-size: 13px; max-width: 52ch; }
 
+
+/* Problem reports */
+.report-list { display: grid; gap: 12px; }
+.report { padding: 16px 20px; display: grid; gap: 10px; }
+.report.is-resolved { opacity: .7; }
+.report-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.report-message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.55; }
+.report-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; }
+.report-device { font-size: 12px; overflow-wrap: anywhere; }
+.report-actions { display: flex; gap: 8px; }

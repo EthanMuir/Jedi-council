@@ -285,7 +285,9 @@ async function refreshNavBadge(active = location.pathname) {
     CURRENT_USER = me.user;
     document.dispatchEvent(new CustomEvent('me', { detail: me }));
     if (!me.user) { slot.replaceChildren(); return; }
-    const badge = me.pending_count ? `<span class="nav-badge" title="${me.pending_count} waiting for approval">${me.pending_count}</span>` : '';
+    const waiting = (me.pending_count || 0) + (me.open_reports || 0);
+    const why = [me.pending_count ? `${me.pending_count} waiting for approval` : '', me.open_reports ? `${me.open_reports} open ${me.open_reports === 1 ? 'report' : 'reports'}` : ''].filter(Boolean).join(', ');
+    const badge = waiting ? `<span class="nav-badge" title="${why}">${waiting}</span>` : '';
     slot.innerHTML = `
       ${me.user.is_admin ? `<a href="/admin.html"${active === '/admin.html' ? ' class="active" aria-current="page"' : ''}>Admin${badge}</a>` : ''}
       <a href="/logout" title="Signed in as ${escapeHtml(me.user.email)}">Sign out</a>`;
