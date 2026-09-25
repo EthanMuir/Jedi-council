@@ -42,6 +42,7 @@ class FixtureProvider:
         if ticker.upper() != "NVDA":
             raise ValueError(f"no recorded profile for {ticker}")
         return {
+            "name": "NVIDIA Corporation",
             "sector_key": "technology",
             "sector": "Technology",
             "industry_key": "semiconductors",

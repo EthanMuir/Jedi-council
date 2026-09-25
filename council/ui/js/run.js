@@ -97,6 +97,9 @@ function onEvent(event, payload) {
       s.positions = payload;
       s.step = 'Checking the result';
       break;
+    case 'company':
+      s.meta.company = payload.name;
+      break;
     case 'earnings_soon':
       s.earnings = payload;
       break;
@@ -269,6 +272,7 @@ function stateFromSaved(run) {
     created_at: run.created_at,
     cost: first.total_cost_usd ?? null,
     run_id: run.run_id,
+    company: run.company || null,
     reopened: true,
   });
   s.status = 'done';
@@ -357,7 +361,7 @@ function renderAll() {
 
 function renderHead() {
   const m = state.meta;
-  document.getElementById('run-ticker').textContent = m.ticker;
+  document.getElementById('run-ticker').innerHTML = `${escapeHtml(m.ticker)}${m.company ? ` <span class="run-company">${escapeHtml(m.company)}</span>` : ''}`;
   const pills = [];
   if (m.created_at) pills.push(`<span>${fmtDate(m.created_at, true)}</span>`);
   pills.push(`<span class="pill">${m.shape === 'lite' ? 'Lite run' : 'Full run'}</span>`);
@@ -585,6 +589,33 @@ async function setShared(on) {
   renderShare();
 }
 
+// A story-sized image of the result (council/share_card.py), shared through
+// the phone's share sheet where it can take files, else saved.
+function shareImageUrl() {
+  return `/api/runs/${encodeURIComponent(state.meta.run_id)}/image.png`;
+}
+
+async function shareImage(btn) {
+  const name = `${state.meta.ticker}-ticker-council.png`;
+  btn.disabled = true;
+  try {
+    const blob = await (await fetch(shareImageUrl(), { credentials: 'same-origin' })).blob();
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: `${state.meta.ticker} · Ticker Council` });
+    } else {
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+  } catch (err) {
+    if (err?.name !== 'AbortError') state.share = { ...(state.share || {}), error: 'Couldn\'t make the image. Try again.' };
+    if (err?.name !== 'AbortError') renderShare();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function renderShare() {
   const btn = document.getElementById('share-btn');
   const card = document.getElementById('share-card');
@@ -596,33 +627,59 @@ function renderShare() {
   const sh = state.share || {};
   const note = 'It shows the call, the summary and how each seat leaned. Never your name, your other runs or your keys.';
   const error = sh.error ? `<p class="share-error">${escapeHtml(sh.error)}</p>` : '';
-  if (!sh.shared) {
-    card.innerHTML = `
-      <div class="share-body">
-        <div><b>Share this result with a link</b><p class="faint">${note}</p></div>
-        ${error}
+  const canShareFiles = !!(navigator.canShare && window.File);
+  const imageSection = `
+    <div class="share-image">
+      <a class="share-thumb" href="${shareImageUrl()}" target="_blank" rel="noopener" aria-label="Open the image full size">
+        <img src="${shareImageUrl()}" alt="The result as a story image: ${escapeHtml(state.meta.ticker)}'s three bars" loading="lazy" />
+      </a>
+      <div class="share-image-text">
+        <b>Post it as an image</b>
+        <p class="faint">Story-sized for Instagram, TikTok and Snapchat: the bars, the headline and the price targets. ${sh.shared ? 'Add your link as a link sticker.' : 'Create a link below to add as a link sticker.'}</p>
         <div class="share-actions">
-          <button class="btn btn-primary btn-small" type="button" id="share-make">Create link</button>
-          <button class="btn btn-small btn-quiet" type="button" id="share-close">Close</button>
+          <button class="btn btn-primary btn-small" type="button" id="share-image">${canShareFiles ? 'Share image' : 'Save image'}</button>
+          ${canShareFiles ? '<button class="btn btn-small" type="button" id="save-image">Save image</button>' : ''}
         </div>
-      </div>`;
-    document.getElementById('share-make').onclick = () => setShared(true);
-  } else {
-    card.innerHTML = `
+      </div>
+    </div>`;
+  const linkSection = !sh.shared ? `
+      <div class="share-body">
+        <div><b>Share it with a link</b><p class="faint">${note} The link shows a preview of the bars when you send it.</p></div>
+        <div class="share-actions">
+          <button class="btn btn-small" type="button" id="share-make">Create link</button>
+        </div>
+      </div>` : `
       <div class="share-body">
         <div><b>Anyone with this link can see this result</b><p class="faint">${note}</p></div>
         <div class="share-link">
           <input class="input" type="text" readonly value="${escapeHtml(sh.url)}" id="share-url" aria-label="Share link" />
           <button class="btn btn-primary btn-small" type="button" id="share-copy">Copy</button>
         </div>
-        ${error}
         <div class="share-actions">
-          ${navigator.share ? '<button class="btn btn-small" type="button" id="share-native">Share…</button>' : ''}
+          ${navigator.share ? '<button class="btn btn-small" type="button" id="share-native">Send link…</button>' : ''}
           <a class="btn btn-small" href="${escapeHtml(sh.url)}" target="_blank" rel="noopener">Preview</a>
           <button class="btn btn-small btn-quiet" type="button" id="share-stop">Stop sharing</button>
-          <button class="btn btn-small btn-quiet" type="button" id="share-close">Close</button>
         </div>
       </div>`;
+  card.innerHTML = `
+    ${imageSection}
+    ${linkSection}
+    ${error}
+    <div class="share-actions share-foot"><button class="btn btn-small btn-quiet" type="button" id="share-close">Close</button></div>`;
+
+  document.getElementById('share-image').onclick = e => shareImage(e.currentTarget);
+  const save = document.getElementById('save-image');
+  if (save) {
+    save.onclick = async () => {
+      const blob = await (await fetch(shareImageUrl(), { credentials: 'same-origin' })).blob();
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${state.meta.ticker}-ticker-council.png` });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
+  }
+  if (!sh.shared) {
+    document.getElementById('share-make').onclick = () => setShared(true);
+  } else {
     const input = document.getElementById('share-url');
     input.onfocus = () => input.select();
     document.getElementById('share-copy').onclick = async (e) => {
@@ -634,7 +691,7 @@ function renderShare() {
     if (nativeBtn) {
       nativeBtn.onclick = () => navigator.share({
         title: `${state.meta.ticker} · Ticker Council`,
-        text: `Twelve AIs debated ${state.meta.ticker}. Here's the verdict:`,
+        text: `Twelve AIs debated ${state.meta.ticker}${state.meta.company ? ` (${state.meta.company})` : ''}. Here's the verdict:`,
         url: sh.url,
       }).catch(() => {});
     }
@@ -643,8 +700,9 @@ function renderShare() {
   document.getElementById('share-close').onclick = toggleShare;
 }
 
-// The stock's closing price around the run: grey before it, green or red
-// after it depending on where it has gone since, with the run marked.
+// The stock's closing price around the run, with the run marked. Each part
+// of the line is green or red by which way it went: into the run, then since
+// it (the part before goes softer once there's a move since to show).
 function renderPriceChart() {
   const card = document.getElementById('price-card');
   const data = state?.prices;
@@ -668,6 +726,8 @@ function renderPriceChart() {
   const dir = change === null ? 'even' : change > 0 ? 'up' : change < 0 ? 'down' : 'even';
   const path = (from, to) => bars.slice(from, to + 1).map((b, k) => `${k ? 'L' : 'M'}${x(from + k).toFixed(1)},${y(b.c).toFixed(1)}`).join('');
   const before = runIdx >= 0 ? path(0, runIdx) : path(0, bars.length - 1);
+  const beforeEnd = runIdx >= 0 ? bars[runIdx].c : last.c;
+  const beforeDir = beforeEnd > bars[0].c ? 'up' : beforeEnd < bars[0].c ? 'down' : 'even';
   const afterPath = after ? path(runIdx, bars.length - 1) : '';
   const area = after ? `${afterPath}L${x(bars.length - 1).toFixed(1)},${H - B}L${x(runIdx).toFixed(1)},${H - B}Z` : '';
   const ticks = [hi - pad, (hi + lo) / 2, lo + pad];
@@ -692,7 +752,7 @@ function renderPriceChart() {
         ${ticks.map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" class="pc-grid" />
           <text x="${W - R + 8}" y="${y(v) + 4}" class="pc-axis">${money(v)}</text>`).join('')}
         ${area ? `<path d="${area}" class="pc-area ${dir}" />` : ''}
-        <path d="${before}" class="pc-before" />
+        <path d="${before}" class="pc-before ${beforeDir}${after ? ' soft' : ''}" />
         ${afterPath ? `<path d="${afterPath}" class="pc-after ${dir}" />` : ''}
         ${runPrice !== null && after ? `<line x1="${x(runIdx)}" x2="${W - R}" y1="${y(runPrice)}" y2="${y(runPrice)}" class="pc-ref" />` : ''}
         ${runIdx >= 0 ? `<line x1="${x(runIdx)}" x2="${x(runIdx)}" y1="${T}" y2="${H - B}" class="pc-run" />

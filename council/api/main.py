@@ -13,14 +13,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from council import key_check, key_store
 from council.api.admin import install_admin
 from council.api.auth import count_visit, install_auth
 from council.api.reports import install_reports
-from council import emailer, notify, onboarding, shares
+from council import emailer, notify, onboarding, share_card, shares
 from council.api import share_page
 from council.api.run_views import compare_runs, load_run, previous_run_id
 from council.api.serialize import to_jsonable
@@ -352,8 +352,9 @@ def _group_runs(predictions: list[dict]) -> list[dict]:
 
 
 def _attach_price_targets(conn, runs: list[dict]) -> None:
-    """Each term row gets its price target (saved in the run's synthesis),
-    and once scored, where the price ended and whether that was in range."""
+    """From each run's saved synthesis: the company's name, and each term
+    row's price target and, once scored, where the price ended and whether
+    that was in range."""
     for run in runs:
         if run["legacy"]:
             continue
@@ -362,9 +363,11 @@ def _attach_price_targets(conn, runs: list[dict]) -> None:
             (run["run_id"],),
         ).fetchone()
         try:
-            terms = (json.loads(row["synthesis_json"]).get("terms") or {}) if row else {}
+            synthesis = json.loads(row["synthesis_json"]) if row else {}
         except ValueError:
-            terms = {}
+            synthesis = {}
+        terms = synthesis.get("terms") or {}
+        run["company"] = synthesis.get("company")
         for key, prediction in run["terms"].items():
             target = (terms.get(key) or {}).get("price_target")
             prediction["price_target"] = target
@@ -579,6 +582,48 @@ async def shared_run_page(token: str, request: Request):
     count_visit(request, "share")
     base = settings.public_url.rstrip("/") or str(request.base_url).rstrip("/")
     return HTMLResponse(share_page.render(run, base_url=base, url=f"{base}/s/{token}", signed_in=signed_in))
+
+
+def _site_label(request: Request) -> str:
+    """The site's address as printed on share images: "tickercouncil.com"."""
+    base = get_settings().public_url.rstrip("/") or str(request.base_url).rstrip("/")
+    host = base.split("://", 1)[-1].split("/", 1)[0]
+    return host.removeprefix("www.")
+
+
+async def _card_response(run: dict, fmt: str, request: Request, cache_seconds: int) -> Response:
+    png = await asyncio.to_thread(share_card.render, run, fmt, _site_label(request))
+    return Response(png, media_type="image/png", headers={"Cache-Control": f"public, max-age={cache_seconds}"})
+
+
+@app.get("/s/{token}/{name}.png")
+async def shared_run_card(token: str, name: str, request: Request):
+    """The share link's images: card.png is the link preview (1200x630),
+    story.png the story-sized one (1080x1920). Public, like the page."""
+    if name not in ("card", "story"):
+        raise HTTPException(404, "not found")
+    settings = get_settings()
+    run_id = shares.run_for_token(settings.settings_db_path, token)
+    if not run_id:
+        raise HTTPException(404, "not found")
+    settings.ensure_dirs()
+    conn = connect(settings.council_db_path)
+    try:
+        run = load_run(conn, run_id)
+    finally:
+        conn.close()
+    if run is None:
+        raise HTTPException(404, "not found")
+    # Cached for an hour: a scored period shows up on the image after that.
+    return await _card_response(run, "story" if name == "story" else "og", request, 3600)
+
+
+@app.get("/api/runs/{run_id}/image.png")
+async def run_image(run_id: str, request: Request, format: str = "story"):
+    """A share image of one of your runs, for the Share button (no public
+    link needed to post an image)."""
+    run = _run_owner(request, run_id)
+    return await _card_response(run, "og" if format == "og" else "story", request, 0)
 
 
 @app.get("/api/archives")

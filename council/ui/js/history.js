@@ -64,7 +64,7 @@ function runTags(run) {
 function renderTable() {
   const filter = document.getElementById('ticker-filter').value.trim().toUpperCase();
   const rows = runs
-    .filter(r => !filter || r.ticker.includes(filter))
+    .filter(r => !filter || r.ticker.includes(filter) || (r.company || '').toUpperCase().includes(filter))
     .sort((a, b) => {
       const v = {
         ticker: () => a.ticker.localeCompare(b.ticker),
@@ -84,7 +84,7 @@ function renderTable() {
   }
   body.innerHTML = rows.map(run => `
     <tr class="clickable" data-run="${escapeHtml(run.run_id)}" tabindex="0">
-      <td><b>${escapeHtml(run.ticker)}</b></td>
+      <td><b>${escapeHtml(run.ticker)}</b>${run.company ? `<span class="ticker-company">${escapeHtml(run.company)}</span>` : ''}</td>
       <td class="muted">${fmtDate(run.created_at, true)}</td>
       ${TERMS.map(t => termCell(run, t)).join('')}
       <td>${runTags(run)}</td>

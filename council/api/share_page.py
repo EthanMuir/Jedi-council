@@ -199,6 +199,7 @@ _STYLE = """
   .score { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; border-radius: 99px; padding: 3px 10px; }
   .score.right { color: var(--up); background: var(--up-soft); }
   .score.wrong { color: var(--down); background: var(--down-soft); }
+  h1 .company { font-size: 17px; font-weight: 500; letter-spacing: 0; color: var(--muted); }
   .target { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
   .target b { color: var(--ink); }
   .seats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -244,20 +245,25 @@ def _header(signed_in: bool) -> str:
 
 def render(run: dict, base_url: str, url: str, signed_in: bool = False) -> str:
     ticker = run["ticker"]
+    company = run.get("company") or (run.get("synthesis") or {}).get("company") or ""
+    named = f"{ticker} ({company})" if company else ticker
+    image_alt = f"{named}: the Council's lean for the next week, 3 months and year"
     leans = term_leans(run)
     headline = _headline(run, leans)
     when = _date_label(run["created_at"])
-    title = f"{ticker}: what twelve AIs think · Ticker Council"
-    description = f"Twelve AI analysts debated {ticker} on {when}. {headline}"
+    title = f"{named}: what twelve AIs think · Ticker Council"
+    description = f"Twelve AI analysts debated {named} on {when}. {headline}"
     head = f"""<meta name="description" content="{escape(description)}" />
 <meta property="og:type" content="article" />
 <meta property="og:site_name" content="Ticker Council" />
-<meta property="og:title" content="{escape(f'{ticker}: twelve AIs debated it. Here is the verdict.')}" />
+<meta property="og:title" content="{escape(f'{named}: twelve AIs debated it. Here is the verdict.')}" />
 <meta property="og:description" content="{escape(headline)}" />
 <meta property="og:url" content="{escape(url)}" />
-<meta property="og:image" content="{escape(base_url)}/icons/og.png" />
+<meta property="og:image" content="{escape(url)}/card.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="{escape(image_alt)}" />
+<meta name="twitter:image" content="{escape(url)}/card.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="robots" content="noindex" />"""
     terms = "".join(_term_row(run, t, leans.get(t)) for t in TERMS if t in leans)
@@ -266,7 +272,7 @@ def render(run: dict, base_url: str, url: str, signed_in: bool = False) -> str:
     body = f"""{_header(signed_in)}
 <main class="wrap">
   <p class="eyebrow">The Council's verdict · {escape(when)}{' · sample answers, not a real run' if sample else ''}</p>
-  <h1>{escape(ticker)}</h1>
+  <h1>{escape(ticker)}{f' <span class="company">{escape(company)}</span>' if company else ''}</h1>
   <p class="headline">{escape(headline)}</p>
   <section class="card" aria-label="The Council's position">
     <h2>Which way it leans</h2>

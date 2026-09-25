@@ -466,7 +466,8 @@ class DataService:
         metadata, not price data. {} when no provider knows the ticker."""
         try:
             return await self._fetch_with_fallback(
-                "fetch_market_profile", f"profile:{ticker}", _TTL_SECONDS["profile"], ticker
+                # "profile2": entries cached before the company name was added are skipped.
+                "fetch_market_profile", f"profile2:{ticker}", _TTL_SECONDS["profile"], ticker
             )
         except RuntimeError:
             return {}

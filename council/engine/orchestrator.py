@@ -456,6 +456,12 @@ async def run_deliberation(
         )
     price_at_prediction = price_series.bars[-1].close
 
+    # The company's name, shown next to the ticker. Display only: seats
+    # never see it (several read the stock anonymised).
+    company = (await data_service.get_market_profile(ticker)).get("name")
+    if company:
+        await emit("company", {"name": company})
+
     # Earnings in the next week make the short term close to a coin flip:
     # the price jumps on the report in a way no seat can call.
     next_earnings = await data_service.get_next_earnings(ticker, as_of)
@@ -917,7 +923,7 @@ async def run_deliberation(
     # model, or Groq after an overflow, not just what routing intended.
     model_used = {c.seat_id: (c.model, c.provider) for c in llm_client.call_log if c.success}
     synthesis_json = json.dumps(
-        {**synthesis.model_dump(), "terms": terms_payload, "replay": replay}, default=str
+        {**synthesis.model_dump(), "terms": terms_payload, "replay": replay, "company": company}, default=str
     )
     prosecutor_json = json.dumps([pv.model_dump() for pv in prosecutor_verdicts])
 

@@ -245,6 +245,7 @@ class YFinanceProvider:
             except Exception:  # noqa: BLE001 -- peers are optional; the sector fund still works
                 peers = []
         return {
+            "name": info.get("longName") or info.get("shortName"),
             "sector_key": sector_key,
             "sector": info.get("sector"),
             "industry_key": industry_key,

@@ -33,7 +33,7 @@ def load_run(conn: sqlite3.Connection, run_id: str) -> dict | None:
             "resolution": dict(resolution) if resolution else None,
         }
     first = preds[0]
-    return {
+    run = {
         "run_id": run_id,
         "ticker": first["ticker"],
         "created_at": first["created_at"],
@@ -44,6 +44,8 @@ def load_run(conn: sqlite3.Connection, run_id: str) -> dict | None:
         "synthesis": json.loads(first["synthesis_json"]) if first["synthesis_json"] else None,
         "terms": terms,
     }
+    run["company"] = (run["synthesis"] or {}).get("company")
+    return run
 
 
 def vote_p_bullish(verdict: dict) -> float | None:
