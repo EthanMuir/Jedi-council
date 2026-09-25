@@ -97,6 +97,12 @@ def _settings(request: Request) -> Settings:
     return settings_for_account(get_settings(), _account(request))
 
 
+# Runs still going after their page lost the connection (a phone locking
+# its screen drops the stream). Held here so they finish and save to
+# History instead of being garbage-collected or cancelled with the request.
+_DETACHED_RUNS: set[asyncio.Task] = set()
+
+
 @app.get("/api/deliberate/stream")
 async def deliberate_stream(
     request: Request,
@@ -156,15 +162,17 @@ async def deliberate_stream(
             finally:
                 await queue.put((None, None))
 
+        # Its own task, never awaited from the request: when the page goes
+        # away mid-run (the phone locks, the tab closes), the request is
+        # cancelled but the run carries on and still saves to History.
         task = asyncio.create_task(run())
-        try:
-            while True:
-                event, payload = await queue.get()
-                if event is None:
-                    break
-                yield f"event: {event}\ndata: {json.dumps(payload)}\n\n"
-        finally:
-            await task
+        _DETACHED_RUNS.add(task)
+        task.add_done_callback(_DETACHED_RUNS.discard)
+        while True:
+            event, payload = await queue.get()
+            if event is None:
+                break
+            yield f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
     return StreamingResponse(
         event_generator(),

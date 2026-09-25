@@ -188,6 +188,7 @@ async function startRun(e) {
   history.replaceState(null, '', '/index.html');
   saveState();
   showRun();
+  noteEarlierRuns(state);
 
   let url = `/api/deliberate/stream?ticker=${encodeURIComponent(ticker)}`;
   if (context) url += `&context=${encodeURIComponent(context)}`;
@@ -202,16 +203,20 @@ async function startRun(e) {
       onEvent(event, payload);
     }, { signal: controller.signal });
     if (state === mine && state.status === 'running') {
-      state.status = 'done';
+      // The stream closed without a "done": the connection dropped quietly.
+      state.status = 'detached';
       saveState();
       renderAll();
+      watchForResult();
     }
   } catch (err) {
     if (controller.signal.aborted || state !== mine) return;
-    state.alerts.push({ kind: 'stop', title: 'Lost the connection.', message: `${err.message} The run may still finish -- check History in a few minutes.` });
-    state.status = 'error';
+    // Usually the phone locked or the browser paused the page. The run
+    // carries on on the server; watch for it to land in History.
+    state.status = 'detached';
     saveState();
     renderAll();
+    watchForResult();
   } finally {
     if (listening === controller) listening = null;
   }
@@ -219,6 +224,7 @@ async function startRun(e) {
 
 function newRun() {
   extrasFor = null;
+  if (watchTimer) { clearTimeout(watchTimer); watchTimer = null; }
   document.getElementById('share-btn').hidden = true;
   document.getElementById('share-card').hidden = true;
   document.getElementById('changes').hidden = true;
@@ -404,7 +410,9 @@ function renderAlerts() {
     extra.push({ kind: 'warn', title: 'Earnings soon.', message: state.earnings.message });
   }
   if (state.status === 'detached') {
-    extra.push({ kind: 'info', title: 'Still running.', message: 'You left this page while the run was going. It carries on without you and will be in History when it finishes.' });
+    extra.push({ kind: 'info', title: 'Still running.', message: state.watchGaveUp
+      ? 'This run hasn\'t shown up in History yet. It may still be going (runs on free models can take a while); check History later.'
+      : 'The live view lost its connection (a locked phone does this), but the run carries on. The result will open here as soon as it\'s saved.' });
   }
   box.innerHTML = [...state.alerts, ...extra].map(a => `
     <div class="alert ${a.kind === 'stop' ? 'alert-stop' : a.kind === 'warn' ? 'alert-warn' : ''}" role="${a.kind === 'stop' ? 'alert' : 'status'}">
@@ -473,6 +481,60 @@ function renderPositions() {
     ? 'Chance the price is higher at the end of each period · dots are seats'
     : 'Which way the price is likely to go · dots are seats';
 }
+
+// ---- picking a run back up after the connection drops ----------------------------
+
+// The ticker's runs already in History when this run started, so the new
+// one can be told apart when it lands.
+function noteEarlierRuns(s) {
+  fetchJSON(`/api/predictions?ticker=${encodeURIComponent(s.meta.ticker)}&limit=10`)
+    .then(r => { s.meta.earlier = r.runs.map(x => x.run_id); saveState(); })
+    .catch(() => {});
+}
+
+let watchTimer = null;
+const WATCH_EVERY_MS = 8000;
+const WATCH_FOR_MS = 30 * 60 * 1000;
+
+function watchForResult() {
+  if (watchTimer || !state || state.status !== 'detached') return;
+  const mine = state;
+  const started = Date.parse(mine.meta.created_at) || Date.now();
+  async function check() {
+    watchTimer = null;
+    if (state !== mine || mine.status !== 'detached') return;
+    try {
+      const r = await fetchJSON(`/api/predictions?ticker=${encodeURIComponent(mine.meta.ticker)}&limit=5`);
+      const earlier = new Set(mine.meta.earlier || []);
+      // Without the list of earlier runs, fall back to "saved after this
+      // run started" (with slack for the phone's clock being off).
+      const found = r.runs.find(x => mine.meta.earlier
+        ? !earlier.has(x.run_id)
+        : Date.parse(x.created_at + (x.created_at.endsWith('Z') ? '' : 'Z')) > started - 10 * 60 * 1000);
+      if (found && state === mine) {
+        clearSavedState();
+        history.replaceState(null, '', `/index.html?run=${encodeURIComponent(found.run_id)}`);
+        openSavedRun(found.run_id);
+        return;
+      }
+    } catch (e) { /* offline for now; try again */ }
+    if (Date.now() - started > WATCH_FOR_MS) {
+      mine.watchGaveUp = true;
+      saveState();
+      renderAlerts();
+      return;
+    }
+    watchTimer = setTimeout(check, WATCH_EVERY_MS);
+  }
+  watchTimer = setTimeout(check, 1500);
+}
+
+// Coming back to the page (unlocking the phone) checks straight away.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !state || state.status !== 'detached') return;
+  if (watchTimer) { clearTimeout(watchTimer); watchTimer = null; }
+  watchForResult();
+});
 
 // ---- sharing and "what changed" ------------------------------------------------
 
@@ -864,10 +926,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const saved = loadSavedState();
   if (saved?.meta) {
     state = saved;
-    // The live stream can't be picked back up after leaving the page.
+    // The live stream can't be picked back up after leaving the page,
+    // but the run carries on: watch for it to land in History.
     if (state.status === 'running') state.status = 'detached';
     state.stages = {};
     showRun();
+    if (state.status === 'detached') watchForResult();
     return;
   }
   // Free Mode's limits go further with Lite runs, so that's its default.
