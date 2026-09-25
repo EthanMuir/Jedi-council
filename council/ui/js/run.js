@@ -1072,13 +1072,27 @@ function renderSections() {
 
 const POPULAR = ['NVDA', 'AAPL', 'TSLA', 'MSFT', 'AMZN'];
 
-// The chamber: the twelve seats in an arc over the title. Tapping one says
-// what it reads.
-const SEAT_INITIALS = {
-  technician: 'PC', fundamentalist: 'FI', analyst_ratings: 'AT', estimate_scribe: 'EE',
-  insider_reader: 'IT', senate_watcher: 'CT', catalyst_seer: 'NW', structure_archivist: 'SF',
-  flow_cartographer: 'IH', oracle_options: 'OM', macro_sage: 'EC', cross_market: 'RM',
+// The chamber: the twelve seats in an arc over the title, each with its
+// own icon. Tapping one says what it reads.
+// A simple line icon for each seat (24x24, drawn in the text colour).
+const SEAT_ICONS = {
+  technician: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/>',
+  fundamentalist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  analyst_ratings: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>',
+  estimate_scribe: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
+  insider_reader: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M3 13h18"/>',
+  senate_watcher: '<path d="M3 21h18M5 21V10M9.5 21V10M14.5 21V10M19 21V10"/><path d="M2.5 10L12 4l9.5 6z"/>',
+  catalyst_seer: '<path d="M4 5h13v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v10a2 2 0 0 1-2 2"/><path d="M8 9h5M8 13h5M8 17h3"/>',
+  structure_archivist: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 14l2 2 4-4"/>',
+  flow_cartographer: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  oracle_options: '<path d="M7 20V4M3 8l4-4 4 4"/><path d="M17 4v16M13 16l4 4 4-4"/>',
+  macro_sage: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>',
+  cross_market: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7l7.4.6M7 8.3l1.4 7.3M16.4 10l-5.6 6.2"/>',
 };
+
+function seatIcon(id) {
+  return `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SEAT_ICONS[id] || '<circle cx="12" cy="12" r="6"/>'}</svg>`;
+}
 
 function buildChamber() {
   const box = document.getElementById('chamber-seats');
@@ -1091,7 +1105,7 @@ function buildChamber() {
     const x = 50 + 42 * Math.cos(a);
     const y = 82 + 74 * Math.sin(a);
     return `<button class="chamber-seat" type="button" data-seat="${seat.id}" aria-pressed="false"
-      style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" aria-label="${escapeHtml(seat.name)}">${SEAT_INITIALS[seat.id] || ''}</button>`;
+      style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%" aria-label="${escapeHtml(seat.name)}" title="${escapeHtml(seat.name)}">${seatIcon(seat.id)}</button>`;
   }).join('');
   box.querySelectorAll('.chamber-seat').forEach(btn => {
     btn.onclick = () => {
