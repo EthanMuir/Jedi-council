@@ -2,10 +2,10 @@
 
 /* ---------- start a run: the centred hero ---------- */
 /* Centred in the space under the nav; the Getting started checklist
-   sits below it. overflow: clip keeps the ring from ever widening the page. */
+   sits below it. */
 .hero {
   min-height: calc(100svh - 150px); display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; justify-items: center;
-  gap: 18px; padding: 24px 0 32px; text-align: center; overflow: clip;
+  gap: 18px; padding: 24px 0 32px; text-align: center;
 }
 /* The chamber: twelve seats in an arc with the title inside it. */
 /* Seats and title scale with the chamber's own width (cqw), so the arc keeps
