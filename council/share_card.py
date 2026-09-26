@@ -16,7 +16,7 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from council.api.run_views import direction, term_leans
 from council.engine.horizons import TERMS
@@ -34,7 +34,8 @@ MUTED = (154, 163, 178)
 FAINT = (98, 108, 124)
 TRACK = (38, 47, 61)
 ACCENT = (110, 150, 255)
-COLOURS = {"up": (47, 191, 113), "down": (239, 91, 91), "even": (214, 170, 60), "noread": (120, 128, 140)}
+# Soft teal / rose / amber: reads as up / down / even without a flat traffic-light green.
+COLOURS = {"up": (94, 234, 212), "down": (251, 113, 133), "even": (251, 191, 36), "noread": (120, 128, 140)}
 
 TERM_LABEL = {"short": "Next week", "medium": "Next 3 months", "long": "Next year"}
 
@@ -147,20 +148,45 @@ class _Canvas:
         return buf.getvalue()
 
 
-def _bar(c: _Canvas, x0: float, x1: float, cy: float, p: float | None, height: float, knob: float) -> None:
-    """The lean bar: a track spanning a 25%-75% chance of rising, the middle
-    marked, filled from the middle to the Council's position."""
+def _bar(c: _Canvas, x0: float, x1: float, cy: float, p: float | None, height: float, knob: float = 0) -> None:
+    """The lean bar: a slim track spanning a 25%-75% chance of rising, the
+    middle marked, and a fill running out from the middle to the Council's
+    position -- faint at the middle, solid at its rounded end, with a soft
+    glow. No knob."""
     c.rounded((x0, cy - height / 2, x1, cy + height / 2), height / 2, TRACK)
     mid = (x0 + x1) / 2
-    c.rounded((mid - 1.5, cy - height, mid + 1.5, cy + height), 1.5, FAINT)
-    if p is None:
-        return
-    dir_ = direction(p)
-    x = x0 + max(0.0, min(1.0, (p - 0.25) / 0.5)) * (x1 - x0)
-    colour = COLOURS[dir_]
-    if dir_ != "even":
-        c.rounded((min(x, mid), cy - height / 2, max(x, mid), cy + height / 2), height / 2, colour)
-    c.circle(x, cy, knob, BG_BOTTOM, outline=colour, width=knob * 0.42)
+    if p is not None and direction(p) != "even":
+        x = x0 + max(0.0, min(1.0, (p - 0.25) / 0.5)) * (x1 - x0)
+        _gradient_fill(c, mid, x, cy, height, COLOURS[direction(p)])
+    c.rounded((mid - 1.5, cy - height * 0.95, mid + 1.5, cy + height * 0.95), 1.5, FAINT)
+
+
+def _gradient_fill(c: _Canvas, mid: float, end: float, cy: float, height: float, colour: tuple) -> None:
+    left, right = sorted((mid, end))
+    w, h = max(1, c.s(right - left)), max(1, c.s(height))
+    # Alpha runs from faint at the middle line to solid at the far end.
+    ramp = Image.linear_gradient("L").rotate(90, expand=True).resize((w, h))
+    if end < mid:
+        ramp = ramp.transpose(Image.FLIP_LEFT_RIGHT)
+    alpha = ramp.point(lambda v: 50 + int(v * (255 - 50) / 255))
+    shape = Image.new("L", (w, h), 0)
+    r = h // 2
+    draw = ImageDraw.Draw(shape)
+    draw.rounded_rectangle([0, 0, w - 1, h - 1], radius=r, fill=255)
+    # Square off the end that sits on the middle line.
+    if end >= mid:
+        draw.rectangle([0, 0, min(r, w - 1), h - 1], fill=255)
+    else:
+        draw.rectangle([max(0, w - 1 - r), 0, w - 1, h - 1], fill=255)
+    mask = ImageChops.multiply(alpha, shape)
+    x, y = c.s(left), c.s(cy - height / 2)
+    # A soft glow under the fill.
+    pad = h * 2
+    glow = Image.new("L", (w + pad * 2, h + pad * 2), 0)
+    glow.paste(mask, (pad, pad))
+    glow = glow.filter(ImageFilter.GaussianBlur(h * 0.9)).point(lambda v: int(v * 0.55))
+    c.img.paste(Image.new("RGB", glow.size, colour), (x - pad, y - pad), glow)
+    c.img.paste(Image.new("RGB", (w, h), colour), (x, y), mask)
 
 
 def _scored(run: dict, term: str) -> bool | None:
@@ -196,7 +222,7 @@ def render_og(run: dict, site: str) -> bytes:
         p = leans.get(term)
         cy = row_y + i * row_gap
         c.text((pad, cy), TERM_LABEL[term], "SemiBold", 30, INK, anchor="lm")
-        _bar(c, pad + label_w, c.w - pad - words_w, cy, p, 14, 16)
+        _bar(c, pad + label_w, c.w - pad - words_w, cy, p, 10)
         words = lean_words(p)
         scored = _scored(run, term)
         c.text((c.w - pad, cy), words, "Bold", 32, COLOURS[direction(p)], anchor="rm")
@@ -250,7 +276,7 @@ def render_story(run: dict, site: str) -> bytes:
             c.text((right_edge + 14, top + 56), "·", "Bold", 34, FAINT, anchor="ms")
             right_edge -= 14
         c.text((right_edge, top + 56), lean_words(p), "Bold", 34, COLOURS[direction(p)], anchor="rs")
-        _bar(c, inner, c.w - inner, top + 104, p, 18, 21)
+        _bar(c, inner, c.w - inner, top + 104, p, 12)
         target = (terms.get(term) or {}).get("price_target")
         if target and p is not None:
             like = target["target"]

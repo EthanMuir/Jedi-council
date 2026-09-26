@@ -656,9 +656,9 @@ function renderShare() {
   const canShareFiles = !!(navigator.canShare && window.File);
   const imageSection = `
     <div class="share-image">
-      <a class="share-thumb" href="${shareImageUrl()}" target="_blank" rel="noopener" aria-label="Open the image full size">
+      <button class="share-thumb" type="button" id="share-thumb" aria-label="Share or save this image">
         <img src="${shareImageUrl()}" alt="The result as a story image: ${escapeHtml(state.meta.ticker)}'s three bars" loading="lazy" />
-      </a>
+      </button>
       <div class="share-image-text">
         <b>Post it as an image</b>
         <p class="faint">Story-sized for Instagram, TikTok and Snapchat: the bars, the headline and the price targets. ${sh.shared ? 'Add your link as a link sticker.' : 'Create a link below to add as a link sticker.'}</p>
@@ -694,6 +694,9 @@ function renderShare() {
     <div class="share-actions share-foot"><button class="btn btn-small btn-quiet" type="button" id="share-close">Close</button></div>`;
 
   document.getElementById('share-image').onclick = e => shareImage(e.currentTarget);
+  // Tapping the preview does the same: never open the bare image, which
+  // strands someone using the Home Screen app (it has no back button).
+  document.getElementById('share-thumb').onclick = e => shareImage(e.currentTarget);
   const save = document.getElementById('save-image');
   if (save) {
     save.onclick = async () => {

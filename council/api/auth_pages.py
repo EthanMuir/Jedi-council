@@ -473,10 +473,10 @@ _LANDING_STYLE = """
   .terms { margin-top: 18px; }
   .term-row { display: grid; grid-template-columns: 82px minmax(0, 1fr) 92px; gap: 12px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); font-size: 14px; }
   .term-row b { font-weight: 600; }
-  .track { position: relative; height: 10px; border-radius: 99px; background: var(--track); }
-  .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--line-strong); border-radius: 1px; }
-  .fill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--up) 45%, transparent), var(--up)); box-shadow: var(--glow-bar) var(--up); transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
-  .knob { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--knob); border: 3px solid var(--up); box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: left 1.1s cubic-bezier(.2,.8,.2,1); }
+  .track { position: relative; height: 8px; border-radius: 99px; background: var(--track); }
+  .mid { position: absolute; left: 50%; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--line-strong); border-radius: 1px; }
+  /* The lean: a fill running out from the middle line, fading in toward its rounded end. */
+  .fill { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-radius: 0 99px 99px 0; background: linear-gradient(90deg, color-mix(in srgb, var(--up) 18%, transparent), var(--up)); box-shadow: var(--glow-bar) color-mix(in srgb, var(--up) 60%, transparent); transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
   .word { text-align: right; font-weight: 600; color: var(--up); opacity: 0; transition: opacity .5s .6s; }
   .demo.bars .word { opacity: 1; }
   .verdict { margin-top: 12px; border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.5; background: var(--surface-2); color: var(--ink); opacity: 0; transform: translateY(6px); transition: opacity .5s, transform .5s; }
@@ -619,7 +619,6 @@ _LANDING_SCRIPT = """
     demo.classList.add('bars');
     rows.forEach(r => {
       const pos = parseFloat(r.dataset.pos);
-      r.querySelector('.knob').style.left = pos + '%';
       r.querySelector('.fill').style.width = Math.max(0, pos - 50) + '%';
     });
   }
@@ -627,7 +626,7 @@ _LANDING_SCRIPT = """
   function reset() {
     demo.classList.remove('bars', 'done');
     seats.forEach(s => s.classList.remove('voted'));
-    rows.forEach(r => { r.querySelector('.knob').style.left = '50%'; r.querySelector('.fill').style.width = '0'; });
+    rows.forEach(r => { r.querySelector('.fill').style.width = '0'; });
     status.textContent = 'Council in session…';
   }
   function play() {
@@ -686,7 +685,7 @@ def landing_page(google_enabled: bool, signed_in: bool = False, base_url: str = 
     )
     demo_terms = "".join(
         f'<div class="term-row" data-pos="{max(0.0, min(1.0, (p - 0.25) / 0.5)) * 100:.1f}"><b>{term}</b>'
-        f'<div class="track"><span class="mid"></span><span class="fill"></span><span class="knob"></span></div>'
+        f'<div class="track"><span class="mid"></span><span class="fill"></span></div>'
         f'<span class="word">{word}</span></div>'
         for term, p, word in _DEMO_TERMS
     )
