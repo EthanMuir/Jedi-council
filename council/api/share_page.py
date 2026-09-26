@@ -99,7 +99,7 @@ def _target(run: dict, term: str) -> str:
         f'<span>Ended at {_price(ended, target["target"])}: {"inside" if landed else "outside"} the range</span>' if ended is not None else ""
     )
     return (
-        f'<div class="target"><span>Price target <b>about {_price(target["target"])}</b></span>'
+        f'<div class="target"><span>Price target about <b>{_price(target["target"])}</b></span>'
         f'<span>{target["chance_pct"]}% chance {_price(target["low"], target["target"])}–{_price(target["high"], target["target"])}</span>'
         f'<span>Then {_price(target["price_now"], target["target"])}</span>{end_line}</div>'
     )

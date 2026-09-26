@@ -416,7 +416,7 @@ function targetChanceNote(target) {
 function priceTargetHtml(target, { realised = null, compact = false, note = true } = {}) {
   if (!target) return '';
   if (compact) {
-    return `<div class="target-compact"><span>Price target <b class="num">about ${fmtPrice(target.target)}</b></span><span class="faint">${target.chance_pct}% chance ${fmtPrice(target.low, false, target.target)}–${fmtPrice(target.high, false, target.target)}</span></div>`;
+    return `<div class="target-compact"><span>Price target about <b class="num">${fmtPrice(target.target)}</b></span><span class="faint">${target.chance_pct}% chance ${fmtPrice(target.low, false, target.target)}–${fmtPrice(target.high, false, target.target)}</span></div>`;
   }
   const ended = targetEnded(target, realised);
   const points = [target.low, target.high, target.price_now, ended?.price].filter(v => v !== null && v !== undefined);
@@ -432,7 +432,7 @@ function priceTargetHtml(target, { realised = null, compact = false, note = true
   return `
     <details class="target">
       <summary>
-        <span>Price target <b class="num">about ${fmtPrice(target.target)}</b></span>
+        <span>Price target about <b class="num">${fmtPrice(target.target)}</b></span>
         ${endedText}
       </summary>
       <div class="target-body">

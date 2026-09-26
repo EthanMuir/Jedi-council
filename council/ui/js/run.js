@@ -504,8 +504,14 @@ function renderPositions() {
            ${final.consensus_pct ? `<span class="tiny">${Math.round(final.consensus_pct)}% of leaning seats agree</span>` : ''}`
         : `<span class="big ${dir}">${leanWords(p)}</span><span class="tiny">${tiny}</span>`;
     }
-    const warnings = (s.synthesis?.terms?.[term]?.warnings || s.warnings?.terms?.[term] || [])
-      .map(w => `<div class="pos-warn">${aiText(w.message)}</div>`).join('');
+    const termWarnings = s.synthesis?.terms?.[term]?.warnings || s.warnings?.terms?.[term] || [];
+    // The Challenger's objection can run long, so it folds away behind one line.
+    const warnings = termWarnings.map(w => (w.kind === 'prosecutor'
+      ? `<details class="pos-objection">
+          <summary><span class="pos-objection-title">The Challenger objected</span><span class="pos-objection-more">See why</span></summary>
+          <p>${aiText(w.message.replace(/^The (Prosecutor|Challenger) objected:\s*/, ''))}</p>
+        </details>`
+      : `<div class="pos-warn">${aiText(w.message)}</div>`)).join('');
     const syn = s.synthesis;
     const noteText = syn ? (expert ? (syn[term] || syn.terms?.[term]?.note) : (syn[`plain_${term}`] || syn[term] || syn.terms?.[term]?.note)) : '';
     const extra = expert && final?.expected_move_pct ? `<div class="faint" style="font-size:12px">Expected move about ±${Number(final.expected_move_pct).toFixed(1)}%</div>` : '';
@@ -732,13 +738,24 @@ function renderShare() {
 // The stock's closing price around the run, with the run marked. Each part
 // of the line is green or red by which way it went: into the run, then since
 // it (the part before goes softer once there's a move since to show).
+let priceChartWidth = 0;
+window.addEventListener('resize', () => {
+  const card = document.getElementById('price-card');
+  if (card && !card.hidden && Math.abs(card.clientWidth - priceChartWidth) > 8) renderPriceChart();
+});
+
 function renderPriceChart() {
   const card = document.getElementById('price-card');
   const data = state?.prices;
   const bars = data?.bars || [];
   if (bars.length < 5) { card.hidden = true; return; }
   card.hidden = false;
-  const W = 640, H = 210, L = 10, R = 58, T = 16, B = 26;
+  priceChartWidth = card.clientWidth;
+  // Drawn at the size it's shown (not scaled from a fixed width), so its
+  // labels stay the same size as the rest of the page's small text.
+  const wrapPad = window.innerWidth <= 640 ? 32 : 40;
+  const W = Math.max(280, Math.round((card.clientWidth || 680) - wrapPad));
+  const H = W < 480 ? 190 : 220, L = 0, R = 62, T = 18, B = 26;
   const closes = bars.map(b => b.c);
   let lo = Math.min(...closes), hi = Math.max(...closes);
   const pad = (hi - lo) * 0.08 || hi * 0.02;
