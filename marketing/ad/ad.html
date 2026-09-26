@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ticker Council ad</title>
+<style>
+@font-face { font-family: Inter; font-weight: 400; src: url("../../council/assets/fonts/Inter-Regular.ttf"); }
+@font-face { font-family: Inter; font-weight: 600; src: url("../../council/assets/fonts/Inter-SemiBold.ttf"); }
+@font-face { font-family: Inter; font-weight: 700; src: url("../../council/assets/fonts/Inter-Bold.ttf"); }
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --ink: #141820; --muted: #5a6475; --faint: #8a93a3;
+  --line: #e0e4ea; --accent: #2c56c9; --accent-soft: #e6ecfb; --track: #e9ecf1;
+  --up: #16835a; --up-soft: #e3f3ec; --down: #c23b35; --down-soft: #fbe8e7;
+  --even: #8a6d1c; --even-soft: #f6efd9; --warn: #9a5b00; --warn-soft: #fdf1dc;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); }
+body { font-family: Inter, "DejaVu Sans", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+#frame { position: relative; overflow: hidden; background: var(--bg); }
+.abs { position: absolute; will-change: transform, opacity; }
+#bgglow { inset: 0; background:
+  radial-gradient(1200px 900px at 50% 18%, rgba(44, 86, 201, .10), transparent 60%),
+  radial-gradient(900px 700px at 50% 100%, rgba(22, 131, 90, .06), transparent 60%); }
+#bgdots { inset: 0; background-image: radial-gradient(rgba(20, 24, 32, .07) 1.6px, transparent 1.7px); background-size: 44px 44px; }
+
+/* hook */
+#hook { inset: 0; display: grid; place-items: center; text-align: center; }
+#hook .small { font-size: 88px; font-weight: 600; color: var(--muted); letter-spacing: -1px; }
+#hook .big { font-size: 270px; font-weight: 700; letter-spacing: -10px; line-height: .95; }
+#hook .big span { color: var(--accent); }
+
+/* captions */
+#caption { text-align: center; font-weight: 700; letter-spacing: -2px; line-height: 1.08; }
+#caption .line { position: absolute; left: 0; right: 0; }
+#caption .line em { font-style: normal; color: var(--accent); }
+
+/* stage: every visual lives in a 1080 x 1400 box, placed per orientation */
+#stage { width: 1080px; height: 1400px; transform-origin: 0 0; }
+#glow { left: 90px; top: 10px; width: 900px; height: 900px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(44, 86, 201, .16), rgba(44, 86, 201, 0) 65%); }
+.seat { width: 128px; height: 128px; margin: -64px 0 0 -64px; border-radius: 50%; background: var(--surface);
+  border: 3px solid var(--line); display: grid; place-items: center; color: var(--faint);
+  box-shadow: 0 6px 20px rgba(20, 24, 32, .06); }
+.seat svg { width: 60px; height: 60px; }
+.seat .badge { position: absolute; right: -8px; top: -8px; width: 46px; height: 46px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 22px; font-weight: 700; border: 4px solid var(--bg); }
+#center { left: 340px; top: 360px; width: 400px; text-align: center; }
+#center .tk { font-size: 120px; font-weight: 700; letter-spacing: -4px; line-height: 1; }
+#center .co { font-size: 32px; color: var(--muted); margin-top: 10px; font-weight: 600; }
+
+#bar { left: 130px; top: 1000px; width: 820px; height: 16px; border-radius: 99px; background: var(--track); }
+#barfill { position: absolute; top: 0; bottom: 0; left: 50%; border-radius: 0 99px 99px 0;
+  background: linear-gradient(90deg, rgba(22, 131, 90, .2), var(--up)); box-shadow: 8px 0 18px -6px rgba(22, 131, 90, .45); }
+#bar .mid { position: absolute; left: 50%; top: -10px; bottom: -10px; width: 3px; margin-left: -1.5px; background: #cfd5de; border-radius: 2px; }
+#barlabels { left: 130px; top: 1100px; width: 820px; display: flex; justify-content: space-between; font-size: 28px; color: var(--faint); font-weight: 600; }
+.dot { width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; }
+
+.chip { left: 140px; width: 800px; height: 96px; border-radius: 24px; background: var(--surface);
+  box-shadow: 0 10px 30px rgba(20, 24, 32, .08); border: 2px solid var(--line);
+  display: flex; align-items: center; gap: 22px; padding: 0 30px; font-size: 38px; font-weight: 600; }
+.chip .ic { width: 56px; height: 56px; color: var(--muted); flex: none; }
+.chip .ic svg { width: 100%; height: 100%; }
+.chip .lean { margin-left: auto; padding: 8px 22px; border-radius: 99px; font-size: 32px; font-weight: 700; }
+.lean.up { color: var(--up); background: var(--up-soft); }
+.lean.down { color: var(--down); background: var(--down-soft); }
+.lean.even { color: var(--even); background: var(--even-soft); }
+
+.argue { left: 90px; width: 900px; border-radius: 28px; padding: 30px 36px; font-size: 40px; line-height: 1.3; font-weight: 600;
+  background: var(--surface); box-shadow: 0 12px 34px rgba(20, 24, 32, .09); }
+.argue b { display: block; font-size: 28px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+.argue.bull { border-left: 10px solid var(--up); } .argue.bull b { color: var(--up); }
+.argue.bear { border-left: 10px solid var(--down); } .argue.bear b { color: var(--down); }
+
+/* verdict card */
+#card { left: 60px; top: 70px; width: 960px; height: 1250px; border-radius: 40px; background: var(--surface);
+  box-shadow: 0 30px 80px rgba(20, 24, 32, .12); border: 2px solid var(--line); }
+#card .head { position: absolute; left: 56px; right: 56px; top: 50px; }
+#card .status { font-size: 28px; font-weight: 600; color: var(--up); display: flex; align-items: center; gap: 14px; }
+#card .status i { width: 16px; height: 16px; border-radius: 50%; background: var(--up); display: inline-block; }
+#card .title { margin-top: 18px; display: flex; align-items: baseline; gap: 22px; }
+#card .title .tk { font-size: 88px; font-weight: 700; letter-spacing: -3px; }
+#card .title .co { font-size: 34px; color: var(--muted); font-weight: 600; }
+#card .example { position: absolute; right: 0; top: 0; font-size: 24px; font-weight: 700; color: var(--muted);
+  background: #eef1f5; border-radius: 99px; padding: 8px 18px; letter-spacing: 1px; text-transform: uppercase; }
+.row { position: absolute; left: 56px; right: 56px; }
+.row .top { display: flex; justify-content: space-between; align-items: baseline; }
+.row .term { font-size: 40px; font-weight: 700; }
+.row .term small { display: block; font-size: 26px; color: var(--faint); font-weight: 600; margin-top: 6px; }
+.row .word { font-size: 50px; font-weight: 700; color: var(--up); letter-spacing: -1px; }
+.row .track { position: relative; margin-top: 26px; height: 16px; border-radius: 99px; background: var(--track); }
+.row .fill { position: absolute; top: 0; bottom: 0; left: 50%; border-radius: 0 99px 99px 0;
+  background: linear-gradient(90deg, rgba(22, 131, 90, .2), var(--up)); box-shadow: 8px 0 18px -6px rgba(22, 131, 90, .45); }
+.row .track .mid { position: absolute; left: 50%; top: -9px; bottom: -9px; width: 3px; margin-left: -1.5px; background: #cfd5de; border-radius: 2px; }
+.target { margin-top: 26px; border-radius: 22px; background: #f7f8fa; box-shadow: 0 0 0 2px var(--line);
+  padding: 20px 26px; font-size: 30px; color: var(--muted); display: flex; gap: 24px; }
+.target b { color: var(--ink); }
+#objection { left: 0; top: 0; border-radius: 22px; background: var(--warn-soft); color: var(--warn);
+  font-size: 32px; font-weight: 700; padding: 22px 28px; display: flex; align-items: center; gap: 18px; white-space: nowrap; }
+#objection .ex { width: 40px; height: 40px; border-radius: 50%; border: 4px solid currentColor; display: grid; place-items: center; font-size: 24px; flex: none; }
+#objection .more { margin-left: 40px; font-size: 28px; }
+#scored { font-size: 40px; font-weight: 700; color: var(--up); background: var(--up-soft); border-radius: 99px; padding: 14px 30px;
+  box-shadow: 0 10px 30px rgba(22, 131, 90, .25); white-space: nowrap; }
+#scored small { font-size: 28px; font-weight: 600; margin-left: 10px; }
+
+/* end card */
+#end { inset: 0; display: grid; place-items: center; text-align: center; }
+#end .inner { display: grid; justify-items: center; }
+#end .logo { width: 190px; height: 190px; border-radius: 48px; background: linear-gradient(145deg, #3b6cf0, #7a4fe0);
+  display: grid; place-items: center; color: #fff; box-shadow: 0 24px 60px rgba(44, 86, 201, .35); }
+#end .logo svg { width: 120px; height: 120px; }
+#end .name { font-size: 84px; font-weight: 700; letter-spacing: -2px; margin-top: 40px; }
+#end .name span { color: var(--accent); }
+#end .tag { font-size: 44px; color: var(--muted); font-weight: 600; margin-top: 14px; }
+#end .cta { font-size: 110px; font-weight: 700; letter-spacing: -4px; margin-top: 90px; }
+#end .url { margin-top: 30px; font-size: 56px; font-weight: 700; color: #fff; background: var(--accent); border-radius: 99px; padding: 26px 56px;
+  box-shadow: 0 18px 44px rgba(44, 86, 201, .35); }
+#end .nfa { margin-top: 70px; font-size: 28px; color: var(--faint); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <div id="bgglow" class="abs"></div>
+  <div id="bgdots" class="abs"></div>
+  <div id="hook" class="abs"><div><div class="small">Should you buy</div><div class="big"><span>NVDA</span>?</div></div></div>
+  <div id="caption" class="abs"></div>
+  <div id="stage" class="abs">
+    <div id="glow" class="abs"></div>
+    <div id="seats"></div>
+    <div id="center" class="abs"><div class="tk">NVDA</div><div class="co">NVIDIA Corporation</div></div>
+    <div id="bar" class="abs"><div class="mid"></div><div id="barfill"></div></div>
+    <div id="barlabels" class="abs"><span>◀ Down</span><span>Even</span><span>Up ▶</span></div>
+    <div id="dots"></div>
+    <div id="chips"></div>
+    <div id="bull" class="abs argue bull"><b>Bull case</b>Demand for AI chips is still climbing.</div>
+    <div id="bear" class="abs argue bear"><b>Bear case</b>The stock already looks expensive.</div>
+    <div id="card" class="abs">
+      <div class="head">
+        <div class="status"><i></i>Verdict reached</div>
+        <div class="title"><span class="tk">NVDA</span><span class="co">NVIDIA Corporation</span></div>
+        <span class="example">Example</span>
+      </div>
+      <div id="rows"></div>
+    </div>
+    <div id="objection" class="abs"><span class="ex">!</span>The Challenger objected<span class="more">See why ⌄</span></div>
+    <div id="scored" class="abs">✓ Right<small>price +4.1%</small></div>
+  </div>
+  <div id="end" class="abs"><div class="inner">
+    <div class="logo"><svg viewBox="0 0 32 32"><g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M2.6 20.4C2.4 14.6 7 10.6 12.6 10.6c4.4 0 7.9 2.3 8.2 5.6.2 2.6-1.8 4.2-4.8 4.4l-9.4.2c-1.6 0-3.2.5-4 1.6z"/><path fill="none" stroke-width="2.7" d="M18.2 13.4c1.5-2.6 2.7-5.3 3.1-8.3"/><circle stroke="none" cx="22" cy="4.4" r="2.3"/><path stroke="none" d="M23.6 3.5l3 1.1-3 .9z"/><path fill="none" stroke-width="1.8" d="M10.8 20.4l-1 9.2M14.6 20.4l1.6 9.2"/></g></svg></div>
+    <div class="name">Ticker <span>Council</span></div>
+    <div class="tag">Twelve AIs debate every stock.</div>
+    <div class="cta">Try it free</div>
+    <div class="url">tickercouncil.com</div>
+    <div class="nfa">Not financial advice. Example verdict shown.</div>
+  </div></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const W = +(params.get('w') || 1080), H = +(params.get('h') || 1920);
+const WIDE = W > H;
+const frame = document.getElementById('frame');
+frame.style.width = W + 'px'; frame.style.height = H + 'px';
+
+const ICONS = {
+  technician: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/>',
+  fundamentalist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  analyst_ratings: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>',
+  estimate_scribe: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
+  insider_reader: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M3 13h18"/>',
+  senate_watcher: '<path d="M3 21h18M5 21V10M9.5 21V10M14.5 21V10M19 21V10"/><path d="M2.5 10L12 4l9.5 6z"/>',
+  catalyst_seer: '<path d="M4 5h13v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v10a2 2 0 0 1-2 2"/><path d="M8 9h5M8 13h5M8 17h3"/>',
+  structure_archivist: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M9 14l2 2 4-4"/>',
+  flow_cartographer: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  oracle_options: '<path d="M7 20V4M3 8l4-4 4 4"/><path d="M17 4v16M13 16l4 4 4-4"/>',
+  macro_sage: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>',
+  cross_market: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="M8.3 7l7.4.6M7 8.3l1.4 7.3M16.4 10l-5.6 6.2"/>',
+};
+const svg = id => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[id]}</svg>`;
+// Stylised example reads: [seat, lean, p]
+const SEATS = [
+  ['technician', 'up', .63], ['fundamentalist', 'up', .6], ['analyst_ratings', 'up', .61], ['estimate_scribe', 'up', .58],
+  ['insider_reader', 'down', .43], ['senate_watcher', 'even', .5], ['catalyst_seer', 'up', .62], ['structure_archivist', 'even', .5],
+  ['flow_cartographer', 'up', .57], ['oracle_options', 'up', .64], ['macro_sage', 'down', .45], ['cross_market', 'up', .59],
+];
+const COLORS = { up: '#16835a', down: '#c23b35', even: '#8a6d1c' };
+const ARROW = { up: '▲', down: '▼', even: '●' };
+const CX = 540, CY = 460, R = 340;
+const seatPos = i => { const a = -Math.PI / 2 + (i / 12) * Math.PI * 2; return [CX + R * Math.cos(a), CY + R * Math.sin(a)]; };
+const BAR_L = 130, BAR_W = 820, BAR_Y = 1008;
+const barX = p => BAR_L + Math.max(0, Math.min(1, (p - 0.25) / 0.5)) * BAR_W;
+
+// Build seats and dots.
+const seatEls = SEATS.map(([id, lean], i) => {
+  const el = document.createElement('div');
+  el.className = 'abs seat';
+  const [x, y] = seatPos(i);
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  el.innerHTML = svg(id) + `<span class="badge" style="background:${COLORS[lean]};color:#fff">${ARROW[lean]}</span>`;
+  document.getElementById('seats').appendChild(el);
+  return el;
+});
+const stacks = {};
+const dotEls = SEATS.map(([, lean, p], i) => {
+  const el = document.createElement('div');
+  el.className = 'abs dot';
+  el.style.background = COLORS[lean];
+  const key = Math.round(barX(p) / 24);
+  stacks[key] = (stacks[key] || 0) + 1;
+  el._to = [barX(p), BAR_Y + 44 + (stacks[key] - 1) * 26];
+  el._from = seatPos(i);
+  document.getElementById('dots').appendChild(el);
+  return el;
+});
+const CHIPS = [['technician', 'Price Chart', 'up'], ['insider_reader', 'Insider Trades', 'down'], ['catalyst_seer', 'News', 'up']];
+const chipEls = CHIPS.map(([id, name, lean], k) => {
+  const el = document.createElement('div');
+  el.className = 'abs chip';
+  el.style.top = (1160 + k * 108) + 'px';
+  el.innerHTML = `<span class="ic">${svg(id)}</span>${name}<span class="lean ${lean}">${ARROW[lean]} ${lean}</span>`;
+  document.getElementById('chips').appendChild(el);
+  return el;
+});
+document.getElementById('bull').style.top = '1150px';
+document.getElementById('bear').style.top = '1290px';
+
+const ROWS = [['Next week', 'Scored in 7 days', .56, 'Leaning up'], ['Next 3 months', 'Scored in 3 months', .62, 'Up'], ['Next year', 'Scored in a year', .68, 'Strongly up']];
+const ROW_TOP = [290, 640, 990];
+const rowEls = ROWS.map(([term, sub, p, word], k) => {
+  const el = document.createElement('div');
+  el.className = 'row';
+  el.style.top = ROW_TOP[k] + 'px';
+  el.innerHTML = `<div class="top"><div class="term">${term}<small>${sub}</small></div><div class="word">${word}</div></div>
+    <div class="track"><div class="mid"></div><div class="fill"></div></div>
+    ${k === 0 ? '<div class="target">Price target about <b>$196</b><span>70% chance $171–$222</span></div>' : ''}`;
+  el._p = p;
+  document.getElementById('rows').appendChild(el);
+  return el;
+});
+
+// Captions: [start, end, html]
+const CAPTIONS = [
+  [1.5, 4.0, 'Ask <em>12 AI analysts.</em>'],
+  [4.0, 6.0, 'Each reads <em>different data.</em>'],
+  [6.0, 8.0, 'Then they <em>argue.</em>'],
+  [8.0, 11.5, 'One <em>clear verdict.</em>'],
+  [11.5, 13.0, 'Every call gets <em>scored.</em>'],
+];
+const cap = document.getElementById('caption');
+const capEls = CAPTIONS.map(([, , html]) => {
+  const el = document.createElement('div');
+  el.className = 'line';
+  el.innerHTML = html;
+  cap.appendChild(el);
+  return el;
+});
+
+// Layout per orientation.
+const stage = document.getElementById('stage');
+let S, SX, SY;
+if (WIDE) {
+  S = 0.66; SX = 1920 - 1080 * S - 150; SY = (1080 - 1480 * S) / 2 - 10;
+  Object.assign(cap.style, { left: '110px', top: '0px', width: '760px', height: '1080px', fontSize: '96px', textAlign: 'left' });
+  capEls.forEach(e => { e.style.top = '430px'; });
+} else {
+  S = 0.84; SX = (1080 - 1080 * S) / 2; SY = 400;  // keeps clear of TikTok's bottom caption and side buttons
+  Object.assign(cap.style, { left: '60px', top: '150px', width: '960px', height: '300px', fontSize: '92px' });
+  capEls.forEach(e => { e.style.top = '60px'; });
+}
+if (WIDE) {
+  document.querySelector('#hook .big').style.fontSize = '260px';
+  document.querySelector('#end .cta').style.marginTop = '46px';
+  document.querySelector('#end .nfa').style.marginTop = '40px';
+  document.querySelector('#end .inner').style.transform = 'scale(.8)';
+}
+
+// Timing helpers.
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const easeBack = x => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const set = (el, o, tf) => { el.style.opacity = o; el.style.transform = tf || ''; el.style.visibility = o <= 0.001 ? 'hidden' : 'visible'; };
+const window2 = (t, a, b, fin = .25, fout = .2) => Math.min(prog(t, a, a + fin), 1 - prog(t, b - fout, b));
+
+function render(t) {
+  // Hook: 0-1.5s
+  const hook = document.getElementById('hook');
+  const hin = easeBack(prog(t, 0.05, 0.45));
+  const hout = prog(t, 1.3, 1.55);
+  const shake = t > .35 && t < .6 ? Math.sin(t * 90) * 6 * (1 - prog(t, .35, .6)) : 0;
+  set(hook, Math.min(prog(t, 0.05, 0.2), 1 - hout), `translate(${shake}px, ${-hout * 120}px) scale(${lerp(1.35, 1, hin) * (1 - hout * .15)})`);
+
+  // Background glow breathes gently.
+  document.getElementById('bgglow').style.opacity = .8 + .2 * Math.sin(t * 1.6);
+
+  // Captions
+  CAPTIONS.forEach(([a, b], k) => {
+    const x = window2(t, a, b);
+    const enter = easeOut(prog(t, a, a + .3));
+    const y = (1 - enter) * 50 - prog(t, b - .2, b) * 30;
+    set(capEls[k], x, `translateY(${y}px)`);
+  });
+
+  // Stage placement; it lifts away at the end.
+  const endOut = easeInOut(prog(t, 12.9, 13.3));
+  set(stage, 1 - endOut, `translate(${SX}px, ${SY - endOut * 120}px) scale(${S})`);
+
+  // Ring: 1.5-8.2
+  const ringIn = easeOut(prog(t, 1.5, 2.0));
+  const ringOut = easeInOut(prog(t, 8.0, 8.4));
+  const ringVis = ringIn * (1 - ringOut);
+  document.getElementById('glow').style.opacity = ringVis * (.7 + .3 * Math.sin(t * 3));
+  set(document.getElementById('center'), ringVis, `scale(${lerp(.85, 1, ringIn) * (1 - ringOut * .2)})`);
+  seatEls.forEach((el, i) => {
+    const lit = prog(t, 1.75 + i * 0.15, 1.95 + i * 0.15);
+    const pop = easeBack(lit);
+    el.style.borderColor = lit > .5 ? '#2c56c9' : '#e0e4ea';
+    el.style.color = lit > .5 ? '#2c56c9' : '#8a93a3';
+    el.style.boxShadow = lit > .5 ? `0 0 0 ${10 * (1 - prog(t, 1.95 + i * .15, 2.5 + i * .15))}px rgba(44,86,201,.18), 0 8px 24px rgba(44,86,201,.18)` : '';
+    set(el, Math.min(ringIn, 1) * (1 - ringOut), `scale(${lerp(.6, 1, pop) * (1 - ringOut * .3)})`);
+    const badge = el.querySelector('.badge');
+    const b = easeBack(prog(t, 4.1 + i * .1, 4.35 + i * .1));
+    set(badge, prog(t, 4.1 + i * .1, 4.2 + i * .1), `scale(${b})`);
+  });
+
+  // Bar + flying dots: 4.0-8.2
+  const barIn = easeOut(prog(t, 4.0, 4.4));
+  const barVis = barIn * (1 - ringOut);
+  set(document.getElementById('bar'), barVis, `scaleX(${lerp(.7, 1, barIn)})`);
+  set(document.getElementById('barlabels'), barVis);
+  let landed = 0, pSum = 0;
+  dotEls.forEach((el, i) => {
+    const f = easeInOut(prog(t, 4.3 + i * 0.13, 4.95 + i * 0.13));
+    const [fx, fy] = el._from, [tx, ty] = el._to;
+    const x = lerp(fx, tx, f), y = lerp(fy, ty, f) - Math.sin(f * Math.PI) * 140;
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    set(el, prog(t, 4.3 + i * .13, 4.4 + i * .13) * (1 - ringOut), `scale(${f >= 1 ? 1 : .8 + .2 * f})`);
+    if (f >= 1) { landed++; pSum += SEATS[i][2]; }
+  });
+  // Fill follows the landed dots, wobbles while they argue, settles at the verdict.
+  let pBar = landed ? pSum / landed : .5;
+  const argue = prog(t, 6.0, 8.0);
+  if (argue > 0) pBar = .58 + Math.sin(argue * Math.PI * 3) * .05 * (1 - argue);
+  const fill = document.getElementById('barfill');
+  const fx = (clamp((pBar - .25) / .5) - .5) * BAR_W;
+  fill.style.width = Math.max(0, fx) + 'px';
+
+  // Read chips: 4.2-6.0
+  chipEls.forEach((el, k) => {
+    const a = 4.5 + k * .35;
+    const x = window2(t, a, 6.1, .3, .25);
+    set(el, x, `translateX(${(1 - easeOut(prog(t, a, a + .35))) * 160 - prog(t, 5.85, 6.1) * 160}px)`);
+  });
+  // Bull and bear: 6.1-8.2
+  const bull = document.getElementById('bull'), bear = document.getElementById('bear');
+  set(bull, window2(t, 6.15, 8.15, .3, .3), `translateX(${(1 - easeBack(prog(t, 6.15, 6.55))) * -300}px) rotate(${-1.2 * (1 - prog(t, 6.15, 6.8))}deg)`);
+  set(bear, window2(t, 6.75, 8.15, .3, .3), `translateX(${(1 - easeBack(prog(t, 6.75, 7.15))) * 300}px) rotate(${1.2 * (1 - prog(t, 6.75, 7.4))}deg)`);
+
+  // Verdict card: 8.6-13
+  const cardIn = easeOut(prog(t, 8.75, 9.25));
+  set(document.getElementById('card'), cardIn, `translateY(${(1 - cardIn) * 80}px) scale(${lerp(.94, 1, cardIn)})`);
+  rowEls.forEach((el, k) => {
+    const a = 9.3 + k * .35;
+    const f = easeOut(prog(t, a, a + .6));
+    const fillEl = el.querySelector('.fill');
+    const w = (clamp((el._p - .25) / .5) - .5) * 848 * f;
+    fillEl.style.width = w + 'px';
+    set(el.querySelector('.word'), prog(t, a + .35, a + .6), `translateY(${(1 - easeOut(prog(t, a + .35, a + .6))) * 20}px)`);
+    set(el.querySelector('.top'), prog(t, a - .15, a + .1));
+    const tg = el.querySelector('.target');
+    if (tg) set(tg, prog(t, 10.2, 10.5), `translateY(${(1 - easeOut(prog(t, 10.2, 10.5))) * 20}px)`);
+  });
+
+  // Challenger objection: pops center at 8.1, docks into the card (3-months row) by 9.9.
+  const obj = document.getElementById('objection');
+  const oIn = easeBack(prog(t, 8.1, 8.45));
+  const dock = easeInOut(prog(t, 8.7, 9.2));
+  const ow = obj.offsetWidth, oh = obj.offsetHeight;
+  const cx0 = 540 - ow / 2, cy0 = 520;
+  const cx1 = 60 + 56, cy1 = 70 + ROW_TOP[1] + 170;
+  const oScale = lerp(1.35, 1, dock) * lerp(.4, 1, oIn);
+  const oshake = t > 8.45 && t < 8.9 ? Math.sin(t * 80) * 8 * (1 - prog(t, 8.45, 8.9)) : 0;
+  obj.style.left = lerp(cx0, cx1, dock) + 'px'; obj.style.top = lerp(cy0, cy1, dock) + 'px';
+  obj.style.transformOrigin = dock > .5 ? '0 0' : '50% 50%';
+  set(obj, prog(t, 8.1, 8.25), `translateX(${oshake}px) scale(${oScale})`);
+
+  // Scored stamp: 11.6
+  const sc = document.getElementById('scored');
+  const sIn = easeBack(prog(t, 11.65, 12.0));
+  sc.style.left = (60 + 960 - 56 - sc.offsetWidth) + 'px';
+  sc.style.top = (70 + ROW_TOP[0] + 22) + 'px';
+  set(sc, prog(t, 11.65, 11.75), `scale(${lerp(1.8, 1, sIn)}) rotate(${lerp(-8, 0, sIn)}deg)`);
+  // The week row's lean word steps aside for the stamp.
+  const w0 = rowEls[0].querySelector('.word');
+  if (t > 11.5) w0.style.opacity = 1 - prog(t, 11.5, 11.65);
+
+  // End card: 13.1-15
+  const eIn = easeOut(prog(t, 13.15, 13.6));
+  const end = document.getElementById('end');
+  set(end, eIn, `${WIDE ? '' : ''}translateY(${(1 - eIn) * 60}px)`);
+  const inner = end.querySelector('.inner');
+  const kids = [...inner.children];
+  kids.forEach((k, i) => {
+    const a = 13.2 + i * .12;
+    const x = easeOut(prog(t, a, a + .35));
+    k.style.opacity = prog(t, a, a + .25);
+    k.style.transform = `translateY(${(1 - x) * 40}px)` + (k.classList.contains('url') ? ` scale(${1 + .04 * Math.sin(Math.max(0, t - 14) * 6) * (t > 14 ? 1 : 0)})` : '');
+  });
+}
+window.render = render;
+render(Number(params.get('t') || 0));
+</script>
+</body>
+</html>

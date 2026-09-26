@@ -11,3 +11,6 @@ venv/
 /data/
 .DS_Store
 /backups/
+/marketing/ad/frames_*/
+/marketing/ad/*.mp4
+/marketing/ad/music.wav
