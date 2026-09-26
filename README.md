@@ -213,7 +213,7 @@ daily limit runs out mid-run. If every usable provider is out -- or a paid
 account runs out of credit -- the run stops with the reason and nothing is
 written to the Crypt. Free runs are labeled `run_mode=free` and scored
 separately in the Archives. **Lite runs** (the Chamber's Full/Lite switch,
-or `lite=true` on the API) make 16 model calls instead of 43: one sample
+or `lite=true` on the API) make 16 model calls instead of 31: one sample
 per seat, one debate round.
 
 ## Run it

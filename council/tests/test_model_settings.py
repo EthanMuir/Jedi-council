@@ -13,14 +13,14 @@ def conn(tmp_path):
 
 def test_no_override_falls_back_to_recommended(conn):
     assert model_settings.get_effective_model(conn, "technician") == "claude-sonnet-5"
-    assert model_settings.get_effective_model(conn, "prosecutor") == "claude-opus-5"
+    assert model_settings.get_effective_model(conn, "prosecutor") == "claude-sonnet-5"
 
 
 def test_set_override_takes_effect(conn):
     model_settings.set_override(conn, "technician", "gpt-5-nano")
     assert model_settings.get_effective_model(conn, "technician") == "gpt-5-nano"
     # other roles unaffected
-    assert model_settings.get_effective_model(conn, "prosecutor") == "claude-opus-5"
+    assert model_settings.get_effective_model(conn, "prosecutor") == "claude-sonnet-5"
 
 
 def test_set_override_twice_updates_not_duplicates(conn):

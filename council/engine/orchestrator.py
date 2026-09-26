@@ -57,6 +57,7 @@ from council.engine.cost_auditor import CostAuditResult, audit
 from council.engine.horizons import TERM_NAMES, TERM_WINDOWS, TERMS, competence, resolve_at_for
 from council.engine.llm_client import LLMClient
 from council.engine.risk_warden import RiskSizing, size_position
+from council.engine.model_catalog import caches_seat_prompts
 from council.engine.routing import planned_run_mode, resolve_route
 from council.engine.sampling import SampledSeatVerdict, aggregate_samples
 from council.engine.schemas import (
@@ -226,6 +227,15 @@ def _run_mode(settings: Settings, call_log: list) -> str:
 # counting it toward the participation warning would make every run's real
 # evidence look thinner than it is.
 _STRUCTURALLY_NO_DATA_SEATS = frozenset({"senate_watcher"})
+
+
+def _caches_samples(seat_id: str, settings: Settings) -> bool:
+    """Whether this seat's repeated samples get Anthropic's cached-prompt
+    price -- only then is it worth sending the first one ahead."""
+    if settings.resolved_no_llm:
+        return False
+    route = resolve_route(seat_id, settings, default_model=settings.seat_model)
+    return route.provider == "anthropic" and caches_seat_prompts(route.model)
 
 
 def _no_data_seats(settings: Settings) -> frozenset[str]:
@@ -530,9 +540,17 @@ async def run_deliberation(
                     "samples_total": n_samples,
                 },
             )
-            answers = await asyncio.gather(
-                *(deliberate_one_tracked(i) for i in range(n_samples))
-            )
+            if n_samples > 1 and _caches_samples(seat.id, settings):
+                # Its first sample goes alone, so the prompt is cached by the
+                # time the others go out and they read it at a tenth of the
+                # price (llm_client.py, prompt caching).
+                first = await deliberate_one_tracked(0)
+                rest = await asyncio.gather(*(deliberate_one_tracked(i) for i in range(1, n_samples)))
+                answers = [first, *rest]
+            else:
+                answers = await asyncio.gather(
+                    *(deliberate_one_tracked(i) for i in range(n_samples))
+                )
             sampled = {
                 t: aggregate_samples(seat.id, [a.term(t) for a in answers]) for t in TERMS
             }

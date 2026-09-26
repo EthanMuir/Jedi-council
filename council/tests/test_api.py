@@ -250,7 +250,7 @@ def test_cost_estimate_reflects_current_overrides(tmp_path, monkeypatch):
 def test_cost_estimate_covers_a_whole_run(client):
     test_client, _settings = client
     response = test_client.get("/api/settings/cost-estimate").json()
-    assert response["total_calls"] == 43
+    assert response["total_calls"] == 31
     assert "horizon" not in response
 
 

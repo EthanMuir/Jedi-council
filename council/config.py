@@ -103,7 +103,7 @@ class Settings(BaseSettings):
     synthesis_model: str = "claude-opus-5"
 
     # sampling / concurrency defaults referenced from Phase 2 onward
-    n_samples_per_seat: int = 3
+    n_samples_per_seat: int = 2
     max_concurrent_llm_calls: int = 8
 
     # Phase 3: Tiers II-IV
@@ -181,9 +181,9 @@ class Settings(BaseSettings):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
 
 
-# A lite run: one sample per seat instead of three, one debate round
-# instead of two -- 16 model calls instead of 43. Cheaper on paid
-# keys, and stretches free-tier daily limits about 2.5x further, at the
+# A lite run: one sample per seat instead of two, one debate round
+# instead of two -- 16 model calls instead of 31. Cheaper on paid
+# keys, and stretches free-tier daily limits about 2x further, at the
 # cost of the dispersion signal multiple samples give.
 LITE_RUN = {"n_samples_per_seat": 1, "debate_rounds": 1}
 

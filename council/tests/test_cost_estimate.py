@@ -52,11 +52,11 @@ def test_total_cost_is_positive_for_anthropic_routed_seats():
     assert estimate.total_calls > 0
 
 
-def test_full_run_is_43_calls_and_lite_is_16():
+def test_full_run_is_31_calls_and_lite_is_16():
     from council.config import as_lite
 
     settings = Settings(**_LIVE_SETTINGS)
-    assert estimate_deliberation_cost("NVDA", settings).total_calls == 43
+    assert estimate_deliberation_cost("NVDA", settings).total_calls == 31
     assert estimate_deliberation_cost("NVDA", as_lite(settings)).total_calls == 16
 
 

@@ -38,6 +38,9 @@ class ModelInfo:
     input_price_per_mtok: float
     output_price_per_mtok: float
     free: bool = False
+    # Anthropic only caches a prompt at least this long (tokens); shorter
+    # ones are billed normally. 0 = no prompt caching for this model.
+    cache_min_tokens: int = 0
 
     @property
     def typical_call_cost_usd(self) -> float:
@@ -49,9 +52,9 @@ class ModelInfo:
 
 CATALOG: list[ModelInfo] = [
     # --- Anthropic ---
-    ModelInfo("claude-opus-5", "anthropic", "Claude Opus 5", 15.00, 75.00),
-    ModelInfo("claude-sonnet-5", "anthropic", "Claude Sonnet 5", 3.00, 15.00),
-    ModelInfo("claude-haiku-4-5-20251001", "anthropic", "Claude Haiku 4.5", 1.00, 5.00),
+    ModelInfo("claude-opus-5", "anthropic", "Claude Opus 5", 15.00, 75.00, cache_min_tokens=4096),
+    ModelInfo("claude-sonnet-5", "anthropic", "Claude Sonnet 5", 3.00, 15.00, cache_min_tokens=1024),
+    ModelInfo("claude-haiku-4-5-20251001", "anthropic", "Claude Haiku 4.5", 1.00, 5.00, cache_min_tokens=4096),
     # --- OpenAI ---
     ModelInfo("gpt-5", "openai", "GPT-5", 1.25, 10.00),
     ModelInfo("gpt-5-mini", "openai", "GPT-5 Mini", 0.25, 2.00),
@@ -77,6 +80,18 @@ def get_model(model_id: str) -> ModelInfo | None:
     return _BY_ID.get(model_id)
 
 
+# A seat's whole prompt (answer format, instructions, its data) runs about
+# 3,000 tokens -- see cost_estimate.py.
+SEAT_PROMPT_TOKENS = 3000
+
+
+def caches_seat_prompts(model_id: str) -> bool:
+    """Whether a seat's repeated samples on this model get the cheaper
+    cached-prompt price (the model caches, and a seat prompt is long enough)."""
+    info = get_model(model_id)
+    return bool(info and info.cache_min_tokens and info.cache_min_tokens <= SEAT_PROMPT_TOKENS)
+
+
 def models_sorted_by_cost(descending: bool = True) -> list[ModelInfo]:
     return sorted(CATALOG, key=lambda m: m.typical_call_cost_usd, reverse=descending)
 
@@ -92,17 +107,17 @@ RECOMMENDED: dict[str, str] = {
     "fundamentalist": "gpt-5",
     "catalyst_seer": "claude-sonnet-5",
     "insider_reader": "claude-sonnet-5",
-    "senate_watcher": "gemini-3-pro",
+    "senate_watcher": "claude-haiku-4-5-20251001",
     "flow_cartographer": "claude-sonnet-5",
     "oracle_options": "claude-sonnet-5",
     "macro_sage": "gemini-3-pro",
     "cross_market": "claude-sonnet-5",
     "estimate_scribe": "gpt-5",
     "analyst_ratings": "gpt-5",
-    "structure_archivist": "claude-sonnet-5",
+    "structure_archivist": "claude-haiku-4-5-20251001",
     "bull_advocate": "claude-sonnet-5",
     "bear_advocate": "gpt-5",
-    "prosecutor": "claude-opus-5",
+    "prosecutor": "claude-sonnet-5",
     "grand_master": "claude-opus-5",
 }
 

@@ -24,21 +24,24 @@ providers:
   google:
     tier: free
 
+# Cost (Sept 2026): Congress Trades and SEC Filings read short, structured
+# data and run on Haiku; the Challenger runs on Sonnet; only the final
+# summary uses Opus.
 seats:
   technician:          {provider: anthropic, model: claude-sonnet-5}
   fundamentalist:      {provider: openai,    model: gpt-5,       fallback_provider: anthropic, fallback_model: claude-sonnet-5}
   catalyst_seer:       {provider: anthropic, model: claude-sonnet-5}
   insider_reader:      {provider: anthropic, model: claude-sonnet-5}
-  senate_watcher:      {provider: google,    model: gemini-3-pro, fallback_provider: anthropic, fallback_model: claude-sonnet-5}
+  senate_watcher:      {provider: anthropic, model: claude-haiku-4-5-20251001}
   flow_cartographer:   {provider: anthropic, model: claude-sonnet-5}
   oracle_options:      {provider: anthropic, model: claude-sonnet-5}
   macro_sage:          {provider: google,    model: gemini-3-pro, fallback_provider: anthropic, fallback_model: claude-sonnet-5}
   cross_market:        {provider: anthropic, model: claude-sonnet-5}
   estimate_scribe:     {provider: openai,    model: gpt-5,       fallback_provider: anthropic, fallback_model: claude-sonnet-5}
   analyst_ratings:     {provider: openai,    model: gpt-5,       fallback_provider: anthropic, fallback_model: claude-sonnet-5}
-  structure_archivist: {provider: anthropic, model: claude-sonnet-5}
+  structure_archivist: {provider: anthropic, model: claude-haiku-4-5-20251001}
 
   bull_advocate:  {provider: anthropic, model: claude-sonnet-5}
   bear_advocate:  {provider: openai,    model: gpt-5, fallback_provider: anthropic, fallback_model: claude-sonnet-5}
-  prosecutor:     {provider: anthropic, model: claude-opus-5}
+  prosecutor:     {provider: anthropic, model: claude-sonnet-5}
   grand_master:   {provider: anthropic, model: claude-opus-5}

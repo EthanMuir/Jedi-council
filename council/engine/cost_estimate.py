@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from council.config import Settings
-from council.engine.model_catalog import get_model
+from council.engine.model_catalog import caches_seat_prompts, get_model
 from council.engine.routing import resolve_route
 
 # Per-call token counts, by call type, measured from real prompts (Sept 2026:
@@ -49,6 +49,16 @@ class CostEstimate:
     @property
     def total_calls(self) -> int:
         return sum(li.call_count for li in self.line_items)
+
+
+def _cached_seat_tokens(model: str, samples: int) -> dict:
+    """A seat's per-call token counts with prompt caching folded in: the
+    first sample writes the cache (1.25x input), the rest read it (0.1x).
+    Expressed as input tokens at the plain price, averaged per call."""
+    if samples < 2 or not caches_seat_prompts(model):
+        return _TIER_I_TOKENS
+    factor = (1.25 + 0.1 * (samples - 1)) / samples
+    return {"input": round(_TIER_I_TOKENS["input"] * factor), "output": _TIER_I_TOKENS["output"]}
 
 
 def _cost_for(model: str, calls: int, tokens: dict, is_fixture: bool) -> float:
@@ -89,7 +99,9 @@ def estimate_deliberation_cost(ticker: str, settings: Settings) -> CostEstimate:
                 call_count=n_samples,
                 est_input_tokens=_TIER_I_TOKENS["input"] * n_samples,
                 est_output_tokens=_TIER_I_TOKENS["output"] * n_samples,
-                est_cost_usd=round(_cost_for(route.model, n_samples, _TIER_I_TOKENS, is_fixture), 6),
+                est_cost_usd=round(
+                    _cost_for(route.model, n_samples, _cached_seat_tokens(route.model, n_samples), is_fixture), 6
+                ),
             )
         )
 

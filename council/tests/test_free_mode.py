@@ -480,7 +480,7 @@ def test_lite_estimate_makes_far_fewer_calls(api):
     client, _ = api
     full = client.get("/api/settings/cost-estimate", params={}).json()
     lite = client.get("/api/settings/cost-estimate", params={"lite": "true"}).json()
-    assert (full["total_calls"], lite["total_calls"]) == (43, 16)
+    assert (full["total_calls"], lite["total_calls"]) == (31, 16)
 
 
 def test_archives_can_be_split_by_run_mode(api):

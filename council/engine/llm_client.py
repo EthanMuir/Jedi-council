@@ -158,9 +158,30 @@ def _classify_rate_limit(exc: Exception) -> Exception:
     return _RetryableProviderError(text, wait)
 
 
+# Prompt caching (Anthropic): Anthropic bills a cached prompt prefix at 1.25x
+# the input price the first time and 0.1x on each re-read within ~5 minutes.
+_CACHE_WRITE_MULTIPLIER = 1.25
+_CACHE_READ_MULTIPLIER = 0.1
+
+
+def _billed_input_tokens(usage) -> int:
+    """Input tokens as billed at the plain input price: cache writes count
+    1.25x, cache reads 0.1x (see above), so cost logging stays one number."""
+    plain = getattr(usage, "input_tokens", 0) or 0
+    written = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    return round(plain + written * _CACHE_WRITE_MULTIPLIER + read * _CACHE_READ_MULTIPLIER)
+
+
 async def _call_anthropic(
-    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str
+    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str, cache: bool = False
 ) -> tuple[dict, int, int]:
+    """`cache` marks the whole prompt (answer format, system prompt, the
+    seat's data) for prompt caching: a seat's samples send it word for word,
+    so after the first, the rest read it at a tenth of the input price."""
+    content = (
+        [{"type": "text", "text": user_prompt, "cache_control": {"type": "ephemeral"}}] if cache else user_prompt
+    )
     try:
         resp = await client.messages.create(
             model=model,
@@ -170,7 +191,7 @@ async def _call_anthropic(
             # one SeatVerdict's fields.
             max_tokens=3000,
             system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[{"role": "user", "content": content}],
             tools=[
                 {
                     "name": tool_name,
@@ -189,11 +210,11 @@ async def _call_anthropic(
             raise _QuotaExhaustedError(str(exc), "credit") from exc
         raise _NonRetryableProviderError(str(exc)) from exc
     tool_use = next(b for b in resp.content if b.type == "tool_use")
-    return tool_use.input, resp.usage.input_tokens, resp.usage.output_tokens
+    return tool_use.input, _billed_input_tokens(resp.usage), resp.usage.output_tokens
 
 
 async def _call_openai(
-    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str
+    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str, cache: bool = False
 ) -> tuple[dict, int, int]:
     """Built and tested against a faked SDK object, same caveat as every
     other provider integration built this session without a real key to
@@ -240,7 +261,7 @@ async def _call_openai(
 
 
 async def _call_gemini(
-    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str
+    client, model: str, system_prompt: str, user_prompt: str, schema: dict, tool_name: str, cache: bool = False
 ) -> tuple[dict, int, int]:
     """Built and tested against a faked SDK object -- unverified against a
     live Gemini response, same caveat as _call_openai above. Uses Gemini's
@@ -648,6 +669,7 @@ class LLMClient:
         fixture_name: str | None = None,
         sample_index: int = 0,
         max_retries: int = 2,
+        cache: bool = False,
     ) -> T:
         if self.settings.resolved_no_llm:
             return await self._fixture_structured(
@@ -701,7 +723,7 @@ class LLMClient:
             try:
                 try:
                     raw_input, input_tokens, output_tokens = await asyncio.wait_for(
-                        call_adapter(client, model, system_prompt, user_prompt, schema, tool_name),
+                        call_adapter(client, model, system_prompt, user_prompt, schema, tool_name, cache=cache),
                         timeout=_CALL_BACKSTOP_SECONDS,
                     )
                 except asyncio.TimeoutError as exc:
@@ -849,10 +871,15 @@ class LLMClient:
         sample_index: int = 0,
         memories: list | None = None,
         max_retries: int = 2,
+        cache: bool | None = None,
     ) -> MultiTermVerdict:
         """A Tier I seat's read of its data, with a lean for each term. A
         call that fails or never validates becomes NO_READ on every term --
-        the seat couldn't form a read -- rather than failing the run."""
+        the seat couldn't form a read -- rather than failing the run.
+        When the seat is asked more than once (a full run), its prompt is
+        marked for caching: every sample sends it word for word."""
+        if cache is None:
+            cache = self.settings.n_samples_per_seat > 1
         user_prompt = user_prompt + format_memory_context(memories) + TERMS_BRIEF
         try:
             answer = await self.get_structured(
@@ -864,6 +891,7 @@ class LLMClient:
                 fixture_name=fixture_name,
                 sample_index=sample_index,
                 max_retries=max_retries,
+                cache=cache,
             )
         except SchemaRetryExhausted as exc:
             return MultiTermVerdict.no_read(

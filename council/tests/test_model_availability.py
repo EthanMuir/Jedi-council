@@ -136,3 +136,66 @@ def test_the_models_page_shows_what_will_really_run(tmp_path, monkeypatch):
     assert client.post("/api/settings/google-billing", json={"enabled": True}).json() == {"google_billing": True}
     roles = {r["role"]: r for r in client.get("/api/settings/models").json()["roles"]}
     assert roles["macro_sage"]["current_model"] == "gemini-3-pro" and roles["macro_sage"]["chosen_needs"] is None
+
+
+# ---- cost cuts (Sept 2026) --------------------------------------------------------
+
+
+def test_seat_samples_are_cached_and_billed_at_the_cached_price():
+    import asyncio
+
+    payload = seat_answer_payload()
+    sent = []
+
+    class _Messages:
+        async def create(self, **kwargs):
+            sent.append(kwargs)
+            usage = SimpleNamespace(input_tokens=100, output_tokens=500,
+                                    cache_creation_input_tokens=0, cache_read_input_tokens=3000)
+            return SimpleNamespace(content=[SimpleNamespace(type="tool_use", input=payload)], usage=usage)
+
+    client = LLMClient(Settings(no_llm=False, anthropic_api_key="sk-test-not-real", n_samples_per_seat=2))
+    client._client = SimpleNamespace(messages=_Messages())
+    asyncio.run(client.get_seat_answer(
+        seat_id="technician", model="claude-sonnet-5", system_prompt="s", user_prompt="u", fixture_name="technician"
+    ))
+    block = sent[0]["messages"][0]["content"][0]
+    assert block["cache_control"] == {"type": "ephemeral"} and block["text"].startswith("u")
+    # 100 plain + 3000 read at a tenth = 400 billed input tokens.
+    assert client.call_log[0].input_tokens == 400
+
+
+def test_a_single_sample_is_not_cached():
+    import asyncio
+
+    sent = []
+
+    class _Messages:
+        async def create(self, **kwargs):
+            sent.append(kwargs)
+            usage = SimpleNamespace(input_tokens=10, output_tokens=5)
+            return SimpleNamespace(content=[SimpleNamespace(type="tool_use", input=seat_answer_payload())], usage=usage)
+
+    client = LLMClient(Settings(no_llm=False, anthropic_api_key="sk-test-not-real", n_samples_per_seat=1))
+    client._client = SimpleNamespace(messages=_Messages())
+    asyncio.run(client.get_seat_answer(
+        seat_id="technician", model="claude-sonnet-5", system_prompt="s", user_prompt="u", fixture_name="technician"
+    ))
+    assert isinstance(sent[0]["messages"][0]["content"], str)
+
+
+def test_cheaper_defaults(tmp_path):
+    from council.config import as_lite
+    from council.engine.cost_estimate import estimate_deliberation_cost
+    from council.engine.model_catalog import caches_seat_prompts
+
+    live = Settings(no_llm=False, anthropic_api_key="sk-ant-x", settings_db_path=str(tmp_path / "s.db"))
+    route = lambda seat: resolve_route(seat, live, default_model=live.seat_model).model  # noqa: E731
+    assert route("senate_watcher") == route("structure_archivist") == "claude-haiku-4-5-20251001"
+    assert resolve_route("prosecutor", live, default_model=live.synthesis_model).model == "claude-sonnet-5"
+    assert resolve_route("grand_master", live, default_model=live.synthesis_model).model == "claude-opus-5"
+    assert live.n_samples_per_seat == 2
+    assert caches_seat_prompts("claude-sonnet-5") and not caches_seat_prompts("claude-haiku-4-5-20251001")
+    full = estimate_deliberation_cost("X", live)
+    assert full.total_calls == 31 and full.total_cost_usd < 0.75
+    assert estimate_deliberation_cost("X", as_lite(live)).total_calls == 16

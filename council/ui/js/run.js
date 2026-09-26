@@ -1209,9 +1209,9 @@ function toggleQuestion() {
 
 async function loadShapeHints() {
   const hint = document.getElementById('shape-hint');
-  const calls = { full: 43, lite: 16 };
+  const calls = { full: 31, lite: 16 };
   const base = {
-    full: 'Full: every seat answers 3 times and the debate runs 2 rounds',
+    full: 'Full: every seat answers twice and the debate runs 2 rounds',
     lite: 'Lite: every seat answers once and the debate runs 1 round. Faster and cheaper, a little less thorough',
   };
   const costs = {};

@@ -24,7 +24,7 @@ let runAlerts = []; // { kind: 'notice' | 'stopped', message, link }
 let runInfo = null; // { ticker, shape } of the run shown on the ring
 
 const SHAPE_HINTS = {
-  full: 'Full: every seat answers 3 times and the debate runs 2 rounds (43 model calls).',
+  full: 'Full: every seat answers twice and the debate runs 2 rounds (31 model calls).',
   lite: 'Lite: every seat answers once and the debate runs 1 round (16 model calls) -- faster and cheaper, a little less thorough.',
 };
 
