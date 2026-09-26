@@ -24,12 +24,12 @@ const KEY_GUIDES = [
     tag: 'Free',
     group: 'ai',
     purpose: 'Free AI answers, no card needed. Weaker than Claude. With only free keys, Free Mode turns on by itself so every seat uses them.',
-    placeholder: 'Paste key (AIza…)',
+    placeholder: 'Paste key (AQ.…)',
     cost: 'Free within Google\'s daily limits, no card needed. Stay free by not adding billing to the Google project the key belongs to. On the free tier, Google may use what you send to improve its products.',
     steps: [
       { text: 'Open Google AI Studio and sign in with any Google account.', link: 'https://aistudio.google.com/', linkText: 'Open AI Studio' },
       { text: 'Go to "Get API key" and click "Create API key". If it asks about a project, let it create one.', link: 'https://aistudio.google.com/apikey', linkText: 'Open API keys' },
-      { text: 'Copy the key (it starts with AIza) and paste it into the box.' },
+      { text: 'Copy the key (it starts with AQ.) and paste it into the box.' },
     ],
   },
   {

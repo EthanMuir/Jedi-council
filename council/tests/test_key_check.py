@@ -13,6 +13,7 @@ from council import key_check
 from council.tests.test_auth import _signup_and_approve, make_app, site  # noqa: F401
 
 GOOGLE = "AIza" + "x" * 35
+NEW_GOOGLE = "AQ.Ab8RN6" + "x" * 40
 ANTHROPIC = "sk-ant-" + "x" * 40
 FRED = "a" * 32
 
@@ -25,16 +26,27 @@ def test_a_working_google_key_passes():
     seen = []
 
     def handler(request):
-        seen.append(request.url)
+        seen.append(request)
         return httpx.Response(200, json={"models": []})
 
     assert check("google_api_key", GOOGLE, handler).status == "ok"
-    assert seen[0].host == "generativelanguage.googleapis.com" and seen[0].params["key"] == GOOGLE
+    assert seen[0].url.host == "generativelanguage.googleapis.com"
+    assert seen[0].headers["x-goog-api-key"] == GOOGLE and "key" not in seen[0].url.params
+
+
+def test_new_google_auth_keys_are_accepted():
+    """Keys made in AI Studio now start with AQ. rather than AIza."""
+    assert check("google_api_key", NEW_GOOGLE, lambda r: httpx.Response(200, json={"models": []})).status == "ok"
+
+
+def test_a_turned_down_new_google_key_gets_the_plain_hint():
+    result = check("google_api_key", NEW_GOOGLE, lambda r: httpx.Response(401, json={}))
+    assert result.status == "bad" and "retiring" not in result.message
 
 
 def test_a_turned_down_google_key_is_bad():
     result = check("google_api_key", GOOGLE, lambda r: httpx.Response(400, json={"error": {"status": "INVALID_ARGUMENT"}}))
-    assert result.status == "bad" and "AIza" in result.message
+    assert result.status == "bad" and "AQ." in result.message
 
 
 def test_the_wrong_kind_of_key_is_caught_without_a_request():

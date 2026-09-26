@@ -33,7 +33,7 @@ class KeyCheck:
 
 _PREFIX_HINT = {
     "anthropic_api_key": "It should start with sk-ant-.",
-    "google_api_key": "It should start with AIza.",
+    "google_api_key": "New keys start with AQ. (older ones with AIza).",
     "groq_api_key": "It should start with gsk_.",
     "openai_api_key": "It should start with sk-.",
     "fred_api_key": "It should be 32 letters and numbers.",
@@ -85,12 +85,22 @@ async def _anthropic(client: httpx.AsyncClient, key: str) -> KeyCheck:
 
 
 async def _google(client: httpx.AsyncClient, key: str) -> KeyCheck:
+    # The key goes in the header, not ?key=: Google's newer auth keys (AQ.) are
+    # documented for the header, and it keeps the key out of URLs.
     resp = await client.get(
-        "https://generativelanguage.googleapis.com/v1beta/models", params={"key": key, "pageSize": 1}
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        params={"pageSize": 1},
+        headers={"x-goog-api-key": key},
     )
     if resp.status_code == 200:
         return KeyCheck("ok", "Key works.")
     body = _body_text(resp)
+    if resp.status_code in (400, 401, 403) and key.startswith("AIza"):
+        return KeyCheck(
+            "bad",
+            "Google didn't accept that key. Google is retiring the older keys that start with AIza. "
+            "Make a new one in Google AI Studio (aistudio.google.com/apikey); it will start with AQ.",
+        )
     if resp.status_code == 403 and "not been used" in body:
         return KeyCheck(
             "bad",
@@ -157,7 +167,7 @@ def _format_problem(name: str, key: str) -> str | None:
         return "Paste a key first."
     if any(c.isspace() for c in key):
         return "That has a space in it. Copy just the key."
-    prefixes = {"anthropic_api_key": "sk-ant-", "google_api_key": "AIza", "groq_api_key": "gsk_"}
+    prefixes = {"anthropic_api_key": ("sk-ant-",), "google_api_key": ("AQ.", "AIza"), "groq_api_key": ("gsk_",)}
     want = prefixes.get(name)
     if want and not key.startswith(want):
         return f"That doesn't look like a {_LABEL[name]} key. {_PREFIX_HINT[name]}"
