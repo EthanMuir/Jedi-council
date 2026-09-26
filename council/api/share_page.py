@@ -187,13 +187,14 @@ _STYLE = """
   .term-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
   .word { font-weight: 700; }
   .word.up { color: var(--up); } .word.down { color: var(--down); } .word.even { color: var(--even); } .word.noread { color: var(--faint); }
-  .track { position: relative; height: 10px; border-radius: 99px; background: var(--track); }
-  .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--line); }
-  .fill { position: absolute; top: 0; bottom: 0; border-radius: 99px; }
-  .fill.up { background: var(--up); } .fill.down { background: var(--down); }
-  .knob { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
-    background: #fff; border: 3px solid var(--faint); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-  .knob.up { border-color: var(--up); } .knob.down { border-color: var(--down); } .knob.even { border-color: var(--even); }
+  .track { position: relative; height: 8px; border-radius: 99px; background: var(--track); }
+  .mid { position: absolute; left: 50%; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--line); z-index: 1; }
+  /* A fill from the middle line, faint there and solid at its rounded end. No knob. */
+  .fill { position: absolute; top: 0; bottom: 0; }
+  .fill.up { border-radius: 0 99px 99px 0; background: linear-gradient(90deg, color-mix(in srgb, var(--up) 15%, transparent), var(--up)); }
+  .fill.down { border-radius: 99px 0 0 99px; background: linear-gradient(270deg, color-mix(in srgb, var(--down) 15%, transparent), var(--down)); }
+  .knob { display: none; }
+  .knob.even { display: block; position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--even); z-index: 2; }
   .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 6px; }
   .note { font-size: 15px; color: var(--muted); margin: 10px 0 0; }
   .score { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; border-radius: 99px; padding: 3px 10px; }

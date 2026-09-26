@@ -252,28 +252,30 @@ select.input { appearance: none; padding-right: 32px; background-image: linear-g
    knob; each seat is a dot in the lane under it, stacked when they
    crowd. */
 .lean { display: grid; gap: 8px; }
-.lean-track { position: relative; height: 10px; border-radius: 999px; background: var(--track); }
-.lean-track::before, .lean-track::after {
-  content: ""; position: absolute; top: 0; bottom: 0; width: 50%; border-radius: 999px; opacity: 0.55;
-}
-.lean-track::before { left: 0; background: linear-gradient(90deg, var(--down-soft), transparent); }
-.lean-track::after { right: 0; background: linear-gradient(270deg, var(--up-soft), transparent); }
+.lean-track { position: relative; height: 8px; border-radius: 999px; background: var(--track); }
 .lean-mid { position: absolute; left: 50%; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--line-strong); z-index: 1; }
+/* The lean: a fill running out from the middle line, faint there and solid at
+   its rounded end, with a soft glow. No knob. */
 .lean-fill {
-  position: absolute; top: 0; bottom: 0; z-index: 2; border-radius: 999px;
-  transition: left 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s;
+  position: absolute; top: 0; bottom: 0; z-index: 2;
+  transition: left 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.lean-fill.up { background: linear-gradient(90deg, var(--up-mid), var(--up)); }
-.lean-fill.down { background: linear-gradient(270deg, var(--down-mid), var(--down)); }
-.lean-knob {
-  position: absolute; top: 50%; z-index: 3; width: 20px; height: 20px; margin: -10px 0 0 -10px;
-  border-radius: 50%; background: var(--knob); border: 3px solid var(--noread);
-  box-shadow: 0 1px 4px rgba(20, 24, 32, 0.25);
-  transition: left 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.3s;
+.lean-fill.up {
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--up) 15%, transparent), var(--up));
+  box-shadow: 6px 0 12px -4px color-mix(in srgb, var(--up) 45%, transparent);
 }
-.lean-knob.up { border-color: var(--up); }
-.lean-knob.down { border-color: var(--down); }
-.lean-knob.even { border-color: var(--even); }
+.lean-fill.down {
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(270deg, color-mix(in srgb, var(--down) 15%, transparent), var(--down));
+  box-shadow: -6px 0 12px -4px color-mix(in srgb, var(--down) 45%, transparent);
+}
+/* Only a dead-even call keeps a marker: a small dot on the middle line. */
+.lean-knob { display: none; }
+.lean-knob.even {
+  display: block; position: absolute; top: 50%; z-index: 3; width: 10px; height: 10px; margin: -5px 0 0 -5px;
+  border-radius: 50%; background: var(--even); box-shadow: 0 0 0 3px var(--surface);
+}
 .lean-dots { position: relative; height: 10px; }
 .lean-dot {
   position: absolute; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%;
@@ -284,8 +286,8 @@ select.input { appearance: none; padding-right: 32px; background-image: linear-g
 .lean-dot.even { background: var(--even); }
 .lean-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); }
 .lean-scale span:nth-child(2) { transform: translateX(0); }
-.lean.small .lean-track { height: 6px; }
-.lean.small .lean-knob { width: 14px; height: 14px; margin: -7px 0 0 -7px; border-width: 2px; }
+.lean.small .lean-track { height: 5px; }
+.lean.small .lean-knob.even { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
 .lean.small .lean-mid { top: -4px; bottom: -4px; }
 @media (prefers-reduced-motion: reduce) {
   .lean-fill, .lean-knob, .lean-dot { transition: none; }
