@@ -174,10 +174,10 @@ def test_the_scored_email_mentions_the_range():
     from council import notify
 
     target = {"price_now": 100.0, "target": 101.0, "low": 95.0, "high": 108.0, "chance_pct": 70}
-    _, text = notify.compose(
+    text = notify.compose(
         "Sam",
         [{"ticker": "NVDA", "term": "short", "run_id": "r1", "called": "up", "correct": True, "move": 3.0, "target": target}],
         "https://example.com", "",
-    )
+    ).text
     assert "RIGHT" in text
     assert "Price target about $101 (70% chance $95-$108): ended at $103, inside the range" in text

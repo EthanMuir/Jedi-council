@@ -20,8 +20,8 @@ def mail_site(make_app, monkeypatch):
     assert client.post("/api/auth/setup", json={**OWNER, "site_password": SITE_PASSWORD}).status_code == 200
     sent = []
 
-    async def fake_send(_settings, to, subject, text):
-        sent.append({"to": to, "subject": subject, "text": text})
+    async def fake_send(_settings, to, subject, text, html=""):
+        sent.append({"to": to, "subject": subject, "text": text, "html": html})
         return True
 
     monkeypatch.setattr(emailer, "send_email", fake_send)

@@ -8,9 +8,10 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from council import accounts, emailer, site_stats
+from council import accounts, emailer, notify, site_stats
 from council.api import auth
 from council.calibration import releases
 from council.calibration.benchmark import compute_benchmark
@@ -99,8 +100,8 @@ async def set_user_status(user_id: int, body: _StatusRequest, request: Request):
         accounts.set_status(conn, user_id, body.status)
         emailed = False
         if was_pending and body.status == "active":
-            subject, text = emailer.approved_message(target.name, f"{auth.site_url(request)}/login?notice=approved")
-            emailed = await emailer.send_email(get_settings(), target.email, subject, text)
+            message = emailer.approved_message(target.name, f"{auth.site_url(request)}/login?notice=approved")
+            emailed = await emailer.send_message(get_settings(), target.email, message)
         return {"ok": True, "emailed": emailed}
     finally:
         conn.close()
@@ -345,3 +346,73 @@ async def site_stats_overview(request: Request, days: int = 30):
 
 def install_admin(app) -> None:
     app.include_router(router)
+
+
+# ---- emails (#149) ---------------------------------------------------------------------
+# Every email the app sends, filled with example details, to preview in the
+# browser or send to yourself.
+
+EMAIL_KINDS = {
+    "scored": ("Your call was scored", "People whose calls were just scored"),
+    "approved": ("You're approved", "Someone you approve"),
+    "reset": ("Password reset", "Anyone who asks to reset their password"),
+    "signup": ("New sign-up waiting", "You, when someone asks for an account"),
+    "report": ("Problem report", "You, when someone reports a problem"),
+}
+
+
+def _example_email(kind: str, site: str, name: str) -> emailer.Message:
+    if kind == "scored":
+        target = {"price_now": 158.0, "target": 163.0, "low": 151.0, "high": 177.0, "chance_pct": 70}
+        lines = [
+            {"ticker": "NVDA", "company": "NVIDIA Corporation", "term": "short", "run_id": "example", "called": "up",
+             "p": 0.583, "correct": True, "move": 4.1, "target": target},
+            {"ticker": "AAPL", "company": "Apple Inc.", "term": "medium", "run_id": "example", "called": "up",
+             "p": 0.537, "correct": False, "move": -2.3, "target": None},
+        ]
+        return notify.compose(name, lines, site, f"{site}/unsubscribe?u=0&t=example")
+    if kind == "approved":
+        return emailer.approved_message(name, f"{site}/login?notice=approved")
+    if kind == "reset":
+        return emailer.reset_message(name, f"{site}/reset?token=example", accounts.RESET_HOURS)
+    if kind == "signup":
+        return emailer.signup_alert("Sam Carter", "sam@example.com", f"{site}/admin.html")
+    if kind == "report":
+        return emailer.report_message(
+            "Sam Carter (sam@example.com)", "A result looks wrong",
+            "The price chart on my NVDA run stopped at yesterday's close.\nEverything else looked fine.",
+            [("Ticker", "NVDA"), ("Page", "/index.html")], f"{site}/admin.html#reports",
+        )
+    raise HTTPException(404, "no such email")
+
+
+@router.get("/emails")
+async def list_emails(request: Request):
+    _require_admin(request)
+    return {
+        "emails": [{"kind": k, "name": n, "to": to} for k, (n, to) in EMAIL_KINDS.items()],
+        "email_enabled": emailer.email_configured(get_settings()),
+    }
+
+
+@router.get("/emails/{kind}/preview", response_class=HTMLResponse)
+async def preview_email(kind: str, request: Request):
+    user = _require_admin(request)
+    message = _example_email(kind, auth.site_url(request), user.name if user else "Sam")
+    return HTMLResponse(message.html)
+
+
+@router.post("/emails/{kind}/test")
+async def send_test_email(kind: str, request: Request):
+    user = _require_admin(request)
+    settings = get_settings()
+    if not emailer.email_configured(settings):
+        raise HTTPException(400, "Email isn't set up yet (RESEND_API_KEY and EMAIL_FROM in .env).")
+    to = user.email if user else ""
+    if not to:
+        raise HTTPException(400, "Your account has no email address to send to.")
+    message = _example_email(kind, auth.site_url(request), user.name if user else "Sam")
+    sent = await emailer.send_email(settings, to, f"[Test] {message.subject}", message.text, message.html)
+    if not sent:
+        raise HTTPException(502, "Resend didn't accept the email. The server log says why.")
+    return {"ok": True, "to": to}

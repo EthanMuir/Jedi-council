@@ -15,8 +15,10 @@ import sqlite3
 from pathlib import Path
 
 from council import accounts, emailer, secrets_box
+from council import email_design as d
 from council.config import Settings
 from council.crypt.db import connect, effective_run_mode
+from council.email_design import Message
 from council.engine import price_target
 
 log = logging.getLogger("council.notify")
@@ -89,51 +91,149 @@ def _price(v: float, like: float | None = None) -> str:
     return f"${v:,.0f}" if (like if like is not None else v) >= 100 else f"${v:,.2f}"
 
 
-def _targets(conn, run_ids: set[str]) -> dict[tuple[str, str], dict]:
-    """Each run's price targets, by (run_id, term), from its saved synthesis."""
-    out = {}
+def _run_extras(conn, run_ids: set[str]) -> tuple[dict[tuple[str, str], dict], dict[str, str]]:
+    """Each run's price targets, by (run_id, term), and company name, by
+    run_id, from its saved synthesis."""
+    targets, companies = {}, {}
     for run_id in run_ids:
         row = conn.execute(
             "SELECT synthesis_json FROM predictions WHERE run_id = ? AND synthesis_json IS NOT NULL LIMIT 1", (run_id,)
         ).fetchone()
         try:
-            terms = (json.loads(row["synthesis_json"]).get("terms") or {}) if row else {}
+            synthesis = json.loads(row["synthesis_json"]) if row else {}
         except ValueError:
             continue
-        for term, t in terms.items():
+        if synthesis.get("company"):
+            companies[run_id] = synthesis["company"]
+        for term, t in (synthesis.get("terms") or {}).items():
             if isinstance(t, dict) and t.get("price_target"):
-                out[(run_id, term)] = t["price_target"]
-    return out
+                targets[(run_id, term)] = t["price_target"]
+    return targets, companies
 
 
-def compose(name: str, lines: list[dict], base_url: str, unsubscribe_url: str) -> tuple[str, str]:
+def _target_line(x: dict) -> tuple[str, bool] | None:
+    """'Price target about $101 (70% chance $95-$108): ended at $103' and
+    whether it landed inside, once there's a final price."""
+    target = x.get("target")
+    ended = price_target.final_price(target, x["move"])
+    if ended is None:
+        return None
+    line = (
+        f"Price target about {_price(target['target'])} ({target['chance_pct']}% chance "
+        f"{_price(target['low'], target['target'])}-{_price(target['high'], target['target'])}): "
+        f"ended at {_price(ended, target['target'])}"
+    )
+    return line, price_target.landed_in_range(target, x["move"])
+
+
+def _subject(lines: list[dict]) -> str:
     right = sum(1 for x in lines if x["correct"])
     if len(lines) == 1:
         x = lines[0]
-        subject = f"Your {x['ticker']} call was {'right' if x['correct'] else 'wrong'}"
-    else:
-        subject = f"{len(lines)} of your calls were scored: {right} right"
+        return f"Your {x['ticker']} call was {'right' if x['correct'] else 'wrong'}"
+    return f"{len(lines)} of your calls were scored: {right} right"
+
+
+def _text(name: str, lines: list[dict], base_url: str, unsubscribe_url: str) -> str:
+    right = sum(1 for x in lines if x["correct"])
     body = [f"Hi {name},", "", "The Council's calls on these runs just reached their end date and were scored:", ""]
     for x in lines:
         move = f"price {x['move']:+.1f}%" if x["move"] is not None else "price change unknown"
         verdict = "RIGHT" if x["correct"] else "WRONG"
         body.append(f"- {x['ticker']}, {TERM_NAMES.get(x['term'], x['term'])}: called {x['called']} -> {verdict} ({move})")
-        target = x.get("target")
-        ended = price_target.final_price(target, x["move"])
-        if ended is not None:
-            landed = "inside" if price_target.landed_in_range(target, x["move"]) else "outside"
-            body.append(
-                f"  Price target about {_price(target['target'])} ({target['chance_pct']}% chance "
-                f"{_price(target['low'], target['target'])}-{_price(target['high'], target['target'])}): "
-                f"ended at {_price(ended, target['target'])}, {landed} the range"
-            )
+        target = _target_line(x)
+        if target:
+            body.append(f"  {target[0]}, {'inside' if target[1] else 'outside'} the range")
         if base_url and x["run_id"]:
             body.append(f"  {base_url}/index.html?run={x['run_id']}")
     body += ["", f"{right} of {len(lines)} right this time. Every scored call counts toward each seat's track record."]
     if base_url:
         body += ["", f"Your full record: {base_url}/history.html"]
     body += ["", "Not financial advice.", "", f"Stop these emails: {unsubscribe_url}" if unsubscribe_url else ""]
-    return subject, "\n".join(body).rstrip() + "\n"
+    return "\n".join(body).rstrip() + "\n"
+
+
+def _call_html(x: dict, base_url: str) -> str:
+    from council.api.share_page import lean_words
+
+    tone = x["called"] if x["called"] in ("up", "down", "even") else "noread"
+    term = TERM_NAMES.get(x["term"], x["term"])
+    company = (
+        f'&nbsp;&nbsp;<span class="tc-muted" style="font-size:13px;font-weight:400;color:{d.MUTED};">{d.esc(x["company"])}</span>'
+        if x.get("company") else ""
+    )
+    result = d.chip("✓ Right", "up") if x["correct"] else d.chip("✗ Wrong", "down")
+    top = (
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+        f'<td class="tc-ink" style="font-family:{d.FONT};font-size:17px;font-weight:700;color:{d.INK};">'
+        f'<span style="font-family:{d.MONO};">{d.esc(x["ticker"])}</span>{company}</td>'
+        f'<td align="right" style="white-space:nowrap;">{result}</td></tr></table>'
+    )
+    called = lean_words(x["p"]) if x.get("p") is not None else f"Called {x['called']}"
+    fg = d.TONES.get(tone, d.TONES["noread"])[0]
+    lean = (
+        f'<p class="tc-muted" style="margin:6px 0 0;font-family:{d.FONT};font-size:14px;color:{d.MUTED};">'
+        f'{d.esc(term[0].upper() + term[1:])} · the Council said '
+        f'<b style="color:{fg};">{d.esc(called.lower() if x.get("p") is not None else x["called"])}</b></p>'
+    )
+    bits = []
+    if x["move"] is not None:
+        mtone = "up" if x["move"] > 0 else "down" if x["move"] < 0 else "even"
+        bits.append(f'Price <b style="color:{d.TONES[mtone][0]};">{x["move"]:+.1f}%</b>')
+    target = _target_line(x)
+    if target:
+        t = x["target"]
+        landed = "inside" if target[1] else "outside"
+        bits.append(
+            f"Target about {_price(t['target'])}, ended {_price(price_target.final_price(t, x['move']), t['target'])}: "
+            f"{landed} the {t['chance_pct']}% range {_price(t['low'], t['target'])}–{_price(t['high'], t['target'])}"
+        )
+    facts = (
+        f'<p class="tc-ink" style="margin:0;font-family:{d.FONT};font-size:14px;line-height:1.6;color:{d.INK};">'
+        + "<br>".join(bits) + "</p>"
+    ) if bits else ""
+    view = (
+        f'<p style="margin:10px 0 0;font-family:{d.FONT};font-size:14px;">'
+        f'{d.link(base_url + "/index.html?run=" + x["run_id"], "View this run →")}</p>'
+        if base_url and x["run_id"] else ""
+    )
+    return d.box(top + lean + d.lean_bar(x.get("p"), tone) + facts + view, gap=12)
+
+
+def compose(name: str, lines: list[dict], base_url: str, unsubscribe_url: str) -> Message:
+    subject = _subject(lines)
+    right = sum(1 for x in lines if x["correct"])
+    if len(lines) == 1:
+        x = lines[0]
+        heading = f"Your {x['ticker']} call was {'right' if x['correct'] else 'wrong'}"
+        intro = "The Council's call on this run just reached its end date and was scored."
+        move = f", price {x['move']:+.1f}%" if x["move"] is not None else ""
+        preheader = f"{x['ticker']} {TERM_NAMES.get(x['term'], x['term'])}: {'right' if x['correct'] else 'wrong'}{move}"
+    else:
+        heading = f"{len(lines)} calls scored · {right} right"
+        intro = "The Council's calls on these runs just reached their end date and were scored."
+        preheader = f"{right} of {len(lines)} right: " + ", ".join(
+            f"{x['ticker']} {'✓' if x['correct'] else '✗'}" for x in lines[:6]
+        )
+    body = (
+        d.heading(heading)
+        + d.p(f"Hi {d.esc(name)}. {intro}")
+        + "".join(_call_html(x, base_url) for x in lines)
+        + d.p(f"<b>{right} of {len(lines)} right this time.</b> Every scored call counts toward each seat's track record.",
+              muted=True, size=14, gap=4 if base_url else 0)
+        + (d.button(f"{base_url}/history.html", "See your full record") if base_url else "")
+    )
+    html = d.page(
+        site=base_url,
+        preheader=preheader,
+        body=body,
+        footer=d.footer(
+            "Ticker Council's calls are not financial advice.",
+            ("You're getting this because scored-call emails are on for your account. "
+             + d.footer_link(unsubscribe_url, "Stop these emails")) if unsubscribe_url else "",
+        ),
+    )
+    return Message(subject, _text(name, lines, base_url, unsubscribe_url), html)
 
 
 async def email_scored_calls(settings: Settings, swept: list) -> int:
@@ -151,7 +251,7 @@ async def email_scored_calls(settings: Settings, swept: list) -> int:
             f"run_mode, total_cost_usd FROM predictions WHERE id IN ({marks})",
             ids,
         ).fetchall()
-        targets = _targets(council, {row["run_id"] for row in rows if row["run_id"]})
+        targets, companies = _run_extras(council, {row["run_id"] for row in rows if row["run_id"]})
     finally:
         council.close()
 
@@ -168,7 +268,8 @@ async def email_scored_calls(settings: Settings, swept: list) -> int:
         per_account.setdefault(row["user_id"] or 0, []).append({
             "ticker": row["ticker"], "term": row["horizon"], "run_id": row["run_id"] or row["id"],
             "called": _lean(p), "correct": bool(result.direction_correct), "move": result.realised_move_pct,
-            "target": targets.get((row["run_id"], row["horizon"])),
+            "target": targets.get((row["run_id"], row["horizon"])), "p": p,
+            "company": companies.get(row["run_id"]),
         })
 
     sent = 0
@@ -181,9 +282,9 @@ async def email_scored_calls(settings: Settings, swept: list) -> int:
             unsub = f"{base_url}/unsubscribe?u={account}&t={unsubscribe_token(settings, account)}" if base_url else ""
             order = {"short": 0, "medium": 1, "long": 2}
             lines.sort(key=lambda x: (x["ticker"], order.get(x["term"], 9)))
-            subject, text = compose(person.name, lines, base_url, unsub)
+            message = compose(person.name, lines, base_url, unsub)
             try:
-                if await emailer.send_email(settings, person.email, subject, text):
+                if await emailer.send_message(settings, person.email, message):
                     sent += 1
             except Exception as exc:  # noqa: BLE001 -- one failure mustn't stop the rest
                 log.warning("couldn't email scored calls to account %s: %s", account, exc)

@@ -57,3 +57,12 @@ table.compact-table th, table.compact-table td { padding: 9px 12px; }
 .sub-head { font-size: 12px; font-weight: 600; color: var(--faint); letter-spacing: .05em; text-transform: uppercase; margin: 6px 0 2px; }
 #referrers .ticker-bar { grid-template-columns: minmax(0, 11em) minmax(0, 1fr) 40px; }
 #referrers .ticker-bar b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+
+/* Emails (#149) */
+.email-list { display: grid; padding: 4px 0 8px; }
+.email-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 20px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.email-row:first-child { border-top: 0; }
+.email-row .muted { font-size: 13px; }
+.email-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.email-status { font-size: 13px; }
+#emails-off { margin: 0 20px 8px; }

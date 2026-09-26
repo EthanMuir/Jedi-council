@@ -67,15 +67,12 @@ async def _email_owner(request: Request, user, kind: str, message: str, body: _R
     if owner is None or (user is not None and user.id == owner.id):
         return
     who = f"{user.name} ({user.email})" if user else "Someone"
-    extra = "".join(
-        f"\n{label}: {value}" for label, value in (("Ticker", body.ticker), ("Run", body.run_id), ("Page", body.page)) if value
-    )
-    text = (
-        f"{who} reported a problem: {reports.KINDS[kind]}\n\n{message}\n{extra}\n\n"
-        f"See all reports on the admin page:\n{auth.site_url(request)}/admin.html#reports\n"
+    extras = [(label, value) for label, value in (("Ticker", body.ticker), ("Run", body.run_id), ("Page", body.page)) if value]
+    email = emailer.report_message(
+        who, reports.KINDS[kind], message, extras, f"{auth.site_url(request)}/admin.html#reports"
     )
     try:
-        await emailer.send_email(settings, owner.email, f"Problem report: {reports.KINDS[kind]}", text)
+        await emailer.send_message(settings, owner.email, email)
     except Exception as exc:  # noqa: BLE001 -- the report is saved either way
         log.warning("couldn't email the report: %s", exc)
 

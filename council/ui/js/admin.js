@@ -397,6 +397,43 @@ async function onReportAction(e) {
   }
 }
 
+// ---- Emails (#149) ---------------------------------------------------------------------
+
+async function loadEmails() {
+  const list = document.getElementById('email-list');
+  try {
+    const data = await fetchJSON('/api/admin/emails');
+    document.getElementById('emails-off').hidden = data.email_enabled;
+    list.innerHTML = data.emails.map(e => `
+      <div class="email-row">
+        <div><b>${escapeHtml(e.name)}</b><div class="muted">To: ${escapeHtml(e.to)}</div></div>
+        <div class="email-actions">
+          <a class="btn btn-small" href="/api/admin/emails/${e.kind}/preview" target="_blank" rel="noopener">Preview</a>
+          <button class="btn btn-small" type="button" data-test="${e.kind}" ${data.email_enabled ? '' : 'disabled'}>Send me a test</button>
+          <span class="email-status muted" role="status"></span>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    list.innerHTML = `<p class="empty">Couldn't load the emails: ${escapeHtml(friendlyError(err))}</p>`;
+  }
+}
+
+async function onEmailTest(e) {
+  const btn = e.target.closest('button[data-test]');
+  if (!btn) return;
+  const status = btn.parentElement.querySelector('.email-status');
+  btn.disabled = true;
+  status.textContent = 'Sending…';
+  try {
+    const r = await post(`/api/admin/emails/${btn.dataset.test}/test`);
+    status.textContent = `Sent to ${r.to}`;
+  } catch (err) {
+    status.textContent = friendlyError(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   renderNav('/admin.html');
   initSections();
@@ -426,6 +463,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   });
   document.getElementById('report-list').addEventListener('click', onReportAction);
+  document.getElementById('email-list').addEventListener('click', onEmailTest);
+  loadEmails();
   loadReports();
   loadPeople().then(loadRuns);
   loadVisitors();

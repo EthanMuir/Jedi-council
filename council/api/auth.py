@@ -140,8 +140,8 @@ def _status_error(user: accounts.User) -> HTTPException | None:
 async def _notify_owner_of_signup(request: Request, conn, user: accounts.User) -> None:
     owner = accounts.owner(conn)
     if owner:
-        subject, text = emailer.signup_alert(user.name, user.email, f"{site_url(request)}/admin.html")
-        await emailer.send_email(get_settings(), owner.email, subject, text)
+        message = emailer.signup_alert(user.name, user.email, f"{site_url(request)}/admin.html")
+        await emailer.send_message(get_settings(), owner.email, message)
 
 
 # ---- routes -----------------------------------------------------------------------------
@@ -353,10 +353,10 @@ async def forgot_submit(body: _ForgotRequest, request: Request):
         user = accounts.get_user_by_email(conn, body.email or "")
         if user and user.status == "active" and emailer.email_configured(settings):
             token = accounts.create_reset_token(conn, user.id)
-            subject, text = emailer.reset_message(
+            message = emailer.reset_message(
                 user.name, f"{site_url(request)}/reset?token={token}", accounts.RESET_HOURS
             )
-            await emailer.send_email(settings, user.email, subject, text)
+            await emailer.send_message(settings, user.email, message)
     finally:
         conn.close()
     return {"ok": True}
