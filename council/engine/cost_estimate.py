@@ -15,12 +15,15 @@ from council.config import Settings
 from council.engine.model_catalog import get_model
 from council.engine.routing import resolve_route
 
-# Rough per-call token counts, by call type. A seat's answer covers all
-# three terms at once, so its output runs longer than a single call would.
-_TIER_I_TOKENS = {"input": 1300, "output": 550}
-_ADVOCATE_TOKENS = {"input": 700, "output": 300}
-_PROSECUTOR_TOKENS = {"input": 1200, "output": 350}
-_GRAND_MASTER_TOKENS = {"input": 2600, "output": 650}
+# Per-call token counts, by call type, measured from real prompts (Sept 2026:
+# the system prompt, the seat's data, the answer format sent as a tool, and
+# the tool-use overhead). The first guesses were about half this, which made
+# a full run look like $0.59 when a real one cost well over a dollar. A
+# seat's answer covers all three terms at once, so its output runs long.
+_TIER_I_TOKENS = {"input": 3000, "output": 800}
+_ADVOCATE_TOKENS = {"input": 2500, "output": 500}
+_PROSECUTOR_TOKENS = {"input": 2500, "output": 700}
+_GRAND_MASTER_TOKENS = {"input": 4500, "output": 1400}
 
 
 @dataclass
