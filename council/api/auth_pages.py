@@ -703,8 +703,15 @@ def landing_page(google_enabled: bool, signed_in: bool = False, base_url: str = 
 <meta property="og:site_name" content="Ticker Council" />
 <meta property="og:title" content="Ticker Council · Twelve AIs debate every stock" />
 <meta property="og:description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and give you one clear verdict." />
+<meta property="og:url" content="{escape(base_url)}/welcome" />
 <meta property="og:image" content="{escape(base_url)}/icons/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Ticker Council: twelve AIs debate every stock" />
 <meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Ticker Council · Twelve AIs debate every stock" />
+<meta name="twitter:description" content="Twelve AI analysts each read one kind of data about a stock, debate it, and give you one clear verdict." />
+<meta name="twitter:image" content="{escape(base_url)}/icons/og.png" />
 <script>{_LANDING_HEAD_SCRIPT}</script>
 <style>{_LANDING_STYLE}</style>
 </head>
