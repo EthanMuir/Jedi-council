@@ -322,6 +322,29 @@ def _truncate_words(text: object, limit: int) -> object:
     return text
 
 
+def _unwrap_answer(raw, schema: dict):
+    """Claude sometimes nests the whole answer one level down -- the tool
+    input comes back as {"answer": {...}} or {"answer": "<the JSON as a
+    string>"} instead of the fields themselves, so every required field
+    looks missing. When exactly one value is set and it holds the
+    required fields, use that value as the answer."""
+    required = set(schema.get("required") or [])
+    if not isinstance(raw, dict) or not required or required <= raw.keys():
+        return raw
+    values = [v for v in raw.values() if v is not None]
+    if len(values) != 1:
+        return raw
+    inner = values[0]
+    if isinstance(inner, str):
+        try:
+            inner = json.loads(inner)
+        except ValueError:
+            return raw
+    if isinstance(inner, dict) and required & inner.keys():
+        return inner
+    return raw
+
+
 def _repair_seat_answer_input(raw: dict) -> dict:
     """A few answer-shape slips keep recurring in live use even after
     telling the model about them in the schema descriptions (Task #66's
@@ -610,6 +633,8 @@ class LLMClient:
             return await free_models.resolve_gemini(self._gemini_client)
         if route.model == FREE_MODELS["groq"]:
             return await free_models.resolve_groq(self._groq_client, route.seat_id)
+        if route.provider == "google":
+            return await free_models.resolve_google_model(self._gemini_client, route.model)
         return route.model
 
     async def get_structured(
@@ -760,6 +785,7 @@ class LLMClient:
             # genuinely "the model didn't produce a valid structured answer".
             try:
                 latency_ms = (time.monotonic() - start) * 1000
+                raw_input = _unwrap_answer(raw_input, schema)
                 if response_model is SeatAnswer:
                     raw_input = _repair_seat_answer_input(raw_input)
                 result = response_model(**raw_input)
@@ -767,7 +793,23 @@ class LLMClient:
                 last_error = exc
                 last_error_retryable = False
                 failures += 1
-                log_failure(exc, (time.monotonic() - start) * 1000)
+                # The provider still charged for this answer, so count its
+                # tokens: otherwise the app's cost reads low next to the bill.
+                self.call_log.append(
+                    LLMCallRecord(
+                        seat_id=seat_id,
+                        model=model,
+                        provider=route.provider,
+                        prompt_hash=prompt_hash,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        latency_ms=(time.monotonic() - start) * 1000,
+                        cost_usd=self._estimate_cost(route.model, input_tokens, output_tokens),
+                        attempt=attempt,
+                        success=False,
+                        error=str(exc),
+                    )
+                )
                 continue
 
             model_info = get_model(route.model)
@@ -780,7 +822,7 @@ class LLMClient:
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     latency_ms=latency_ms,
-                    cost_usd=self._estimate_cost(model, input_tokens, output_tokens),
+                    cost_usd=self._estimate_cost(route.model, input_tokens, output_tokens),
                     attempt=attempt,
                     success=True,
                     free_tier=bool(model_info and model_info.free),

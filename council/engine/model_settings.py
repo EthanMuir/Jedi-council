@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS account_model_overrides (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (account, role)
 );
+CREATE TABLE IF NOT EXISTS account_google_billing (
+    account INTEGER PRIMARY KEY
+);
 CREATE TABLE IF NOT EXISTS account_free_mode (
     account INTEGER PRIMARY KEY,
     previous_overrides_json TEXT NOT NULL,
@@ -140,7 +143,30 @@ def disable_free_mode(conn: sqlite3.Connection, account: int = OWNER) -> None:
     conn.commit()
 
 
+# ---- paid Gemini models ------------------------------------------------------
+# A Google key works on Gemini's free tier unless its Google Cloud project
+# has billing turned on, and nothing an ordinary key can call says which.
+# So paid Gemini models (Gemini 3 Pro and co.) only count as usable once the
+# person says their key has billing; until then seats set to them use
+# another model (routing.py) and the Models page greys them out.
+
+
+def google_billing_enabled(conn: sqlite3.Connection, account: int = OWNER) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM account_google_billing WHERE account = ?", (account,)
+    ).fetchone() is not None
+
+
+def set_google_billing(conn: sqlite3.Connection, on: bool, account: int = OWNER) -> None:
+    if on:
+        conn.execute("INSERT OR IGNORE INTO account_google_billing (account) VALUES (?)", (account,))
+    else:
+        conn.execute("DELETE FROM account_google_billing WHERE account = ?", (account,))
+    conn.commit()
+
+
 def delete_account(conn: sqlite3.Connection, account: int) -> None:
     conn.execute("DELETE FROM account_model_overrides WHERE account = ?", (account,))
     conn.execute("DELETE FROM account_free_mode WHERE account = ?", (account,))
+    conn.execute("DELETE FROM account_google_billing WHERE account = ?", (account,))
     conn.commit()

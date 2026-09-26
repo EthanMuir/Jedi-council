@@ -193,8 +193,11 @@ def test_post_model_settings_sets_and_clears_override(client):
 
     roles = test_client.get("/api/settings/models").json()["roles"]
     technician = next(r for r in roles if r["role"] == "technician")
-    assert technician["current_model"] == "gpt-5-nano"
+    assert technician["chosen_model"] == "gpt-5-nano"
     assert technician["is_override"] is True
+    # No OpenAI key here, so a run would really use Claude, and the page says why.
+    assert technician["current_model"] == "claude-sonnet-5"
+    assert technician["chosen_needs"] == {"label": "Needs an OpenAI key", "key": "openai_api_key"}
 
     # model_id omitted (None) clears the override back to the recommendation
     clear_response = test_client.post("/api/settings/models", json={"role": "technician"})

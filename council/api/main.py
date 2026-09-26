@@ -37,7 +37,7 @@ from council.engine.llm_client import RunStopped
 from council.engine.model_catalog import ALL_ROLES, FREE_MODELS, RECOMMENDED, models_sorted_by_cost
 from council.engine.orchestrator import TIER_I_SEATS, TickerNotFound, build_data_service, run_deliberation
 from council.engine.resolution_sweep import sweep_unresolved
-from council.engine.routing import planned_run_mode
+from council.engine.routing import model_block, planned_run_mode, resolve_route
 from council.seats.advocates import BearAdvocateSeat, BullAdvocateSeat
 from council.seats.grand_master import GrandMasterSeat
 from council.seats.prosecutor import ProsecutorSeat
@@ -703,6 +703,21 @@ class _ModelOverrideRequest(BaseModel):
     model_id: str | None = None  # None clears the override back to recommended
 
 
+# What a blocked model needs, for the Models page: which key to add (and the
+# API keys card to jump to), or billing on the Google key.
+_BLOCK_NEEDS = {
+    "key:anthropic": {"label": "Needs an Anthropic key", "key": "anthropic_api_key"},
+    "key:openai": {"label": "Needs an OpenAI key", "key": "openai_api_key"},
+    "key:google": {"label": "Needs a Google key", "key": "google_api_key"},
+    "key:groq": {"label": "Needs a Groq key", "key": "groq_api_key"},
+    "billing:google": {"label": "Needs billing on your Google key", "key": "google_api_key"},
+}
+
+
+def _role_default(role: str, settings: Settings) -> str:
+    return settings.synthesis_model if role in ("prosecutor", "grand_master") else settings.seat_model
+
+
 @app.get("/api/settings/models")
 async def get_model_settings(request: Request):
     settings = _settings(request)
@@ -710,9 +725,11 @@ async def get_model_settings(request: Request):
     conn = model_settings.connect(settings.settings_db_path)
     try:
         overrides = model_settings.get_overrides(conn, settings.council_account)
+        google_billing = model_settings.google_billing_enabled(conn, settings.council_account)
     finally:
         conn.close()
 
+    blocks = {m.id: model_block(m.id, settings) for m in models_sorted_by_cost(descending=True)}
     catalog = [
         {
             "id": m.id,
@@ -722,20 +739,44 @@ async def get_model_settings(request: Request):
             "output_price_per_mtok": m.output_price_per_mtok,
             "typical_call_cost_usd": m.typical_call_cost_usd,
             "free": m.free,
+            "available": blocks[m.id] is None,
+            "needs": _BLOCK_NEEDS.get(blocks[m.id]),
         }
         for m in models_sorted_by_cost(descending=True)
     ]
-    roles = [
-        {
+    roles = []
+    for role in ALL_ROLES:
+        chosen = overrides.get(role, RECOMMENDED[role])
+        # The model a run started now would really use for this role.
+        runs = resolve_route(role, settings, default_model=_role_default(role, settings)).model
+        roles.append({
             "role": role,
             "title": _ROLE_TITLES.get(role, role),
             "recommended_model": RECOMMENDED[role],
-            "current_model": overrides.get(role, RECOMMENDED[role]),
+            "chosen_model": chosen,
+            "current_model": runs,
             "is_override": role in overrides,
-        }
-        for role in ALL_ROLES
-    ]
-    return {"catalog": catalog, "roles": roles}
+            "chosen_needs": _BLOCK_NEEDS.get(blocks.get(chosen)) if runs != chosen else None,
+        })
+    return {"catalog": catalog, "roles": roles, "google_billing": google_billing}
+
+
+class _GoogleBillingRequest(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/settings/google-billing")
+async def set_google_billing(body: _GoogleBillingRequest, request: Request):
+    """Whether the person's Google key has billing on, which lets seats use
+    paid Gemini models (see model_settings.google_billing_enabled)."""
+    settings = _settings(request)
+    settings.ensure_dirs()
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        model_settings.set_google_billing(conn, body.enabled, settings.council_account)
+    finally:
+        conn.close()
+    return {"google_billing": body.enabled}
 
 
 @app.post("/api/settings/models")

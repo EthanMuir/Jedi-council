@@ -182,9 +182,23 @@ class _FakeGeminiClient:
         self.aio = SimpleNamespace(models=_GeminiModels(responder))
 
 
+def _billed_gemini_settings(tmp_path):
+    """A Google key marked as having billing, so paid Gemini seats use it."""
+    from council.engine import model_settings
+
+    settings = Settings(
+        no_llm=False, anthropic_api_key="sk-test", google_api_key="test-google-key",
+        settings_db_path=str(tmp_path / "settings.db"),
+    )
+    conn = model_settings.connect(settings.settings_db_path)
+    model_settings.set_google_billing(conn, True)
+    conn.close()
+    return settings
+
+
 @pytest.mark.asyncio
-async def test_gemini_success_path_parses_json_and_logs_cost():
-    settings = Settings(no_llm=False, anthropic_api_key="sk-test", google_api_key="test-google-key")
+async def test_gemini_success_path_parses_json_and_logs_cost(tmp_path):
+    settings = _billed_gemini_settings(tmp_path)
     client = LLMClient(settings)
     client._gemini_client = _FakeGeminiClient(lambda n, kwargs: _valid_gemini_response())
 
@@ -208,8 +222,8 @@ async def test_gemini_success_path_parses_json_and_logs_cost():
 
 
 @pytest.mark.asyncio
-async def test_gemini_passes_response_schema_and_json_mime_type():
-    settings = Settings(no_llm=False, anthropic_api_key="sk-test", google_api_key="test-google-key")
+async def test_gemini_passes_response_schema_and_json_mime_type(tmp_path):
+    settings = _billed_gemini_settings(tmp_path)
     client = LLMClient(settings)
     captured = {}
 
@@ -232,9 +246,9 @@ async def test_gemini_passes_response_schema_and_json_mime_type():
 
 
 @pytest.mark.asyncio
-async def test_gemini_retryable_server_error_succeeds_after_backoff(monkeypatch):
+async def test_gemini_retryable_server_error_succeeds_after_backoff(monkeypatch, tmp_path):
     _fast_backoff(monkeypatch)
-    settings = Settings(no_llm=False, anthropic_api_key="sk-test", google_api_key="test-google-key")
+    settings = _billed_gemini_settings(tmp_path)
     client = LLMClient(settings)
 
     def responder(n, kwargs):
@@ -257,8 +271,8 @@ async def test_gemini_retryable_server_error_succeeds_after_backoff(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_gemini_non_retryable_client_error_fails_fast():
-    settings = Settings(no_llm=False, anthropic_api_key="sk-test", google_api_key="test-google-key")
+async def test_gemini_non_retryable_client_error_fails_fast(tmp_path):
+    settings = _billed_gemini_settings(tmp_path)
     client = LLMClient(settings)
 
     def responder(n, kwargs):

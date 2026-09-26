@@ -18,6 +18,7 @@ function roleName(role) {
 let KEY_STATUS = {};
 let FREE_MODE = { enabled: false, gemini_key: false, groq_key: false };
 let CATALOG_BY_ID = {};
+let GOOGLE_BILLING = false;
 
 // fetchJSON errors read '400: {"detail":"..."}' -- show just the detail.
 function friendlyError(err) {
@@ -62,6 +63,11 @@ function buildKeyCard(guide) {
       <button class="btn btn-quiet key-remove" type="button" hidden>Remove</button>
     </form>
     <p class="key-msg" role="status"></p>
+    ${guide.name === 'google_api_key' ? `
+    <label class="key-billing" for="google-billing" hidden>
+      <input type="checkbox" id="google-billing" />
+      <span><b>My Google project has billing turned on</b><br /><span class="muted">Lets seats use paid Gemini models such as Gemini 3 Pro. Leave it off for a free key: those seats then use another model you have a key for.</span></span>
+    </label>` : ''}
     <details class="key-howto">
       <summary>How do I get this key?</summary>
       <ol>${guide.steps.map(s => `<li>${s.text}${s.link ? `<br /><a href="${s.link}" target="_blank" rel="noopener noreferrer">${s.linkText} ↗</a>` : ''}</li>`).join('')}</ol>
@@ -98,6 +104,23 @@ function buildKeyCard(guide) {
     }
   };
 
+  const billing = card.querySelector('#google-billing');
+  if (billing) {
+    billing.onchange = async () => {
+      try {
+        await fetchJSON('/api/settings/google-billing', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: billing.checked }),
+        });
+        say(billing.checked ? 'Saved. Seats set to paid Gemini models now use them.' : 'Saved. Paid Gemini models are off; those seats use another model.');
+        loadRoles();
+        loadCostEstimate();
+      } catch (err) {
+        billing.checked = !billing.checked;
+        say(`Couldn't save that: ${friendlyError(err)}`, true);
+      }
+    };
+  }
+
   card.querySelector('.key-remove').onclick = async () => {
     try {
       const data = await fetchJSON(`/api/settings/keys/${guide.name}`, { method: 'DELETE' });
@@ -123,8 +146,17 @@ function applyKeyStatus(keys) {
     badge.className = `pill key-badge ${status?.is_set ? 'pill-free' : ''}`;
     badge.title = status?.source === 'env' ? 'Set in the server\'s .env file. Saving a key here replaces it.' : '';
     card.querySelector('.key-remove').hidden = status?.source !== 'app';
+    card.classList.toggle('is-set', Boolean(status?.is_set));
   }
+  syncGoogleBilling();
   renderKeysSummary();
+}
+
+function syncGoogleBilling() {
+  const box = document.getElementById('google-billing');
+  if (!box) return;
+  box.checked = GOOGLE_BILLING;
+  box.closest('.key-billing').hidden = !KEY_STATUS.google_api_key?.is_set;
 }
 
 async function loadKeys() {
@@ -239,30 +271,127 @@ async function saveModelChoice(role, modelId, text) {
   }
 }
 
+const PROVIDER_NAMES = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google', groq: 'Groq' };
+
+// Jump to a key's card under API keys (from a greyed-out model's "Add key").
+function goToKey(keyName) {
+  location.hash = 'keys';
+  requestAnimationFrame(() => {
+    const card = document.querySelector(`.key-card[data-key="${keyName}"]`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const input = card.querySelector(keyName === 'google_api_key' && card.classList.contains('is-set') ? '.key-billing input' : 'input');
+    if (input) input.focus({ preventScroll: true });
+  });
+}
+
+function modelLine(m) {
+  return `${escapeHtml(m.display_name)} <span class="faint">· ${PROVIDER_NAMES[m.provider] || escapeHtml(m.provider)}</span>`;
+}
+
+function closeModelMenus(except) {
+  for (const pick of document.querySelectorAll('.mpick.open')) {
+    if (pick === except) continue;
+    pick.classList.remove('open');
+    pick.querySelector('.mpick-btn').setAttribute('aria-expanded', 'false');
+    pick.querySelector('.mpick-menu').hidden = true;
+  }
+}
+
+// One seat's model picker: shows the model a run will really use, and opens
+// a list where models this person's keys can't use are greyed out with a
+// way to add the missing key.
+function modelPicker(role) {
+  const runs = CATALOG_BY_ID[role.current_model];
+  const chosen = CATALOG_BY_ID[role.chosen_model];
+  const name = roleName(role.role);
+  const pick = document.createElement('div');
+  pick.className = 'mpick';
+  const options = Object.values(CATALOG_BY_ID).map(m => {
+    const star = m.id === role.recommended_model ? '<span class="mpick-star" title="Recommended">★</span>' : '<span class="mpick-star"></span>';
+    const price = `<span class="mpick-price num">${fmtUsd(m.typical_call_cost_usd)}</span>`;
+    if (!m.available) {
+      return `<li class="mpick-opt is-off" role="option" aria-disabled="true" aria-selected="false">
+        ${star}<span class="mpick-name">${modelLine(m)}<small>${escapeHtml(m.needs ? m.needs.label : 'Not available')}</small></span>
+        ${m.needs ? `<button class="btn btn-small" type="button" data-add-key="${m.needs.key}">${m.needs.label.includes('billing') ? 'Set up' : 'Add key'}</button>` : ''}
+        ${price}</li>`;
+    }
+    const on = m.id === role.current_model;
+    return `<li class="mpick-opt${on ? ' is-on' : ''}" role="option" aria-selected="${on}" data-model="${escapeHtml(m.id)}" tabindex="-1">
+      ${star}<span class="mpick-name">${modelLine(m)}</span>${price}</li>`;
+  }).join('');
+  const note = role.chosen_needs && chosen
+    ? `<p class="mpick-note">${role.is_override ? 'Set to' : 'Recommended:'} ${escapeHtml(chosen.display_name)}. ${escapeHtml(role.chosen_needs.label)}, so it uses ${escapeHtml(runs ? runs.display_name : role.current_model)} for now.
+        <button class="link-btn" type="button" data-add-key="${role.chosen_needs.key}">${role.chosen_needs.label.includes('billing') ? 'Set up billing' : 'Add the key'}</button></p>`
+    : '';
+  pick.innerHTML = `
+    <button class="mpick-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Model for ${escapeHtml(name)}: ${escapeHtml(runs ? runs.display_name : role.current_model)}">
+      <span>${runs && runs.id === role.recommended_model ? '<span class="mpick-star">★</span>' : ''}${runs ? modelLine(runs) : escapeHtml(role.current_model)}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    ${note}
+    <ul class="mpick-menu" role="listbox" aria-label="Models for ${escapeHtml(name)}" hidden>${options}</ul>`;
+
+  const btn = pick.querySelector('.mpick-btn');
+  const menu = pick.querySelector('.mpick-menu');
+  const choices = () => [...menu.querySelectorAll('.mpick-opt[data-model]')];
+  const setOpen = open => {
+    closeModelMenus(pick);
+    pick.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    menu.hidden = !open;
+    if (open) (menu.querySelector('.is-on') || choices()[0])?.focus();
+  };
+  btn.onclick = () => setOpen(!pick.classList.contains('open'));
+  pick.addEventListener('click', e => {
+    const add = e.target.closest('[data-add-key]');
+    if (add) { setOpen(false); goToKey(add.dataset.addKey); return; }
+    const opt = e.target.closest('.mpick-opt[data-model]');
+    if (!opt) return;
+    setOpen(false);
+    btn.focus();
+    if (opt.dataset.model === role.current_model && !role.chosen_needs) return;
+    const m = CATALOG_BY_ID[opt.dataset.model];
+    saveModelChoice(role.role, opt.dataset.model, `Saved. ${name} now uses ${m ? m.display_name : opt.dataset.model}.`);
+  });
+  menu.addEventListener('keydown', e => {
+    const list = choices();
+    const i = list.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      list[(i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      if (document.activeElement.matches('.mpick-opt[data-model]')) { e.preventDefault(); document.activeElement.click(); }
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      btn.focus();
+    }
+  });
+  return pick;
+}
+
 function renderRoles(data) {
   CATALOG_BY_ID = Object.fromEntries(data.catalog.map(m => [m.id, m]));
+  GOOGLE_BILLING = data.google_billing;
+  syncGoogleBilling();
   const body = document.getElementById('models-body');
   body.innerHTML = '';
   for (const role of data.roles) {
     const model = CATALOG_BY_ID[role.current_model];
     const tr = document.createElement('tr');
-    const options = Object.values(CATALOG_BY_ID).map(m => `
-      <option value="${escapeHtml(m.id)}"${m.id === role.current_model ? ' selected' : ''}>${m.id === role.recommended_model ? '★ ' : ''}${escapeHtml(m.display_name)} · ${escapeHtml(m.provider)} · ${fmtUsd(m.typical_call_cost_usd)}</option>`).join('');
     tr.innerHTML = `
       <td><b>${escapeHtml(roleName(role.role))}</b>${role.is_override ? ' <span class="pill pill-accent">Changed</span>' : ''}</td>
-      <td><label class="visually-hidden" for="model-${role.role}">Model for ${escapeHtml(roleName(role.role))}</label>
-        <select class="input model-select" id="model-${role.role}">${options}</select></td>
+      <td class="mpick-cell"></td>
       <td class="num">${model ? fmtUsd(model.typical_call_cost_usd) : '–'}</td>
       <td>${role.is_override ? '<button class="btn btn-small btn-quiet" type="button">Use recommended</button>' : ''}</td>`;
-    tr.querySelector('select').onchange = e => {
-      const name = CATALOG_BY_ID[e.target.value]?.display_name || e.target.value;
-      saveModelChoice(role.role, e.target.value, `Saved. ${roleName(role.role)} now uses ${name}.`);
-    };
-    const reset = tr.querySelector('button');
+    tr.querySelector('.mpick-cell').appendChild(modelPicker(role));
+    const reset = tr.querySelector('td:last-child button');
     if (reset) reset.onclick = () => saveModelChoice(role.role, null, `Saved. ${roleName(role.role)} is back on its recommended model.`);
     body.appendChild(tr);
   }
 }
+
+document.addEventListener('click', e => { if (!e.target.closest('.mpick')) closeModelMenus(); });
 
 async function loadRoles() {
   try {

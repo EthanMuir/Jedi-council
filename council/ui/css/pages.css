@@ -72,7 +72,44 @@ table.data.compact td.num { white-space: nowrap; padding-left: 12px; }
 .cost-summary { display: grid; gap: 8px; }
 .cost-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .cost-big { font-size: 24px; font-weight: 500; min-width: 90px; }
-.model-select { font-size: 13px; padding: 7px 30px 7px 10px; min-width: 240px; }
+/* Model picker (Settings -> Models): opens in place, so it's never clipped
+   by the table's scroll box. */
+table.data td.mpick-cell { width: 100%; white-space: normal; }
+/* Rows grow when a picker opens: keep the seat name, price and button
+   level with the picker's button instead of drifting to the middle. */
+#models-table td { vertical-align: top; }
+#models-table td:not(.mpick-cell) { padding-top: 20px; }
+#models-table td:last-child { padding-top: 15px; }
+.mpick { display: grid; gap: 6px; min-width: 0; max-width: 460px; }
+.mpick-btn { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 38px;
+  padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.mpick-btn:hover { border-color: var(--faint); }
+.mpick-btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mpick-btn svg { flex: none; color: var(--muted); transition: transform .15s ease; }
+.mpick.open .mpick-btn svg { transform: rotate(180deg); }
+.mpick-star { display: inline-block; width: 1.1em; color: var(--even); }
+.mpick-note { margin: 0; font-size: 13px; color: var(--warn); line-height: 1.45; }
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.mpick-menu { list-style: none; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); box-shadow: var(--shadow); display: grid; gap: 2px; }
+.mpick-opt { display: grid; grid-template-columns: 1.1em minmax(0, 1fr) auto auto; align-items: center; gap: 4px 8px;
+  padding: 8px 10px; border-radius: 6px; font-size: 14px; }
+.mpick-opt[data-model] { cursor: pointer; }
+.mpick-opt[data-model]:hover, .mpick-opt[data-model]:focus { background: var(--surface-3); outline: none; }
+.mpick-opt[data-model]:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.mpick-opt.is-on { background: var(--accent-soft); }
+.mpick-opt.is-off .mpick-name { color: var(--faint); }
+.mpick-opt.is-off .mpick-name .faint { color: var(--faint); }
+.mpick-name { min-width: 0; overflow-wrap: anywhere; }
+.mpick-name small { display: block; font-size: 12px; color: var(--warn); }
+.mpick-price { grid-column: 4; font-size: 13px; color: var(--muted); }
+.mpick-opt.is-off .mpick-price { color: var(--faint); }
+.mpick-opt .btn { grid-column: 3; }
+.key-billing { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.45; cursor: pointer; }
+.key-billing input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); flex: none; }
+.key-billing[hidden] { display: none; }
 
 /* ---------- Guide prose ---------- */
 .prose .page-section { max-width: 72ch; }
@@ -100,3 +137,10 @@ table.data.compact td.num { white-space: nowrap; padding-left: 12px; }
 /* A checkbox with a label and a note beside it (Settings -> Account -> Emails) */
 .check-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; font-size: 14px; cursor: pointer; }
 .check-row input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); }
+.mpick { text-align: left; }
+@media (max-width: 640px) {
+  .mpick { max-width: none; }
+  .mpick-opt { grid-template-columns: 1.1em minmax(0, 1fr) auto; }
+  .mpick-opt .mpick-price { grid-column: 3; grid-row: 1; }
+  .mpick-opt .btn { grid-column: 2; grid-row: 2; justify-self: start; }
+}

@@ -70,7 +70,7 @@ async def _cached_list(provider: str, fetch) -> list[str]:
     return names
 
 
-async def resolve_gemini(client) -> str:
+def _gemini_fetcher(client):
     async def fetch() -> list[str]:
         names = []
         async for model in await client.aio.models.list():
@@ -79,7 +79,33 @@ async def resolve_gemini(client) -> str:
                 names.append(model.name)
         return names
 
-    return pick_gemini(await _cached_list("google", fetch)) or GEMINI_FALLBACK
+    return fetch
+
+
+async def resolve_gemini(client) -> str:
+    return pick_gemini(await _cached_list("google", _gemini_fetcher(client))) or GEMINI_FALLBACK
+
+
+def pick_google_model(names: list[str], wanted: str) -> str | None:
+    """The name Google actually uses for a paid Gemini model the catalog
+    names by family ("gemini-3-pro" may only exist as
+    "gemini-3-pro-preview"): the exact name if listed, else the stable
+    variant, else the shortest preview of it."""
+    plain = [n.removeprefix("models/") for n in names]
+    if wanted in plain:
+        return wanted
+    variants = [
+        n for n in plain
+        if n.startswith(wanted + "-") and not any(w in n[len(wanted):] for w in _UNSUITABLE_SUFFIXES)
+    ]
+    if not variants:
+        return None
+    return min(variants, key=lambda n: ("preview" in n or "exp" in n, len(n), n))
+
+
+async def resolve_google_model(client, wanted: str) -> str:
+    names = await _cached_list("google", _gemini_fetcher(client))
+    return pick_google_model(names, wanted) or wanted
 
 
 async def resolve_groq(client, seat_id: str) -> str:

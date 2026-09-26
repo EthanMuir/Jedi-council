@@ -224,8 +224,12 @@ async def test_gemini_daily_limit_overflows_to_groq_with_one_notice(tmp_path):
 async def test_free_gemini_key_on_a_paid_gemini_model_drops_to_the_free_model(tmp_path):
     # macro_sage defaults to Gemini 3 Pro, which the free tier doesn't
     # include: Google answers with a free-tier quota error (limit 0). That
-    # must not stop the run -- the seat just uses the free model.
+    # must not stop the run -- the seat just uses the free model. (The key
+    # is marked as having billing, or Gemini 3 Pro wouldn't be tried.)
     settings = _free_settings(tmp_path, google_api_key="AIza-test")
+    conn = model_settings.connect(settings.settings_db_path)
+    model_settings.set_google_billing(conn, True)
+    conn.close()
     no_pro = {
         "error": {
             "code": 429,
@@ -255,6 +259,23 @@ async def test_free_gemini_key_on_a_paid_gemini_model_drops_to_the_free_model(tm
     assert models_asked == ["gemini-3-pro", free_models.GEMINI_FALLBACK]
     assert client.stop_reason is None
     assert len(notices) == 1 and "free tier" in notices[0]
+
+
+async def test_a_free_gemini_key_never_tries_paid_gemini(tmp_path):
+    # Without billing marked on the Google key, a seat set to Gemini 3 Pro
+    # goes straight to the free model: no failed call first.
+    settings = _free_settings(tmp_path, google_api_key="AIza-test")
+    models_asked = []
+
+    def responder(n, kwargs):
+        models_asked.append(kwargs["model"])
+        return _gemini_ok(n, kwargs)
+
+    client = LLMClient(settings)
+    client._gemini_client = _Gemini(responder)
+    verdict = await _verdict(client, "macro_sage")
+    assert verdict.vote == "BULLISH"
+    assert models_asked == [free_models.GEMINI_FALLBACK]
 
 
 async def test_run_stops_when_every_free_provider_is_used_up(tmp_path):

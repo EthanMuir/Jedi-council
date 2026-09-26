@@ -1,6 +1,7 @@
 """Addendum A3: resolves which (provider, model) a seat actually uses this
 run. Falls back to another provider (Anthropic first) whenever the
-intended provider's API key isn't configured. The fallback is silent to the seat -- it always gets a
+intended provider's API key isn't configured, or when the model is a paid Gemini
+one and the Google key isn't marked as having billing. The fallback is silent to the seat -- it always gets a
 valid model string back -- but the resolution is logged (see
 orchestrator.py's write_seat_vote calls) so it's visible in the Crypt which
 provider a vote actually came from.
@@ -56,6 +57,27 @@ def _provider_key_available(provider: str, settings: Settings) -> bool:
     return provider == "anthropic" and not settings.has_any_ai_key
 
 
+def _google_billing(settings: Settings) -> bool:
+    conn = model_settings.connect(settings.settings_db_path)
+    try:
+        return model_settings.google_billing_enabled(conn, settings.council_account)
+    finally:
+        conn.close()
+
+
+def model_block(model_id: str, settings: Settings) -> str | None:
+    """Why this person can't use a model right now -- "key:<provider>" (no
+    key for its service) or "billing:google" (a paid Gemini model on a key
+    not marked as having billing) -- or None when they can."""
+    info = get_model(model_id)
+    provider = info.provider if info else "anthropic"
+    if not _provider_key_available(provider, settings):
+        return f"key:{provider}"
+    if provider == "google" and info is not None and not info.free and not _google_billing(settings):
+        return "billing:google"
+    return None
+
+
 def _fallback_route(seat_id: str, settings: Settings, default_model: str) -> ResolvedRoute:
     """The intended provider has no key: use the first provider that does
     -- Anthropic (the caller's default model), then OpenAI, then the free
@@ -68,7 +90,7 @@ def _fallback_route(seat_id: str, settings: Settings, default_model: str) -> Res
         ("groq", FREE_MODELS["groq"]),
     ]
     for provider, model in candidates:
-        if _provider_key_available(provider, settings):
+        if model_block(model, settings) is None:
             return ResolvedRoute(seat_id, provider, model, routed_as_intended=False)
     return ResolvedRoute(seat_id, "anthropic", default_model, routed_as_intended=False)
 
@@ -95,27 +117,28 @@ def resolve_route(
     if override_model is not None:
         model_info = get_model(override_model)
         provider = model_info.provider if model_info else "anthropic"
-        if _provider_key_available(provider, settings):
+        if model_block(override_model, settings) is None:
             return ResolvedRoute(seat_id, provider, override_model, routed_as_intended=True)
-        # The override's provider has no key configured -- fall back the
-        # same way an unconfigured yaml provider would.
+        # The override's provider has no key configured (or it's a paid
+        # Gemini model on a free key) -- fall back the same way an unusable
+        # yaml assignment would.
         return _fallback_route(seat_id, settings, default_model)
 
     routing_config = routing_config or load_routing_config()
     seat_cfg = routing_config.get("seats", {}).get(seat_id)
     if not seat_cfg:
-        if _provider_key_available("anthropic", settings):
+        if model_block(default_model, settings) is None:
             return ResolvedRoute(seat_id, "anthropic", default_model, routed_as_intended=True)
         return _fallback_route(seat_id, settings, default_model)
 
     provider = seat_cfg["provider"]
     model = seat_cfg["model"]
-    if _provider_key_available(provider, settings):
+    if model_block(model, settings) is None:
         return ResolvedRoute(seat_id, provider, model, routed_as_intended=True)
 
     fallback_provider = seat_cfg.get("fallback_provider", "anthropic")
     fallback_model = seat_cfg.get("fallback_model", default_model)
-    if _provider_key_available(fallback_provider, settings):
+    if model_block(fallback_model, settings) is None:
         return ResolvedRoute(seat_id, fallback_provider, fallback_model, routed_as_intended=False)
 
     # Neither has a key: whatever provider does, so a seat is never left
